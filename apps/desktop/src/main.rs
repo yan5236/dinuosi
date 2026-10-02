@@ -1,6 +1,8 @@
 #![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
 
 mod assets;
+mod editor;
+mod ui;
 mod view;
 
 use gpui::{
@@ -20,13 +22,14 @@ fn main() {
                 }
             })
             .detach();
-            let bounds = Bounds::centered(None, size(px(1180.0), px(760.0)), cx);
+            let bounds = Bounds::centered(None, size(px(1440.0), px(900.0)), cx);
             let result = cx.open_window(
                 WindowOptions {
                     window_bounds: Some(WindowBounds::Windowed(bounds)),
-                    window_min_size: Some(size(px(900.0), px(600.0))),
+                    window_min_size: Some(size(px(1040.0), px(640.0))),
                     titlebar: Some(TitlebarOptions {
-                        title: Some("Dinuosi · 迪诺斯".into()),
+                        title: Some("Dinuosi".into()),
+                        appears_transparent: true,
                         ..Default::default()
                     }),
                     ..Default::default()

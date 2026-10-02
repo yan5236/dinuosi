@@ -17,7 +17,8 @@ assets/brand → 编译嵌入 Desktop
 
 - Core 定义内存项目模型和稳定 UUID，不依赖 GUI，不直接序列化内部结构。
 - Command 是业务入口；新建项目调用 Core 校验。它不读写磁盘，也不改动已有项目。
-- Desktop 保存当前窗口的项目句柄和显示状态，只通过命令新建项目。
+- Desktop 保存当前窗口的内存项目列表、导航、音量和标尺缩放状态，只通过命令新建项目；返回管理页保留同一会话项目。
+- Desktop 的 `view.rs` 负责会话与项目管理，`editor.rs` 负责剪辑区域和比例布局，`ui.rs` 提供灰阶、原生控件与自绘窗口操作；不引入 WebView。
 - Icons 不依赖 GPUI；以素材 `spec.json` 为来源，在 `OUT_DIR` 生成类型化枚举、中文标签、逻辑资源路径及原始 SVG 内容。
 - GPUI 的 AssetSource 提供内嵌 SVG 与 PNG；SVG 使用 GPUI 单色渲染并由界面文字色着色，双色 Logo 使用原始 PNG 保留品牌色。
 
