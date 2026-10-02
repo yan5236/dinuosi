@@ -1,0 +1,640 @@
+{
+  "name": "轻线 · 完整界面图标集（89 枚完整版）",
+  "version": "1.5",
+  "count": 89,
+  "previousCount": 88,
+  "additionCount": 1,
+  "viewBox": "0 0 24 24",
+  "strokeWidth": 1.8,
+  "stroke": "currentColor",
+  "fill": "none",
+  "strokeLinecap": "round",
+  "strokeLinejoin": "round",
+  "recommendedSize": 24,
+  "authoringAndExport": "Inkscape 1.4.4",
+  "icons": [
+    {
+      "name": "home",
+      "label": "首页",
+      "file": "svg/home.svg",
+      "symbolId": "icon-home",
+      "addedIn": "1.0"
+    },
+    {
+      "name": "user",
+      "label": "我的",
+      "file": "svg/user.svg",
+      "symbolId": "icon-user",
+      "addedIn": "1.0"
+    },
+    {
+      "name": "star",
+      "label": "收藏",
+      "file": "svg/star.svg",
+      "symbolId": "icon-star",
+      "addedIn": "1.0"
+    },
+    {
+      "name": "search",
+      "label": "搜索",
+      "file": "svg/search.svg",
+      "symbolId": "icon-search",
+      "addedIn": "1.0"
+    },
+    {
+      "name": "settings",
+      "label": "设置",
+      "file": "svg/settings.svg",
+      "symbolId": "icon-settings",
+      "addedIn": "1.0"
+    },
+    {
+      "name": "menu",
+      "label": "菜单",
+      "file": "svg/menu.svg",
+      "symbolId": "icon-menu",
+      "addedIn": "1.0"
+    },
+    {
+      "name": "close",
+      "label": "关闭",
+      "file": "svg/close.svg",
+      "symbolId": "icon-close",
+      "addedIn": "1.0"
+    },
+    {
+      "name": "chevron-left",
+      "label": "上一项",
+      "file": "svg/chevron-left.svg",
+      "symbolId": "icon-chevron-left",
+      "addedIn": "1.0"
+    },
+    {
+      "name": "chevron-right",
+      "label": "下一项",
+      "file": "svg/chevron-right.svg",
+      "symbolId": "icon-chevron-right",
+      "addedIn": "1.0"
+    },
+    {
+      "name": "bell",
+      "label": "通知",
+      "file": "svg/bell.svg",
+      "symbolId": "icon-bell",
+      "addedIn": "1.0"
+    },
+    {
+      "name": "mail",
+      "label": "消息",
+      "file": "svg/mail.svg",
+      "symbolId": "icon-mail",
+      "addedIn": "1.0"
+    },
+    {
+      "name": "folder",
+      "label": "文件夹",
+      "file": "svg/folder.svg",
+      "symbolId": "icon-folder",
+      "addedIn": "1.0"
+    },
+    {
+      "name": "file",
+      "label": "文档",
+      "file": "svg/file.svg",
+      "symbolId": "icon-file",
+      "addedIn": "1.0"
+    },
+    {
+      "name": "download",
+      "label": "下载",
+      "file": "svg/download.svg",
+      "symbolId": "icon-download",
+      "addedIn": "1.0"
+    },
+    {
+      "name": "upload",
+      "label": "上传",
+      "file": "svg/upload.svg",
+      "symbolId": "icon-upload",
+      "addedIn": "1.0"
+    },
+    {
+      "name": "edit",
+      "label": "编辑",
+      "file": "svg/edit.svg",
+      "symbolId": "icon-edit",
+      "addedIn": "1.0"
+    },
+    {
+      "name": "trash",
+      "label": "删除",
+      "file": "svg/trash.svg",
+      "symbolId": "icon-trash",
+      "addedIn": "1.0"
+    },
+    {
+      "name": "check",
+      "label": "完成",
+      "file": "svg/check.svg",
+      "symbolId": "icon-check",
+      "addedIn": "1.0"
+    },
+    {
+      "name": "plus",
+      "label": "新增",
+      "file": "svg/plus.svg",
+      "symbolId": "icon-plus",
+      "addedIn": "1.0"
+    },
+    {
+      "name": "heart",
+      "label": "喜欢",
+      "file": "svg/heart.svg",
+      "symbolId": "icon-heart",
+      "addedIn": "1.0"
+    },
+    {
+      "name": "calendar",
+      "label": "日历",
+      "file": "svg/calendar.svg",
+      "symbolId": "icon-calendar",
+      "addedIn": "1.0"
+    },
+    {
+      "name": "lock",
+      "label": "安全",
+      "file": "svg/lock.svg",
+      "symbolId": "icon-lock",
+      "addedIn": "1.0"
+    },
+    {
+      "name": "link",
+      "label": "链接",
+      "file": "svg/link.svg",
+      "symbolId": "icon-link",
+      "addedIn": "1.0"
+    },
+    {
+      "name": "more",
+      "label": "更多",
+      "file": "svg/more.svg",
+      "symbolId": "icon-more",
+      "addedIn": "1.0"
+    },
+    {
+      "name": "image",
+      "label": "图片",
+      "file": "svg/image.svg",
+      "symbolId": "icon-image",
+      "addedIn": "1.1"
+    },
+    {
+      "name": "camera",
+      "label": "相机",
+      "file": "svg/camera.svg",
+      "symbolId": "icon-camera",
+      "addedIn": "1.1"
+    },
+    {
+      "name": "play",
+      "label": "播放",
+      "file": "svg/play.svg",
+      "symbolId": "icon-play",
+      "addedIn": "1.1"
+    },
+    {
+      "name": "pause",
+      "label": "暂停",
+      "file": "svg/pause.svg",
+      "symbolId": "icon-pause",
+      "addedIn": "1.1"
+    },
+    {
+      "name": "volume",
+      "label": "音量",
+      "file": "svg/volume.svg",
+      "symbolId": "icon-volume",
+      "addedIn": "1.1"
+    },
+    {
+      "name": "microphone",
+      "label": "麦克风",
+      "file": "svg/microphone.svg",
+      "symbolId": "icon-microphone",
+      "addedIn": "1.1"
+    },
+    {
+      "name": "share",
+      "label": "分享",
+      "file": "svg/share.svg",
+      "symbolId": "icon-share",
+      "addedIn": "1.1"
+    },
+    {
+      "name": "copy",
+      "label": "复制",
+      "file": "svg/copy.svg",
+      "symbolId": "icon-copy",
+      "addedIn": "1.1"
+    },
+    {
+      "name": "refresh",
+      "label": "刷新",
+      "file": "svg/refresh.svg",
+      "symbolId": "icon-refresh",
+      "addedIn": "1.1"
+    },
+    {
+      "name": "filter",
+      "label": "筛选",
+      "file": "svg/filter.svg",
+      "symbolId": "icon-filter",
+      "addedIn": "1.1"
+    },
+    {
+      "name": "help",
+      "label": "帮助",
+      "file": "svg/help.svg",
+      "symbolId": "icon-help",
+      "addedIn": "1.1"
+    },
+    {
+      "name": "info",
+      "label": "信息",
+      "file": "svg/info.svg",
+      "symbolId": "icon-info",
+      "addedIn": "1.1"
+    },
+    {
+      "name": "logout",
+      "label": "退出",
+      "file": "svg/logout.svg",
+      "symbolId": "icon-logout",
+      "addedIn": "1.1"
+    },
+    {
+      "name": "cart",
+      "label": "购物车",
+      "file": "svg/cart.svg",
+      "symbolId": "icon-cart",
+      "addedIn": "1.1"
+    },
+    {
+      "name": "pin",
+      "label": "定位",
+      "file": "svg/pin.svg",
+      "symbolId": "icon-pin",
+      "addedIn": "1.1"
+    },
+    {
+      "name": "globe",
+      "label": "全球",
+      "file": "svg/globe.svg",
+      "symbolId": "icon-globe",
+      "addedIn": "1.1"
+    },
+    {
+      "name": "razor",
+      "label": "刀片切割",
+      "file": "svg/razor.svg",
+      "symbolId": "icon-razor",
+      "addedIn": "1.2"
+    },
+    {
+      "name": "select",
+      "label": "选择工具",
+      "file": "svg/select.svg",
+      "symbolId": "icon-select",
+      "addedIn": "1.2"
+    },
+    {
+      "name": "trim-start",
+      "label": "裁剪入点",
+      "file": "svg/trim-start.svg",
+      "symbolId": "icon-trim-start",
+      "addedIn": "1.2"
+    },
+    {
+      "name": "trim-end",
+      "label": "裁剪出点",
+      "file": "svg/trim-end.svg",
+      "symbolId": "icon-trim-end",
+      "addedIn": "1.2"
+    },
+    {
+      "name": "timeline",
+      "label": "时间线",
+      "file": "svg/timeline.svg",
+      "symbolId": "icon-timeline",
+      "addedIn": "1.2"
+    },
+    {
+      "name": "track",
+      "label": "轨道",
+      "file": "svg/track.svg",
+      "symbolId": "icon-track",
+      "addedIn": "1.2"
+    },
+    {
+      "name": "snap",
+      "label": "磁吸对齐",
+      "file": "svg/snap.svg",
+      "symbolId": "icon-snap",
+      "addedIn": "1.2"
+    },
+    {
+      "name": "keyframe",
+      "label": "关键帧",
+      "file": "svg/keyframe.svg",
+      "symbolId": "icon-keyframe",
+      "addedIn": "1.2"
+    },
+    {
+      "name": "transition",
+      "label": "转场",
+      "file": "svg/transition.svg",
+      "symbolId": "icon-transition",
+      "addedIn": "1.2"
+    },
+    {
+      "name": "subtitles",
+      "label": "字幕",
+      "file": "svg/subtitles.svg",
+      "symbolId": "icon-subtitles",
+      "addedIn": "1.2"
+    },
+    {
+      "name": "waveform",
+      "label": "音频波形",
+      "file": "svg/waveform.svg",
+      "symbolId": "icon-waveform",
+      "addedIn": "1.2"
+    },
+    {
+      "name": "export-video",
+      "label": "导出视频",
+      "file": "svg/export-video.svg",
+      "symbolId": "icon-export-video",
+      "addedIn": "1.2"
+    },
+    {
+      "name": "import-media",
+      "label": "导入素材",
+      "file": "svg/import-media.svg",
+      "symbolId": "icon-import-media",
+      "addedIn": "1.2"
+    },
+    {
+      "name": "video",
+      "label": "视频片段",
+      "file": "svg/video.svg",
+      "symbolId": "icon-video",
+      "addedIn": "1.2"
+    },
+    {
+      "name": "record",
+      "label": "录制",
+      "file": "svg/record.svg",
+      "symbolId": "icon-record",
+      "addedIn": "1.2"
+    },
+    {
+      "name": "stop",
+      "label": "停止",
+      "file": "svg/stop.svg",
+      "symbolId": "icon-stop",
+      "addedIn": "1.2"
+    },
+    {
+      "name": "skip-back",
+      "label": "上一剪辑点",
+      "file": "svg/skip-back.svg",
+      "symbolId": "icon-skip-back",
+      "addedIn": "1.2"
+    },
+    {
+      "name": "skip-forward",
+      "label": "下一剪辑点",
+      "file": "svg/skip-forward.svg",
+      "symbolId": "icon-skip-forward",
+      "addedIn": "1.2"
+    },
+    {
+      "name": "speed",
+      "label": "播放速度",
+      "file": "svg/speed.svg",
+      "symbolId": "icon-speed",
+      "addedIn": "1.2"
+    },
+    {
+      "name": "crop",
+      "label": "画面裁切",
+      "file": "svg/crop.svg",
+      "symbolId": "icon-crop",
+      "addedIn": "1.2"
+    },
+    {
+      "name": "marker",
+      "label": "时间标记",
+      "file": "svg/marker.svg",
+      "symbolId": "icon-marker",
+      "addedIn": "1.2"
+    },
+    {
+      "name": "mute",
+      "label": "静音",
+      "file": "svg/mute.svg",
+      "symbolId": "icon-mute",
+      "addedIn": "1.2"
+    },
+    {
+      "name": "zoom-in",
+      "label": "放大时间线",
+      "file": "svg/zoom-in.svg",
+      "symbolId": "icon-zoom-in",
+      "addedIn": "1.2"
+    },
+    {
+      "name": "zoom-out",
+      "label": "缩小时间线",
+      "file": "svg/zoom-out.svg",
+      "symbolId": "icon-zoom-out",
+      "addedIn": "1.2"
+    },
+    {
+      "name": "minimize",
+      "label": "最小化",
+      "file": "svg/minimize.svg",
+      "symbolId": "icon-minimize",
+      "addedIn": "1.3"
+    },
+    {
+      "name": "maximize",
+      "label": "最大化",
+      "file": "svg/maximize.svg",
+      "symbolId": "icon-maximize",
+      "addedIn": "1.3"
+    },
+    {
+      "name": "restore",
+      "label": "还原窗口",
+      "file": "svg/restore.svg",
+      "symbolId": "icon-restore",
+      "addedIn": "1.3"
+    },
+    {
+      "name": "fullscreen",
+      "label": "进入全屏",
+      "file": "svg/fullscreen.svg",
+      "symbolId": "icon-fullscreen",
+      "addedIn": "1.3"
+    },
+    {
+      "name": "exit-fullscreen",
+      "label": "退出全屏",
+      "file": "svg/exit-fullscreen.svg",
+      "symbolId": "icon-exit-fullscreen",
+      "addedIn": "1.3"
+    },
+    {
+      "name": "sidebar-left",
+      "label": "左侧边栏",
+      "file": "svg/sidebar-left.svg",
+      "symbolId": "icon-sidebar-left",
+      "addedIn": "1.3"
+    },
+    {
+      "name": "sidebar-right",
+      "label": "右侧边栏",
+      "file": "svg/sidebar-right.svg",
+      "symbolId": "icon-sidebar-right",
+      "addedIn": "1.3"
+    },
+    {
+      "name": "panel-bottom",
+      "label": "底部面板",
+      "file": "svg/panel-bottom.svg",
+      "symbolId": "icon-panel-bottom",
+      "addedIn": "1.3"
+    },
+    {
+      "name": "split-horizontal",
+      "label": "左右分栏",
+      "file": "svg/split-horizontal.svg",
+      "symbolId": "icon-split-horizontal",
+      "addedIn": "1.3"
+    },
+    {
+      "name": "split-vertical",
+      "label": "上下分栏",
+      "file": "svg/split-vertical.svg",
+      "symbolId": "icon-split-vertical",
+      "addedIn": "1.3"
+    },
+    {
+      "name": "pin-window",
+      "label": "窗口置顶",
+      "file": "svg/pin-window.svg",
+      "symbolId": "icon-pin-window",
+      "addedIn": "1.3"
+    },
+    {
+      "name": "picture-in-picture",
+      "label": "画中画",
+      "file": "svg/picture-in-picture.svg",
+      "symbolId": "icon-picture-in-picture",
+      "addedIn": "1.3"
+    },
+    {
+      "name": "reverse-playback",
+      "label": "倒放",
+      "file": "svg/reverse-playback.svg",
+      "symbolId": "icon-reverse-playback",
+      "addedIn": "1.4"
+    },
+    {
+      "name": "freeze-frame",
+      "label": "定格",
+      "file": "svg/freeze-frame.svg",
+      "symbolId": "icon-freeze-frame",
+      "addedIn": "1.4"
+    },
+    {
+      "name": "mirror-horizontal",
+      "label": "左右镜像",
+      "file": "svg/mirror-horizontal.svg",
+      "symbolId": "icon-mirror-horizontal",
+      "addedIn": "1.4"
+    },
+    {
+      "name": "mirror-vertical",
+      "label": "上下镜像",
+      "file": "svg/mirror-vertical.svg",
+      "symbolId": "icon-mirror-vertical",
+      "addedIn": "1.4"
+    },
+    {
+      "name": "rotate-left",
+      "label": "向左旋转",
+      "file": "svg/rotate-left.svg",
+      "symbolId": "icon-rotate-left",
+      "addedIn": "1.4"
+    },
+    {
+      "name": "rotate-right",
+      "label": "向右旋转",
+      "file": "svg/rotate-right.svg",
+      "symbolId": "icon-rotate-right",
+      "addedIn": "1.4"
+    },
+    {
+      "name": "undo",
+      "label": "撤销",
+      "file": "svg/undo.svg",
+      "symbolId": "icon-undo",
+      "addedIn": "1.4"
+    },
+    {
+      "name": "redo",
+      "label": "重做",
+      "file": "svg/redo.svg",
+      "symbolId": "icon-redo",
+      "addedIn": "1.4"
+    },
+    {
+      "name": "reset-parameters",
+      "label": "重置参数",
+      "file": "svg/reset-parameters.svg",
+      "symbolId": "icon-reset-parameters",
+      "addedIn": "1.4"
+    },
+    {
+      "name": "link-clips",
+      "label": "关联片段",
+      "file": "svg/link-clips.svg",
+      "symbolId": "icon-link-clips",
+      "addedIn": "1.4"
+    },
+    {
+      "name": "unlink-clips",
+      "label": "解除关联",
+      "file": "svg/unlink-clips.svg",
+      "symbolId": "icon-unlink-clips",
+      "addedIn": "1.4"
+    },
+    {
+      "name": "ripple-delete",
+      "label": "波纹删除",
+      "file": "svg/ripple-delete.svg",
+      "symbolId": "icon-ripple-delete",
+      "addedIn": "1.4"
+    },
+    {
+      "name": "replace-media",
+      "label": "替换素材",
+      "file": "svg/replace-media.svg",
+      "symbolId": "icon-replace-media",
+      "addedIn": "1.5"
+    }
+  ]
+}

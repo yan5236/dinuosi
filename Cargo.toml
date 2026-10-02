@@ -1,0 +1,24 @@
+[workspace]
+members = ["apps/desktop", "crates/core", "crates/command", "crates/icons"]
+default-members = ["apps/desktop"]
+resolver = "3"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[workspace.dependencies]
+dinuosi-core = { path = "crates/core" }
+dinuosi-command = { path = "crates/command" }
+dinuosi-icons = { path = "crates/icons" }
+gpui = "=0.2.2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+uuid = { version = "1", features = ["v4"] }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+all = "warn"

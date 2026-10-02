@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" width="256" height="256" viewBox="0 0 256 256">
+<title>Dinuosi · 切片 D — Editable master</title><desc>Two solid filled paths. 45-degree negative-space cut. No fonts, raster images, strokes or filters.</desc>
+<g inkscape:groupmode="layer" inkscape:label="01 Body · 青色主形" id="layer-body"><path id="d-body" fill="#19C9CF" d="M44 40H128A88 88 0 0 1 206.253692 87.746308L171.637370 122.362630A44 44 0 0 0 128 84H88V172H122L78 216H44Z"/></g>
+<g inkscape:groupmode="layer" inkscape:label="02 Slice · 深青切片" id="layer-slice"><path id="cut-slice" fill="#078D9A" d="M212.054518 101.945482A88 88 0 0 1 128 216H98L145.730572 168.269428A44 44 0 0 0 168.269428 145.730572Z"/></g>
+</svg>

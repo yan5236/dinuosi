@@ -1,0 +1,6 @@
+/target/
+/.local/
+*.log
+.DS_Store
+Thumbs.db
+/.ref/

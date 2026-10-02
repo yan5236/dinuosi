@@ -1,0 +1,18 @@
+[package]
+name = "dinuosi-desktop"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "dinuosi"
+path = "src/main.rs"
+
+[dependencies]
+dinuosi-core.workspace = true
+dinuosi-command.workspace = true
+dinuosi-icons.workspace = true
+gpui.workspace = true
+
+[lints]
+workspace = true
