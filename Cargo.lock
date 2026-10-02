@@ -1334,6 +1334,8 @@ dependencies = [
 name = "dinuosi-core"
 version = "0.1.0"
 dependencies = [
+ "serde",
+ "serde_json",
  "uuid",
 ]
 
@@ -1345,6 +1347,7 @@ dependencies = [
  "dinuosi-core",
  "dinuosi-icons",
  "gpui",
+ "unicode-segmentation",
 ]
 
 [[package]]

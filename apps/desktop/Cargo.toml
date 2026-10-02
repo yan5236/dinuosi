@@ -13,6 +13,7 @@ dinuosi-core.workspace = true
 dinuosi-command.workspace = true
 dinuosi-icons.workspace = true
 gpui.workspace = true
+unicode-segmentation = "1.13"
 
 [dev-dependencies]
 gpui = { workspace = true, features = ["test-support"] }

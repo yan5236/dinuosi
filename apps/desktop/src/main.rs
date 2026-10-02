@@ -1,41 +1,29 @@
 #![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
 
 mod assets;
+mod dialogs;
 mod editor;
+mod input;
+mod manager;
 mod ui;
 mod view;
+mod windows;
 
-use gpui::{
-    App, AppContext, Application, Bounds, TitlebarOptions, WindowBounds, WindowOptions, px, size,
-};
-use view::Desktop;
+use dinuosi_core::ProjectStore;
+use gpui::{App, Application};
 
 /// 启动 GPUI 桌面窗口并注册编译内嵌的品牌和图标资源。
-/// 窗口创建失败时向标准错误报告并退出；关闭最后一个窗口时结束程序。
+/// 用户数据位置缺失或窗口创建失败时报告错误；管理与剪辑窗口生命周期由 windows 模块负责。
 fn main() {
     Application::new()
         .with_assets(assets::Assets)
         .run(|cx: &mut App| {
-            cx.on_window_closed(|cx| {
-                if cx.windows().is_empty() {
-                    cx.quit();
-                }
-            })
-            .detach();
-            let bounds = Bounds::centered(None, size(px(1440.0), px(900.0)), cx);
-            let result = cx.open_window(
-                WindowOptions {
-                    window_bounds: Some(WindowBounds::Windowed(bounds)),
-                    window_min_size: Some(size(px(1040.0), px(640.0))),
-                    titlebar: Some(TitlebarOptions {
-                        title: Some("Dinuosi".into()),
-                        appears_transparent: true,
-                        ..Default::default()
-                    }),
-                    ..Default::default()
-                },
-                |window, cx| cx.new(|cx| Desktop::new(window, cx)),
-            );
+            let result = data_directory().and_then(|directory| {
+                windows::start(
+                    ProjectStore::new(directory.join("recent-projects.json")),
+                    cx,
+                )
+            });
             if let Err(error) = result {
                 eprintln!("无法创建 Dinuosi 窗口：{error}");
                 cx.quit();
@@ -43,4 +31,23 @@ fn main() {
             }
             cx.activate(true);
         });
+}
+
+/// 定位应用数据目录；允许显式 DINUOSI_DATA_DIR 隔离开发/测试数据，不把用户列表写入仓库。
+/// Windows 使用 LOCALAPPDATA，其他平台使用 XDG_DATA_HOME 或用户目录；缺失时明确报错。
+fn data_directory() -> Result<std::path::PathBuf, String> {
+    if let Some(path) = std::env::var_os("DINUOSI_DATA_DIR") {
+        return Ok(std::path::PathBuf::from(path));
+    }
+    let base = if cfg!(target_os = "windows") {
+        std::env::var_os("LOCALAPPDATA").map(std::path::PathBuf::from)
+    } else {
+        std::env::var_os("XDG_DATA_HOME")
+            .map(std::path::PathBuf::from)
+            .or_else(|| {
+                std::env::var_os("HOME").map(|p| std::path::PathBuf::from(p).join(".local/share"))
+            })
+    };
+    base.map(|path| path.join("Dinuosi"))
+        .ok_or_else(|| "无法定位用户数据目录".into())
 }
