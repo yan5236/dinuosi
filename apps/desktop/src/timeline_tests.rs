@@ -153,6 +153,7 @@ fn dynamic_timeline_dragging_and_scroll_follow_actual_tracks(cx: &mut TestAppCon
 }
 
 /// 从素材卡拖到轨道，再框选、移动、裁边、输入参数、删除和撤销，并验证重开磁盘结果。
+/// 检查两侧把手与素材外边框的上下沿完全一致，随后用真实指针事件验证裁剪命中与时长变化。
 #[gpui::test]
 fn timeline_pointer_editing_persists_real_results(cx: &mut TestAppContext) {
     let root = std::env::temp_dir().join(format!("dinuosi-timeline-ui-{}", std::process::id()));
@@ -261,6 +262,14 @@ fn timeline_pointer_editing_persists_real_results(cx: &mut TestAppContext) {
     let content = cx.debug_bounds("timeline-content").unwrap();
     assert_eq!(left.size.width, px(crate::trim_handle::WIDTH));
     assert_eq!(right.size.width, left.size.width);
+    for handle in [left, right] {
+        assert_eq!(handle.top(), clip.top(), "把手顶部必须与素材外边框平齐");
+        assert_eq!(
+            handle.bottom(),
+            clip.bottom(),
+            "把手底部必须与素材外边框平齐"
+        );
+    }
     assert!((left.right() - clip.left()).abs() <= px(1.0));
     assert!((right.left() - clip.right()).abs() <= px(1.0));
     assert!(left.left() >= content.left());

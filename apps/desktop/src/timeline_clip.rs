@@ -8,6 +8,7 @@ use dinuosi_core::timeline::Clip;
 use gpui::{Context, Div, MouseButton, ObjectFit, Stateful, div, img, prelude::*, px, rgb};
 impl Desktop {
     /// 仅绘制可见片段与真实端点把手；水平滚动截断处不伪造端点，零秒处预留把手空间。
+    /// 把手锚点补偿父容器的 1px 边框，并使用片段完整高度，保持上下外边框平齐及原有圆角。
     pub(crate) fn timeline_clip(
         &self,
         clip: &Clip,
@@ -96,8 +97,8 @@ impl Desktop {
                             let id = clip.id.clone();
                             div()
                                 .absolute()
-                                .top_0()
-                                .h_full()
+                                .top(px(-1.0))
+                                .h(px(h - 8.0))
                                 .w_0()
                                 .when(left, |s| s.left_0())
                                 .when(!left, |s| s.right_0())
