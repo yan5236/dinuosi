@@ -18,6 +18,7 @@ mod timeline_actions;
 mod timeline_clip;
 mod timeline_drag;
 mod timeline_preview;
+mod timeline_scroll;
 mod timeline_sound;
 mod timeline_state;
 mod timeline_tracks;
@@ -30,6 +31,8 @@ mod windows;
 
 #[cfg(test)]
 mod editor_media_tests;
+#[cfg(test)]
+mod timeline_scroll_tests;
 #[cfg(test)]
 mod timeline_tests;
 #[cfg(test)]

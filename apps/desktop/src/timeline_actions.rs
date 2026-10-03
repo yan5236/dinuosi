@@ -1,6 +1,9 @@
 //! 指针手势到核心编辑事务的适配；拖动中只更新预览，释放时一次保存与记录历史。
-use crate::{timeline_state::Gesture, view::Desktop};
-use dinuosi_core::timeline::{Property, Timeline};
+use crate::{
+    timeline_state::{DropTarget, Gesture},
+    view::Desktop,
+};
+use dinuosi_core::timeline::{Property, Timeline, TrackKind};
 use gpui::{Context, MouseDownEvent, Pixels, Point, Window};
 
 impl Desktop {
@@ -34,6 +37,7 @@ impl Desktop {
         self.stop_timeline();
         self.stop_preview();
         self.timeline.before = Some(self.timeline.model.clone());
+        self.timeline.gesture_scroll = gpui::point(self.timeline.scroll_x, self.timeline.scroll_y);
         self.timeline.gesture = Some(match edge {
             Some(left) => Gesture::Trim {
                 start: event.position,
@@ -68,6 +72,7 @@ impl Desktop {
             Default::default()
         };
         self.timeline.selected = additive.clone();
+        self.timeline.gesture_scroll = gpui::point(self.timeline.scroll_x, self.timeline.scroll_y);
         self.timeline.gesture = Some(Gesture::Marquee {
             start: event.position,
             additive,
@@ -102,6 +107,7 @@ impl Desktop {
         self.timeline.pointer = point;
         match gesture {
             Gesture::Marquee { start, additive } => {
+                let start = self.timeline_gesture_start(*start);
                 let (a, b) = (
                     self.timeline_frame_at(start.x),
                     self.timeline_frame_at(point.x),
@@ -109,7 +115,7 @@ impl Desktop {
                 let top = start.y.min(point.y);
                 let bottom = start.y.max(point.y);
                 let mut selected = additive.clone();
-                for track in 0..3 {
+                for track in 0..self.timeline.model.tracks.len() {
                     let (y, h) = self.track_geometry(track);
                     let y = self.timeline.bounds.top() + gpui::px(y);
                     if bottom >= y && top <= y + gpui::px(h) {
@@ -124,28 +130,12 @@ impl Desktop {
                 self.timeline.selected = selected;
                 self.timeline.moved = true;
             }
-            Gesture::Move { start, track } => {
-                let delta = ((f32::from(point.x - start.x) / self.pixels_per_second())
-                    * self.timeline.model.fps as f32)
-                    .round() as i64;
-                let target = self.track_at(point.y).unwrap_or(*track);
-                if let Some(before) = &self.timeline.before {
-                    let mut next = before.clone();
-                    if next
-                        .move_clips(
-                            &self.timeline.selected,
-                            delta,
-                            target as isize - *track as isize,
-                        )
-                        .is_ok()
-                    {
-                        self.timeline.model = next;
-                    }
-                }
+            Gesture::Move { start, .. } | Gesture::Track { start, .. } => {
                 self.timeline.moved |=
                     f32::from(point.x - start.x).abs() + f32::from(point.y - start.y).abs() > 4.0;
             }
             Gesture::Trim { start, id, left } => {
+                let start = self.timeline_gesture_start(*start);
                 let delta = ((f32::from(point.x - start.x) / self.pixels_per_second())
                     * self.timeline.model.fps as f32)
                     .round() as i64;
@@ -197,30 +187,70 @@ impl Desktop {
     }
     /// 释放手势并提交一次事务；素材仅在合法落点插入，窗口外释放取消素材拖入。
     pub(crate) fn end_timeline_pointer(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.timeline.scroll_task = None;
         let Some(gesture) = self.timeline.gesture.take() else {
             return;
         };
-        if let Gesture::Library { index, .. } = gesture {
-            if self.timeline.moved
-                && self.timeline.bounds.contains(&self.timeline.pointer)
-                && f32::from(self.timeline.pointer.x - self.timeline.bounds.left())
+        match gesture {
+            Gesture::Library { index, .. } if self.timeline.moved => {
+                if f32::from(self.timeline.pointer.x - self.timeline.bounds.left())
                     >= self.timeline.header
-                && let Some(track) = self.track_at(self.timeline.pointer.y)
-            {
-                self.insert_media_clip(
-                    index,
-                    track,
-                    self.timeline_frame_at(self.timeline.pointer.x),
-                    window,
-                    cx,
-                );
+                    && let Some(target) = self.timeline_drop_target(self.timeline.pointer)
+                {
+                    self.timeline.before = Some(self.timeline.model.clone());
+                    let track = match target {
+                        DropTarget::Track(i) => i,
+                        DropTarget::Insert(i) => self
+                            .timeline
+                            .model
+                            .create_track(i, TrackKind::Media)
+                            .unwrap(),
+                    };
+                    self.insert_media_clip(
+                        index,
+                        track,
+                        self.timeline_frame_at(self.timeline.pointer.x),
+                        window,
+                        cx,
+                    );
+                    if let Some(before) = self.timeline.before.take() {
+                        self.timeline.model = before;
+                    }
+                }
             }
-        } else if let Some(before) = self.timeline.before.take() {
-            self.commit_timeline(before, cx);
+            Gesture::Move { start, track } => {
+                if let Some(before) = self.timeline.before.take() {
+                    if self.timeline.moved
+                        && let Some(next) = self.clip_drop_model(&before, start, track)
+                    {
+                        self.timeline.model = next;
+                    }
+                    self.commit_timeline(before, cx);
+                }
+            }
+            Gesture::Track { index, .. } => {
+                if let Some(before) = self.timeline.before.take() {
+                    if self.timeline.moved
+                        && let Some(target) = self.timeline_drop_target(self.timeline.pointer)
+                    {
+                        let (DropTarget::Insert(above) | DropTarget::Track(above)) = target;
+                        if let Err(error) = self.timeline.model.reorder_track(index, above) {
+                            self.notice = Some(error);
+                        }
+                    }
+                    self.commit_timeline(before, cx);
+                }
+            }
+            _ => {
+                if let Some(before) = self.timeline.before.take() {
+                    self.commit_timeline(before, cx);
+                }
+            }
         }
         cx.notify();
     }
-    /// 调用核心建立片段，插入使用当前素材选区；成功后聚焦时间线并选择新片段。
+    /// 按鼠标落点建立片段，使用当前素材选区；片段间边界插入后移后续素材，其他重叠自动分轨。
+    /// 成功后聚焦并选择新片段；失败回滚本次模型且显示实际错误。
     pub(crate) fn insert_media_clip(
         &mut self,
         index: usize,
@@ -232,7 +262,11 @@ impl Desktop {
         let Some(m) = self.session.media.get(index).filter(|m| !m.offline) else {
             return;
         };
-        let before = self.timeline.model.clone();
+        let before = self
+            .timeline
+            .before
+            .take()
+            .unwrap_or_else(|| self.timeline.model.clone());
         let duration = self.timeline.model.frame(m.duration).max(1);
         let range = if self.session.selected == Some(index) {
             self.timeline.model.frame(self.session.trim_start)
@@ -244,14 +278,33 @@ impl Desktop {
         } else {
             0..duration
         };
-        match self.timeline.model.insert(
-            m.path.clone(),
-            m.name.clone(),
+        let insertion = self.timeline.model.insertion_frame(
             track,
             start,
-            range,
-            duration,
-        ) {
+            (8.0 / self.pixels_per_second() * self.timeline.model.fps as f32).round() as i64,
+            &Default::default(),
+        );
+        let start = insertion.unwrap_or(start);
+        let result = if insertion.is_some() {
+            self.timeline.model.insert_ripple(
+                m.path.clone(),
+                m.name.clone(),
+                track,
+                start,
+                range,
+                duration,
+            )
+        } else {
+            self.timeline.model.insert(
+                m.path.clone(),
+                m.name.clone(),
+                track,
+                start,
+                range,
+                duration,
+            )
+        };
+        match result {
             Ok(id) => {
                 self.timeline.selected.clear();
                 self.timeline.selected.insert(id);
@@ -262,13 +315,17 @@ impl Desktop {
                 self.commit_timeline(before, cx);
             }
             Err(error) => {
+                self.timeline.model = before;
                 self.notice = Some(error);
                 cx.notify();
             }
         }
     }
-    /// 同步保存小型项目元数据以串行化已有素材写入；失败回滚本次编辑并显示实际错误。
+    /// 提交前清理空非主轨并同步保存元数据；主轨保留，轨道清理与编辑共用一条撤销历史。
+    /// 失败回滚本次编辑并显示实际错误，成功刷新轨道几何和预览。
     pub(crate) fn commit_timeline(&mut self, before: Timeline, cx: &mut Context<Self>) {
+        self.timeline.model.remove_empty_tracks();
+        self.timeline.rename = None;
         if before == self.timeline.model {
             return;
         }

@@ -252,7 +252,7 @@ impl Desktop {
                             if let Some(index) = this.session.selected {
                                 this.insert_media_clip(
                                     index,
-                                    2,
+                                    this.timeline.model.main_track(),
                                     this.timeline.model.frame(this.session.timeline_position),
                                     window,
                                     cx,

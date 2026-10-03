@@ -4,7 +4,17 @@ use dinuosi_core::timeline::{History, Property, Timeline};
 use gpui::{Bounds, Entity, Pixels, Point, RenderImage, Task};
 use std::{collections::BTreeSet, sync::Arc};
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DropTarget {
+    Track(usize),
+    Insert(usize),
+}
+
 pub enum Gesture {
+    Track {
+        start: Point<Pixels>,
+        index: usize,
+    },
     Marquee {
         start: Point<Pixels>,
         additive: BTreeSet<String>,
@@ -45,6 +55,8 @@ pub struct TimelineSession {
     pub before: Option<Timeline>,
     pub pointer: Point<Pixels>,
     pub moved: bool,
+    pub gesture_scroll: Point<f32>,
+    pub scroll_task: Option<Task<()>>,
     pub bounds: Bounds<Pixels>,
     pub header: f32,
     pub ruler: f32,
@@ -79,6 +91,7 @@ impl Desktop {
                     * self.pixels_per_second(),
             )
             .max(visible * 2.0)
+            .max(self.timeline.scroll_x + visible)
     }
     /// 返回排除轨道头、两端外置把手预留和竖向滚动条后的时间宽度，最少一个像素。
     pub(crate) fn timeline_view_width(&self) -> f32 {
@@ -96,19 +109,69 @@ impl Desktop {
                 / self.pixels_per_second()) as f64,
         )
     }
-    /// 根据实际窗口高度按草图定位轨道；三行高度为字幕 34、媒体 58、主轨 64 的比例。
-    pub(crate) fn track_geometry(&self, index: usize) -> (f32, f32) {
-        let height = f32::from(self.timeline.bounds.size.height).max(240.0);
-        let scale = (height / 354.0).max(0.8);
-        let top = [126.0, 172.0, 238.0][index] * scale - self.timeline.scroll_y;
-        (top, [34.0, 54.0, 58.0][index] * scale)
+    /// 将按下位置按手势期间的滚动差换回当前窗口坐标；框选和片段位移始终锚定内容。
+    pub(crate) fn timeline_gesture_start(&self, start: Point<Pixels>) -> Point<Pixels> {
+        start
+            - gpui::point(
+                gpui::px(self.timeline.scroll_x - self.timeline.gesture_scroll.x),
+                gpui::px(self.timeline.scroll_y - self.timeline.gesture_scroll.y),
+            )
     }
-    /// 命中当前鼠标所在轨道；空白区不创建额外轨道，不把字幕轨道作为媒体目标。
+    /// 按当前轨道数计算行位置；主轨保持下方，轨道增多后内容自然扩展，不预设三行。
+    /// 返回面板内坐标及行高，包含当前竖向滚动偏移。
+    pub(crate) fn track_geometry(&self, index: usize) -> (f32, f32) {
+        let scale = (f32::from(self.timeline.bounds.size.height).max(240.0) / 354.0).max(0.8);
+        let heights: Vec<_> = self
+            .timeline
+            .model
+            .tracks
+            .iter()
+            .map(|t| {
+                if t.kind == dinuosi_core::timeline::TrackKind::Subtitle {
+                    34.0 * scale
+                } else {
+                    58.0 * scale
+                }
+            })
+            .collect();
+        let above: f32 = heights
+            .iter()
+            .take(heights.len().saturating_sub(1))
+            .map(|h| h + 12.0)
+            .sum();
+        let first = (238.0 * scale - above).max(70.0);
+        let top = first + heights.iter().take(index).map(|h| h + 12.0).sum::<f32>();
+        (top - self.timeline.scroll_y, heights[index])
+    }
+    /// 返回实际轨道底部后的内容高度；单轨没有多余滚动范围，增删轨道后重新夹紧偏移。
+    pub(crate) fn timeline_content_height(&self) -> f32 {
+        let (top, height) = self.track_geometry(self.timeline.model.tracks.len() - 1);
+        (top + self.timeline.scroll_y + height + 24.0 - 38.0).max(1.0)
+    }
+    /// 命中实际轨道行；字幕是否接收素材由核心类型约束决定。
     pub(crate) fn track_at(&self, y: Pixels) -> Option<usize> {
         let y = f32::from(y - self.timeline.bounds.top());
-        (0..3).find(|i| {
+        (0..self.timeline.model.tracks.len()).find(|i| {
             let (top, height) = self.track_geometry(*i);
-            y >= top && y <= top + height
+            y >= top + 6.0 && y <= top + height - 6.0
+        })
+    }
+    /// 返回拖放目标：行内部放入现有轨道，上方空白和行间边界显示插轨线。
+    /// 面板外或标尺/底部滚动条上没有有效落点；空白只在现有轨道上方创建新轨道。
+    pub(crate) fn timeline_drop_target(&self, point: Point<Pixels>) -> Option<DropTarget> {
+        if !self.timeline.bounds.contains(&point) {
+            return None;
+        }
+        let y = f32::from(point.y - self.timeline.bounds.top());
+        if y <= 38.0 || y >= f32::from(self.timeline.bounds.size.height) - 12.0 {
+            return None;
+        }
+        if let Some(index) = self.track_at(point.y) {
+            return Some(DropTarget::Track(index));
+        }
+        (0..self.timeline.model.tracks.len()).find_map(|i| {
+            let (top, _) = self.track_geometry(i);
+            (y <= top + 6.0).then_some(DropTarget::Insert(i))
         })
     }
 }

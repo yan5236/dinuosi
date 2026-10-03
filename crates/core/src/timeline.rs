@@ -96,8 +96,17 @@ pub struct Clip {
     pub transform: Transform,
 }
 
+/// 轨道职责与显示名分离；字幕类型保留，但新项目仅创建主轨。
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TrackKind {
+    Main,
+    Media,
+    Subtitle,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct Track {
+    pub kind: TrackKind,
     pub name: String,
     pub locked: bool,
     pub visible: bool,
@@ -115,22 +124,20 @@ pub struct Timeline {
 }
 
 impl Default for Timeline {
-    /// 创建草图的字幕、媒体和主轨空轨道，不生成示例素材。
+    /// 创建唯一空主轨；字幕与媒体轨道按需创建，不生成示例素材。
     fn default() -> Self {
         Self {
             fps: 30,
             width: 1920,
             height: 1080,
             clips: Vec::new(),
-            tracks: ["字幕轨道", "媒体轨道", "主轨"]
-                .into_iter()
-                .map(|name| Track {
-                    name: name.into(),
-                    locked: false,
-                    visible: true,
-                    muted: false,
-                })
-                .collect(),
+            tracks: vec![Track {
+                kind: TrackKind::Main,
+                name: "主轨".into(),
+                locked: false,
+                visible: true,
+                muted: false,
+            }],
         }
     }
 }
@@ -158,7 +165,14 @@ impl Timeline {
             || self.height == 0
             || self.width > 16384
             || self.height > 16384
-            || self.tracks.len() != 3
+            || self.tracks.is_empty()
+            || self.tracks.last().is_none_or(|t| t.kind != TrackKind::Main)
+            || self
+                .tracks
+                .iter()
+                .filter(|t| t.kind == TrackKind::Main)
+                .count()
+                != 1
         {
             return Err("时间线格式无效".into());
         }
@@ -192,97 +206,16 @@ impl Timeline {
                 }
             }
         }
-        Ok(())
-    }
-    /// 在未锁定的媒体/主轨创建独立片段；源选区以项目帧表示，源文件始终只读。
-    pub fn insert(
-        &mut self,
-        source: PathBuf,
-        name: String,
-        track: usize,
-        start: i64,
-        range: std::ops::Range<i64>,
-        source_frames: i64,
-    ) -> Result<String, String> {
-        if track == 0 || !self.tracks.get(track).is_some_and(|t| !t.locked) {
-            return Err("此轨道不能接收素材".into());
-        }
-        if range.start < 0
-            || range.end <= range.start
-            || range.end > source_frames
-            || source_frames > 86400 * self.fps as i64
-            || start < 0
-            || start > 86400 * self.fps as i64
-        {
-            return Err("素材选区无效".into());
-        }
-        let id = Uuid::new_v4().to_string();
-        self.clips.push(Clip {
-            id: id.clone(),
-            source,
-            name,
-            track,
-            start,
-            duration: range.end - range.start,
-            source_in: range.start,
-            source_frames,
-            transform: Transform::default(),
-        });
-        Ok(id)
-    }
-    /// 原子移动整组片段，保留相对间距；触及零点时整组夹紧，锁轨或非法目标拒绝整个操作。
-    pub fn move_clips(
-        &mut self,
-        ids: &BTreeSet<String>,
-        delta: i64,
-        track_delta: isize,
-    ) -> Result<(), String> {
-        let selected: Vec<_> = self.clips.iter().filter(|c| ids.contains(&c.id)).collect();
-        for c in &selected {
-            let target = c.track as isize + track_delta;
-            if self.tracks[c.track].locked
-                || target <= 0
-                || !self.tracks.get(target as usize).is_some_and(|t| !t.locked)
-            {
-                return Err("无法移动到此轨道".into());
+        for (i, clip) in self.clips.iter().enumerate() {
+            if self.clips[..i].iter().any(|other| {
+                other.track == clip.track
+                    && other.start < clip.start + clip.duration
+                    && clip.start < other.start + other.duration
+            }) {
+                return Err("同一轨道的片段不能重叠".into());
             }
         }
-        let min = selected.iter().map(|c| c.start).min().unwrap_or(0);
-        let max = selected.iter().map(|c| c.start).max().unwrap_or(0);
-        let delta = delta.clamp(-min, 86400 * self.fps as i64 - max);
-        for c in self.clips.iter_mut().filter(|c| ids.contains(&c.id)) {
-            c.start += delta;
-            c.track = (c.track as isize + track_delta) as usize;
-        }
         Ok(())
-    }
-    /// 拖动片段左右边缘，最短一帧且不超出源时长；左边缘同步调整源入点。
-    pub fn trim(&mut self, id: &str, left: bool, delta: i64) -> Result<(), String> {
-        let c = self
-            .clips
-            .iter_mut()
-            .find(|c| c.id == id)
-            .ok_or("片段不存在")?;
-        if self.tracks[c.track].locked {
-            return Err("轨道已锁定".into());
-        }
-        if left {
-            let delta = delta.clamp(-c.source_in.min(c.start), c.duration - 1);
-            c.start += delta;
-            c.source_in += delta;
-            c.duration -= delta;
-        } else {
-            c.duration = c
-                .duration
-                .saturating_add(delta)
-                .clamp(1, c.source_frames - c.source_in);
-        }
-        Ok(())
-    }
-    /// 删除选中的未锁定片段，保留素材库和源文件；锁定轨道的片段不会被删除。
-    pub fn delete(&mut self, ids: &BTreeSet<String>) {
-        self.clips
-            .retain(|c| !ids.contains(&c.id) || self.tracks[c.track].locked);
     }
     /// 对选中且未锁定片段设置同一检查器参数；输入先校验，避免部分更新。
     pub fn set_property(

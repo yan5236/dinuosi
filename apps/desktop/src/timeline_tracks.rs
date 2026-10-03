@@ -8,7 +8,8 @@ use crate::{
 use dinuosi_icons::Icon;
 use gpui::{Context, Div, MouseButton, div, prelude::*, px, rgb, svg};
 impl Desktop {
-    /// 绘制草图中的名称、重命名、锁定、可见和静音控件，轨道高度与片段严格共用。
+    /// 绘制实际轨道的名称、重命名、锁定、可见和静音控件，行高与片段严格共用。
+    /// 自由轨道名称接入整体拖动；字幕图标和静音入口按类型判断，不依赖行号。
     pub(crate) fn track_header_view(
         &self,
         index: usize,
@@ -31,17 +32,27 @@ impl Desktop {
             .bg(rgb(PANEL))
             .child(
                 svg()
-                    .path(if index == 0 {
-                        Icon::Text.path()
-                    } else {
-                        Icon::Video.path()
-                    })
+                    .path(
+                        if track.kind == dinuosi_core::timeline::TrackKind::Subtitle {
+                            Icon::Text.path()
+                        } else {
+                            Icon::Video.path()
+                        },
+                    )
                     .size(px(19.0))
                     .flex_none()
                     .text_color(rgb(TEXT)),
             )
             .child(
                 div()
+                    .id(gpui::SharedString::from(format!("track-drag-{index}")))
+                    .debug_selector(move || format!("track-drag-{index}"))
+                    .on_mouse_down(
+                        MouseButton::Left,
+                        cx.listener(move |this, e, window, cx| {
+                            this.begin_track_drag(index, e, window, cx)
+                        }),
+                    )
                     .flex_1()
                     .min_w_0()
                     .text_size(px(13.0))
@@ -106,25 +117,30 @@ impl Desktop {
                 )
                 .on_click(cx.listener(move |this, _, _, cx| this.toggle_track(index, 1, cx))),
             )
-            .when(index > 0, |s| {
-                s.child(
-                    Tooltip::tool(
-                        format!("track-mute-{index}"),
-                        if track.muted {
-                            Icon::Mute
-                        } else {
-                            Icon::Volume
-                        },
-                        true,
-                        if track.muted {
-                            "取消轨道静音"
-                        } else {
-                            "轨道静音"
-                        },
+            .when(
+                track.kind != dinuosi_core::timeline::TrackKind::Subtitle,
+                |s| {
+                    s.child(
+                        Tooltip::tool(
+                            format!("track-mute-{index}"),
+                            if track.muted {
+                                Icon::Mute
+                            } else {
+                                Icon::Volume
+                            },
+                            true,
+                            if track.muted {
+                                "取消轨道静音"
+                            } else {
+                                "轨道静音"
+                            },
+                        )
+                        .on_click(
+                            cx.listener(move |this, _, _, cx| this.toggle_track(index, 2, cx)),
+                        ),
                     )
-                    .on_click(cx.listener(move |this, _, _, cx| this.toggle_track(index, 2, cx))),
-                )
-            })
+                },
+            )
     }
     /// 绘制真实比例滚动条，拖拽滑块按内容/视口比例移动，点击轨道跳转相应位置。
     pub(crate) fn timeline_scrollbar(

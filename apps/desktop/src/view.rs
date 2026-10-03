@@ -400,6 +400,7 @@ impl Render for Desktop {
                     if event.pressed_button == Some(gpui::MouseButton::Left) {
                         this.move_pointer(event.position.x, cx);
                         this.move_timeline_pointer(event.position, cx);
+                        this.update_timeline_autoscroll(event.position, cx);
                     } else {
                         this.end_pointer(window, cx);
                         this.end_timeline_pointer(window, cx);
