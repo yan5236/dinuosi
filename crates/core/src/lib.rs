@@ -1,7 +1,10 @@
-//! 不依赖 GUI 的项目领域模型及版本化项目存储。
+//! 不依赖 GUI 的项目领域模型、媒体处理及版本化项目存储。
 
+pub mod media;
+pub mod media_stream;
+mod midi;
 mod storage;
-pub use storage::{ProjectEntry, ProjectStore};
+pub use storage::{MediaImport, ProjectEntry, ProjectStore};
 
 use uuid::Uuid;
 
@@ -12,6 +15,8 @@ pub struct Project {
     name: String,
     created_at: u64,
     modified_at: u64,
+    media_paths: Vec<std::path::PathBuf>,
+    media_names: std::collections::BTreeMap<std::path::PathBuf, String>,
 }
 
 impl Project {
@@ -25,6 +30,8 @@ impl Project {
             name: name.to_owned(),
             created_at: now,
             modified_at: now,
+            media_paths: Vec::new(),
+            media_names: Default::default(),
         })
     }
 

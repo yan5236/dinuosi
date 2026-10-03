@@ -4,10 +4,21 @@ mod assets;
 mod dialogs;
 mod editor;
 mod input;
+mod library;
 mod manager;
+mod media;
+mod media_actions;
+mod media_status;
+mod playback;
+mod preview;
+mod preview_view;
+mod sliders;
 mod ui;
 mod view;
 mod windows;
+
+#[cfg(test)]
+mod editor_media_tests;
 
 use dinuosi_core::ProjectStore;
 use gpui::{App, Application};

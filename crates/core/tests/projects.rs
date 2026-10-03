@@ -3,6 +3,82 @@ use std::{fs, path::PathBuf};
 use uuid::Uuid;
 
 struct Workspace(PathBuf);
+
+/// 验证素材别名在重开和离线恢复时保留；移除只改引用，坏索引和无效名称不改变项目。
+#[test]
+fn media_alias_and_removal_preserve_source_files() {
+    let workspace = Workspace::new();
+    let store = workspace.store();
+    let entry = store.create("素材管理", &workspace.0).unwrap();
+    let source = workspace.0.join("源视频.mp4");
+    fs::write(&source, b"source bytes").unwrap();
+    store
+        .add_media_paths(&entry, std::slice::from_ref(&source))
+        .unwrap();
+    let path = fs::canonicalize(&source).unwrap();
+    store.rename_media(&entry, &path, "  新名称  ").unwrap();
+    let loaded = workspace.store().load_media(&entry).unwrap();
+    assert_eq!(loaded[0].name, "新名称");
+    assert_eq!(loaded[0].path, path);
+    assert_eq!(fs::read(&source).unwrap(), b"source bytes");
+    let before = fs::read(&entry.path).unwrap();
+    assert!(store.rename_media(&entry, &path, " ").is_err());
+    assert_eq!(fs::read(&entry.path).unwrap(), before);
+    let index = workspace.0.join("data/recent.json");
+    let index_bytes = fs::read(&index).unwrap();
+    fs::write(&index, b"broken").unwrap();
+    assert!(store.remove_media(&entry, &path).is_err());
+    assert_eq!(fs::read(&entry.path).unwrap(), before);
+    fs::write(&index, index_bytes).unwrap();
+    store.remove_media(&entry, &path).unwrap();
+    assert!(workspace.store().load_media(&entry).unwrap().is_empty());
+    assert_eq!(fs::read(&source).unwrap(), b"source bytes");
+    store
+        .add_media_paths(&entry, std::slice::from_ref(&source))
+        .unwrap();
+    let moved = workspace.0.join("暂时失联.mp4");
+    fs::rename(&source, &moved).unwrap();
+    store.rename_media(&entry, &path, "离线别名").unwrap();
+    assert_eq!(store.load_media(&entry).unwrap()[0].name, "离线别名");
+    store.remove_media(&entry, &path).unwrap();
+    assert_eq!(fs::read(&moved).unwrap(), b"source bytes");
+}
+
+/// 验证媒体保存仅记录源路径，重复导入去重，重命名/重开保留引用，写入失败保留原项目。
+#[test]
+fn media_references_survive_reopen_without_copying_sources() {
+    let workspace = Workspace::new();
+    let store = workspace.store();
+    let entry = store.create("引用项目", &workspace.0).unwrap();
+    let source = workspace.0.join("源视频.mp4");
+    fs::write(&source, b"source bytes").unwrap();
+    store
+        .add_media_paths(&entry, &[source.clone(), source.clone()])
+        .unwrap();
+    let canonical = fs::canonicalize(&source).unwrap();
+    assert_eq!(
+        workspace.store().media_paths(&entry).unwrap(),
+        vec![canonical.clone()]
+    );
+    assert!(!entry.path.parent().unwrap().join("源视频.mp4").exists());
+    let renamed = store.rename(&entry, "新名称").unwrap();
+    assert_eq!(store.media_paths(&renamed).unwrap(), vec![canonical]);
+    let before = fs::read(&entry.path).unwrap();
+    assert!(
+        store
+            .add_media_paths(&entry, &[workspace.0.join("missing.mp4")])
+            .is_err()
+    );
+    assert_eq!(fs::read(&entry.path).unwrap(), before);
+    fs::write(workspace.0.join("data/recent.json"), b"broken index").unwrap();
+    assert!(
+        store
+            .add_media_paths(&entry, std::slice::from_ref(&source))
+            .is_err()
+    );
+    assert_eq!(fs::read(&entry.path).unwrap(), before);
+    assert_eq!(fs::read(source).unwrap(), b"source bytes");
+}
 impl Workspace {
     /// 创建隔离临时目录供真实磁盘回归使用，名称带随机 UUID，不复用用户目录。
     fn new() -> Self {

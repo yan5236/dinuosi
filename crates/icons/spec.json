@@ -1,9 +1,9 @@
 {
-  "name": "轻线 · 完整界面图标集（89 枚完整版）",
-  "version": "1.5",
-  "count": 89,
-  "previousCount": 88,
-  "additionCount": 1,
+  "name": "轻线 · 完整界面图标集（95 枚完整版）",
+  "version": "1.6",
+  "count": 95,
+  "previousCount": 89,
+  "additionCount": 6,
   "viewBox": "0 0 24 24",
   "strokeWidth": 1.8,
   "stroke": "currentColor",
@@ -386,7 +386,7 @@
     },
     {
       "name": "video",
-      "label": "视频片段",
+      "label": "视频",
       "file": "svg/video.svg",
       "symbolId": "icon-video",
       "addedIn": "1.2"
@@ -635,6 +635,36 @@
       "file": "svg/replace-media.svg",
       "symbolId": "icon-replace-media",
       "addedIn": "1.5"
+    },
+    {
+      "name": "all-media",
+      "label": "全部素材",
+      "file": "svg/all-media.svg"
+    },
+    {
+      "name": "audio",
+      "label": "音频",
+      "file": "svg/audio.svg"
+    },
+    {
+      "name": "motion",
+      "label": "动效",
+      "file": "svg/motion.svg"
+    },
+    {
+      "name": "effects",
+      "label": "特效",
+      "file": "svg/effects.svg"
+    },
+    {
+      "name": "playhead-head",
+      "label": "播放头",
+      "file": "svg/playhead-head.svg"
+    },
+    {
+      "name": "warning",
+      "label": "媒体离线",
+      "file": "svg/warning.svg"
     }
   ]
 }

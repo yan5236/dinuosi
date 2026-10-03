@@ -9,7 +9,6 @@ use gpui::{
     Context, Div, FocusHandle, IntoElement, PathPromptOptions, Render, Window, div, prelude::*, px,
     rgb, svg,
 };
-
 /// 一个原生窗口的会话；项目数据由 Core 保存，窗口缩放与音量仅属于编辑会话。
 pub struct Desktop {
     pub(crate) focus_handle: FocusHandle,
@@ -24,8 +23,8 @@ pub struct Desktop {
     pub(crate) busy: bool,
     pub(crate) zoom: f32,
     pub(crate) volume: f32,
+    pub(crate) session: crate::preview::EditorSession,
 }
-
 impl Desktop {
     /// 初始化窗口角色和快捷键焦点；后台加载最近列表，损坏索引以错误提示呈现。
     /// 原生关闭在磁盘操作期间被阻止，避免窗口销毁后遗失错误反馈或重复创建。
@@ -42,19 +41,36 @@ impl Desktop {
             weak.read_with(cx, |view, _| !view.busy).unwrap_or(true)
         });
         let load_store = store.clone();
+        let load_entry = current.clone();
         cx.spawn_in(window, async move |this, cx| {
-            let result = cx.background_spawn(async move { load_store.list() }).await;
+            let result = cx
+                .background_spawn(async move {
+                    let projects = load_store.list()?;
+                    let mut media = Vec::new();
+                    if let Some(entry) = load_entry {
+                        media = load_store
+                            .load_media(&entry)?
+                            .into_iter()
+                            .map(crate::media::Media::from_source)
+                            .collect();
+                    }
+                    Ok::<_, String>((projects, media))
+                })
+                .await;
             let _ = this.update_in(cx, |this, _, cx| {
                 this.busy = false;
                 match result {
-                    Ok(entries) => this.projects = entries,
+                    Ok((entries, media)) => {
+                        this.projects = entries;
+                        this.session.media = media;
+                    }
                     Err(error) => this.notice = Some(error),
                 }
                 cx.notify();
             });
         })
         .detach();
-        Self {
+        let mut desktop = Self {
             focus_handle,
             store,
             current,
@@ -67,9 +83,11 @@ impl Desktop {
             busy: true,
             zoom: 1.0,
             volume: 1.0,
-        }
+            session: crate::preview::EditorSession::new(cx),
+        };
+        desktop.watch_media(window, cx);
+        desktop
     }
-
     /// 打开新建或管理弹窗并聚焦名称/确认控件；已有后台操作期间忽略重复请求。
     pub(crate) fn show_dialog(
         &mut self,
@@ -84,11 +102,11 @@ impl Desktop {
         dialog.focus_first(window, cx);
         self.dialog = Some(dialog);
         self.project_menu = None;
+        self.session.media_menu = None;
         self.menu_open = false;
         self.notice = None;
         cx.notify();
     }
-
     /// 关闭弹窗并恢复工作区快捷键焦点；持久化期间保持弹窗以展示最终结果。
     pub(crate) fn cancel_dialog(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.busy {
@@ -98,7 +116,6 @@ impl Desktop {
         self.focus_handle.focus(window);
         cx.notify();
     }
-
     /// 执行共享项目命令于后台，成功后刷新真实列表；创建/打开通过独立窗口切换进入剪辑主体。
     /// 失败保留当前窗口和表单输入，错误显示在弹窗或工作区；busy 防止重复磁盘操作。
     pub(crate) fn run_project(
@@ -155,7 +172,6 @@ impl Desktop {
         .detach();
         cx.notify();
     }
-
     /// 通过原生文件选择器导入持久化项目；取消不修改列表，选择失败显示可读错误。
     pub(crate) fn import_project(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.busy {
@@ -188,7 +204,6 @@ impl Desktop {
         .detach();
         cx.notify();
     }
-
     /// 从剪辑窗口返回独立管理窗口；成功创建管理窗口后销毁剪辑窗口，失败保留剪辑会话。
     fn show_manager(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.busy || self.current.is_none() {
@@ -199,14 +214,12 @@ impl Desktop {
             cx.notify();
         }
     }
-
     /// 按用户操作显示未接入功能说明；不修改持久化项目或自动生成示例数据。
     pub(crate) fn inform(&mut self, message: &str, cx: &mut Context<Self>) {
         self.notice = Some(message.to_owned());
         self.menu_open = false;
         cx.notify();
     }
-
     /// 构造剪辑标题栏；品牌导航创建独立管理窗口，系统命中区保留原生拖动与窗口控制。
     pub(crate) fn editor_titlebar(
         &self,
@@ -278,8 +291,7 @@ impl Desktop {
             )
             .child(ui::window_controls(window, true))
     }
-
-    /// 按原有三项文本菜单构造浮层，保留背景、间距及悬停样式；新建与管理入口调用持久化流程。
+    /// 构造文件菜单，沿用原有样式；素材导入位于此处，项目入口调用持久化流程。
     /// 浮层遮挡底层点击；关闭窗口期间检查 busy，关闭成功后由窗口观察器重新打开管理窗口。
     fn file_menu(&self, top: f32, cx: &mut Context<Self>) -> Div {
         div()
@@ -306,6 +318,20 @@ impl Desktop {
             )
             .child(
                 div()
+                    .id("menu-import-media")
+                    .debug_selector(|| "menu-import-media".into())
+                    .p(px(10.0))
+                    .cursor_pointer()
+                    .hover(|s| s.bg(rgb(LINE)))
+                    .child("导入素材")
+                    .on_click(cx.listener(|this, event, window, cx| {
+                        this.menu_open = false;
+                        this.choose_media(event, window, cx);
+                        cx.notify();
+                    })),
+            )
+            .child(
+                div()
                     .id("menu-home")
                     .p(px(10.0))
                     .cursor_pointer()
@@ -328,11 +354,20 @@ impl Desktop {
             )
     }
 }
-
 impl Render for Desktop {
     /// 渲染当前窗口角色与浮层；工作区快捷键在根节点接收冒泡，焦点置于零尺寸节点以保留系统拖动。
     /// 弹窗存在时阻止工作区快捷键，并委派 Tab、Enter、Escape 到弹窗交互，避免编辑名称时意外新建。
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        for image in self.session.retired_frames.drain(..) {
+            if !self
+                .session
+                .media
+                .iter()
+                .any(|m| m.thumbnail.as_ref().is_some_and(|t| t.id == image.id))
+            {
+                let _ = window.drop_image(image);
+            }
+        }
         let dimensions = window.viewport_size();
         let layout = crate::editor::Layout::new(dimensions.width.into(), dimensions.height.into());
         div()
@@ -343,6 +378,23 @@ impl Render for Desktop {
             .text_color(rgb(TEXT))
             .text_size(px(14.0))
             .font_family("Microsoft YaHei UI")
+            .on_mouse_move(
+                cx.listener(|this, event: &gpui::MouseMoveEvent, window, cx| {
+                    if event.pressed_button == Some(gpui::MouseButton::Left) {
+                        this.move_pointer(event.position.x, cx);
+                    } else {
+                        this.end_pointer(window, cx);
+                    }
+                }),
+            )
+            .on_mouse_up(
+                gpui::MouseButton::Left,
+                cx.listener(|this, _, window, cx| this.end_pointer(window, cx)),
+            )
+            .on_mouse_up_out(
+                gpui::MouseButton::Left,
+                cx.listener(|this, _, window, cx| this.end_pointer(window, cx)),
+            )
             .on_key_down(cx.listener(|this, event: &gpui::KeyDownEvent, window, cx| {
                 if this.dialog.is_some() {
                     this.dialog_key(event, window, cx);
@@ -363,6 +415,7 @@ impl Render for Desktop {
                 } else if key == "escape" {
                     this.menu_open = false;
                     this.project_menu = None;
+                    this.session.media_menu = None;
                     this.notice = None;
                     cx.notify();
                 }
@@ -373,26 +426,33 @@ impl Render for Desktop {
             } else {
                 self.manager(window, cx)
             })
-            .when(self.menu_open || self.project_menu.is_some(), |s| {
-                s.child(
-                    div()
-                        .absolute()
-                        .inset_0()
-                        .occlude()
-                        .id("menu-dismiss")
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            this.menu_open = false;
-                            this.project_menu = None;
-                            cx.notify();
-                        })),
-                )
-                .when(self.menu_open, |s| {
-                    s.child(self.file_menu(layout.title, cx))
-                })
-                .when_some(self.project_menu.clone(), |s, entry| {
-                    s.child(self.project_actions(entry, cx))
-                })
-            })
+            .when(
+                self.menu_open || self.project_menu.is_some() || self.session.media_menu.is_some(),
+                |s| {
+                    s.child(
+                        div()
+                            .absolute()
+                            .inset_0()
+                            .occlude()
+                            .id("menu-dismiss")
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.menu_open = false;
+                                this.project_menu = None;
+                                this.session.media_menu = None;
+                                cx.notify();
+                            })),
+                    )
+                    .when(self.menu_open, |s| {
+                        s.child(self.file_menu(layout.title, cx))
+                    })
+                    .when(self.session.media_menu.is_some(), |s| {
+                        s.child(self.media_actions(window, cx))
+                    })
+                    .when_some(self.project_menu.clone(), |s, entry| {
+                        s.child(self.project_actions(entry, cx))
+                    })
+                },
+            )
             .when(self.dialog.is_some(), |s| s.child(self.dialog_view(cx)))
             .children(self.notice.clone().map(|notice| {
                 div()
@@ -429,7 +489,6 @@ impl Render for Desktop {
             }))
     }
 }
-
 #[cfg(test)]
 #[path = "view_tests.rs"]
 mod tests;

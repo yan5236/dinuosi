@@ -10,13 +10,18 @@ mod tests {
     /// 验证全部嵌入图标保留清单名称、中文标签和统一 SVG 规格，避免资源接入遗漏。
     #[test]
     fn embedded_icons_preserve_the_supplied_asset_contract() {
-        assert_eq!(ICON_SET_VERSION, "1.5");
-        assert_eq!(Icon::ALL.len(), 89);
+        assert_eq!(ICON_SET_VERSION, "1.6");
+        assert_eq!(Icon::ALL.len(), 95);
         let mut paths = HashSet::new();
         for icon in Icon::ALL {
             assert!(paths.insert(icon.path()));
             assert_eq!(icon.path(), format!("icons/{}.svg", icon.name()));
             assert!(!icon.label().is_empty());
+            if *icon == Icon::PlayheadHead {
+                assert!(icon.svg().contains("fill=\"currentColor\""));
+                assert!(icon.svg().contains("viewBox=\"0 0 24 24\""));
+                continue;
+            }
             for attribute in [
                 "viewBox=\"0 0 24 24\"",
                 "stroke=\"currentColor\"",

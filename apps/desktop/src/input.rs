@@ -19,6 +19,9 @@ pub struct TextInput {
     bounds: Option<Bounds<Pixels>>,
     scroll: Pixels,
     selecting: bool,
+    pub(crate) placeholder: &'static str,
+    pub(crate) control_id: &'static str,
+    pub(crate) show_border: bool,
 }
 
 impl TextInput {
@@ -39,6 +42,9 @@ impl TextInput {
             bounds: None,
             scroll: px(0.0),
             selecting: false,
+            placeholder: "",
+            control_id: "project-name",
+            show_border: true,
         }
     }
 
@@ -289,16 +295,18 @@ impl Render for TextInput {
         let input = cx.entity();
         let paint_input = input.clone();
         div()
-            .id("project-name")
-            .debug_selector(|| "project-name".into())
+            .id(self.control_id)
+            .debug_selector({
+                let id = self.control_id;
+                move || id.into()
+            })
             .w_full()
             .h(px(42.0))
             .px(px(12.0))
             .py(px(10.0))
             .rounded(px(6.0))
             .bg(rgb(PANEL))
-            .border_1()
-            .border_color(rgb(LINE))
+            .when(self.show_border, |s| s.border_1().border_color(rgb(LINE)))
             .text_size(px(14.0))
             .line_height(px(20.0))
             .track_focus(&self.focus)
@@ -335,12 +343,18 @@ impl Render for TextInput {
             .child(
                 canvas(
                     move |_, window, cx| {
-                        let text = input.read(cx).text.clone();
+                        let input = input.read(cx);
+                        let empty = input.text.is_empty();
+                        let text = if empty {
+                            input.placeholder.to_owned()
+                        } else {
+                            input.text.clone()
+                        };
                         let style = window.text_style();
                         let run = TextRun {
                             len: text.len(),
                             font: style.font(),
-                            color: rgb(TEXT).into(),
+                            color: rgb(if empty { MUTED } else { TEXT }).into(),
                             background_color: None,
                             underline: None,
                             strikethrough: None,

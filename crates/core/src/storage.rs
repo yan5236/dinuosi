@@ -1,6 +1,10 @@
 //! 项目文件与最近项目索引的磁盘边界；内部 Project 不直接参与序列化。
 
-use crate::{Project, timestamp, validate_name};
+use crate::{
+    Project,
+    media::{self, Media},
+    timestamp, validate_name,
+};
 use serde::{Deserialize, Serialize};
 use std::{
     fs,
@@ -22,6 +26,12 @@ pub struct ProjectEntry {
     pub modified_at: u64,
 }
 
+/// 批量导入结果：有效媒体已持久化，单个无效文件的错误独立返回给宿主呈现。
+pub struct MediaImport {
+    pub media: Vec<Media>,
+    pub errors: Vec<String>,
+}
+
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct ProjectFormatV1 {
@@ -31,6 +41,10 @@ struct ProjectFormatV1 {
     name: String,
     created_at: u64,
     modified_at: u64,
+    #[serde(default)]
+    media_paths: Vec<PathBuf>,
+    #[serde(default)]
+    media_names: std::collections::BTreeMap<PathBuf, String>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -47,6 +61,171 @@ pub struct ProjectStore {
 }
 
 impl ProjectStore {
+    /// 重开项目引用并探测素材，失联或无法读取的文件保留为离线项，不删除项目引用。
+    /// 项目身份/格式错误直接返回；同步媒体读取由 GUI 后台任务或 CLI 自行调度。
+    pub fn load_media(&self, entry: &ProjectEntry) -> Result<Vec<Media>, String> {
+        let project = self.open(&entry.path)?;
+        if project.id().to_string() != entry.id {
+            return Err("项目文件身份已改变".into());
+        }
+        Ok(project
+            .media_paths
+            .into_iter()
+            .map(|path| {
+                let mut item = media::probe(&path).unwrap_or_else(|_| media::offline(path));
+                if let Some(name) = project.media_names.get(&item.path) {
+                    item.name = name.clone();
+                }
+                item
+            })
+            .collect())
+    }
+
+    /// 批量探测、规范化去重并保存源路径引用；坏文件逐一反馈，有效文件仍可导入。
+    /// 项目/索引写入失败返回错误且不报告成功，绝不复制、删除或改写源媒体。
+    pub fn import_media(
+        &self,
+        entry: &ProjectEntry,
+        paths: &[PathBuf],
+    ) -> Result<MediaImport, String> {
+        let mut result = MediaImport {
+            media: Vec::new(),
+            errors: Vec::new(),
+        };
+        for path in paths {
+            match media::probe(path) {
+                Ok(item) => {
+                    if !result
+                        .media
+                        .iter()
+                        .any(|existing| existing.path == item.path)
+                    {
+                        result.media.push(item);
+                    }
+                }
+                Err(error) => result.errors.push(format!("{}：{error}", path.display())),
+            }
+        }
+        if !result.media.is_empty() {
+            self.add_media_paths(
+                entry,
+                &result
+                    .media
+                    .iter()
+                    .map(|m| m.path.clone())
+                    .collect::<Vec<_>>(),
+            )?;
+            let project = self.open(&entry.path)?;
+            for item in &mut result.media {
+                if let Some(name) = project.media_names.get(&item.path) {
+                    item.name = name.clone();
+                }
+            }
+        }
+        Ok(result)
+    }
+
+    /// 读取项目中保存的源素材路径；旧 V1 项目默认没有素材，不复制、打开或解码源文件。
+    pub fn media_paths(&self, entry: &ProjectEntry) -> Result<Vec<PathBuf>, String> {
+        let project = self.open(&entry.path)?;
+        if project.id().to_string() != entry.id {
+            return Err("项目文件身份已改变".into());
+        }
+        Ok(project.media_paths)
+    }
+
+    /// 合并经过媒体探测的源文件引用，规范化路径并去重，原子保存项目及修改时间。
+    /// 文件不存在、项目身份改变或索引保存失败时返回错误；失败恢复项目，绝不复制或删除素材。
+    pub fn add_media_paths(&self, entry: &ProjectEntry, paths: &[PathBuf]) -> Result<(), String> {
+        let original = self.open(&entry.path)?;
+        if original.id().to_string() != entry.id {
+            return Err("项目文件身份已改变".into());
+        }
+        let mut project = original.clone();
+        for path in paths {
+            let path = fs::canonicalize(path).map_err(|e| format!("素材不可用：{e}"))?;
+            if !path.is_file() {
+                return Err("只能导入素材文件".into());
+            }
+            if !project.media_paths.contains(&path) {
+                project.media_paths.push(path);
+            }
+        }
+        project.modified_at = timestamp().max(project.modified_at);
+        let mut entries = self.list()?;
+        let item = entries
+            .iter_mut()
+            .find(|e| e.id == entry.id && e.path == entry.path)
+            .ok_or("项目已不在列表中")?;
+        item.modified_at = project.modified_at;
+        atomic_json(&entry.path, &ProjectFormatV1::from_project(&project))?;
+        if let Err(error) = self.write_index(entries) {
+            atomic_json(&entry.path, &ProjectFormatV1::from_project(&original))
+                .map_err(|rollback| format!("{error}；恢复项目失败：{rollback}"))?;
+            return Err(error);
+        }
+        Ok(())
+    }
+
+    /// 更改素材库显示名称；路径不变，也不重命名磁盘文件，离线引用同样支持改名。
+    /// 名称须为非空、无控制字符且不超过 120 字符；保存失败保留原引用并返回错误。
+    pub fn rename_media(
+        &self,
+        entry: &ProjectEntry,
+        path: &Path,
+        name: &str,
+    ) -> Result<(), String> {
+        let name = name.trim();
+        if name.is_empty() || name.chars().count() > 120 || name.chars().any(char::is_control) {
+            return Err("素材名称须为 1–120 个字符，不能包含控制字符".into());
+        }
+        self.update_media_reference(entry, path, Some(name))
+    }
+
+    /// 仅移除项目内的素材引用及别名；不读取、移动或删除源文件，允许移除离线素材。
+    /// 项目身份不符、引用不存在或保存失败时返回错误，不报告成功。
+    pub fn remove_media(&self, entry: &ProjectEntry, path: &Path) -> Result<(), String> {
+        self.update_media_reference(entry, path, None)
+    }
+
+    /// 按已保存路径更新别名或移除引用，原子保存项目及索引；索引失败时恢复原项目。
+    /// 不规范化源路径，以保证源文件离线时仍可管理已有引用。
+    fn update_media_reference(
+        &self,
+        entry: &ProjectEntry,
+        path: &Path,
+        name: Option<&str>,
+    ) -> Result<(), String> {
+        let original = self.open(&entry.path)?;
+        if original.id().to_string() != entry.id {
+            return Err("项目文件身份已改变".into());
+        }
+        if !original.media_paths.iter().any(|p| p == path) {
+            return Err("素材已不在素材库中".into());
+        }
+        let mut project = original.clone();
+        if let Some(name) = name {
+            project.media_names.insert(path.to_owned(), name.to_owned());
+        } else {
+            project.media_paths.retain(|p| p != path);
+            project.media_names.remove(path);
+        }
+        project.modified_at = timestamp().max(project.modified_at);
+        let mut entries = self.list()?;
+        let item = entries
+            .iter_mut()
+            .find(|e| e.id == entry.id && e.path == entry.path)
+            .ok_or("项目已不在列表中")?;
+        item.modified_at = project.modified_at;
+        atomic_json(&entry.path, &ProjectFormatV1::from_project(&project))?;
+        if let Err(error) = self.write_index(entries) {
+            atomic_json(&entry.path, &ProjectFormatV1::from_project(&original))
+                .map_err(|rollback| format!("{error}；恢复项目失败：{rollback}"))?;
+            return Err(error);
+        }
+        Ok(())
+    }
+
     /// 创建存储句柄，不读写磁盘；调用者提供用户数据目录中的索引文件绝对路径。
     pub fn new(index_path: PathBuf) -> Self {
         Self { index_path }
@@ -120,6 +299,8 @@ impl ProjectStore {
             name,
             created_at: file.created_at,
             modified_at: file.modified_at,
+            media_paths: file.media_paths,
+            media_names: file.media_names,
         })
     }
 
@@ -245,6 +426,8 @@ impl ProjectFormatV1 {
             name: project.name().to_owned(),
             created_at: project.created_at(),
             modified_at: project.modified_at(),
+            media_paths: project.media_paths.clone(),
+            media_names: project.media_names.clone(),
         }
     }
 }

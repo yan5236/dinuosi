@@ -19,6 +19,7 @@ use std::path::PathBuf;
 pub(crate) enum DialogKind {
     Create,
     Rename(ProjectEntry),
+    RenameMedia { path: PathBuf, name: String },
     Delete(ProjectEntry),
 }
 
@@ -40,6 +41,7 @@ impl Dialog {
         let name = match &kind {
             DialogKind::Create => Some("未命名项目".into()),
             DialogKind::Rename(entry) => Some(entry.name.clone()),
+            DialogKind::RenameMedia { name, .. } => Some(name.clone()),
             DialogKind::Delete(_) => None,
         }
         .map(|text| cx.new(|cx| TextInput::new(text, cx)));
@@ -120,7 +122,7 @@ impl Desktop {
         cx.notify();
     }
 
-    /// 校验表单输入并调度共享持久化命令；目录未选择时保留表单，不创建任何文件。
+    /// 校验表单输入并调度项目命令或素材别名保存；未选目录时保留表单，不创建文件。
     pub(crate) fn submit_dialog(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.busy {
             return;
@@ -133,7 +135,13 @@ impl Desktop {
             .as_ref()
             .map(|input| input.read(cx).text.clone())
             .unwrap_or_default();
+        if let DialogKind::RenameMedia { path, .. } = &dialog.kind {
+            let path = path.clone();
+            self.change_media_reference(path, Some(name), window, cx);
+            return;
+        }
         let (command, enter) = match &dialog.kind {
+            DialogKind::RenameMedia { .. } => unreachable!("素材改名已单独调度"),
             DialogKind::Create => {
                 let Some(parent) = dialog.directory.clone() else {
                     dialog.error = Some("请先选择项目目录".into());
@@ -228,6 +236,7 @@ impl Desktop {
         let (title, submit) = match dialog.kind {
             DialogKind::Create => ("新建项目", "创建"),
             DialogKind::Rename(_) => ("重命名项目", "保存"),
+            DialogKind::RenameMedia { .. } => ("重命名素材", "保存"),
             DialogKind::Delete(_) => ("删除项目", "删除"),
         };
         div()
@@ -267,12 +276,13 @@ impl Desktop {
                                 .flex()
                                 .flex_col()
                                 .gap(px(8.0))
-                                .child(
-                                    div()
-                                        .text_size(px(12.0))
-                                        .text_color(rgb(MUTED))
-                                        .child("项目名称"),
-                                )
+                                .child(div().text_size(px(12.0)).text_color(rgb(MUTED)).child(
+                                    if matches!(dialog.kind, DialogKind::RenameMedia { .. }) {
+                                        "素材名称"
+                                    } else {
+                                        "项目名称"
+                                    },
+                                ))
                                 .child(name),
                         )
                     })

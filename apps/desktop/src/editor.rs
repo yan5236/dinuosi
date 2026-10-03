@@ -53,7 +53,7 @@ impl Desktop {
                     .flex_none()
                     .h(px(layout.upper))
                     .child(
-                        empty_panel("素材库", layout.left)
+                        self.library(layout.left, cx)
                             .border_r_1()
                             .border_color(rgb(LINE)),
                     )
@@ -65,17 +65,8 @@ impl Desktop {
                             .flex_none()
                             .w(px(layout.preview))
                             .h_full()
-                            .child(
-                                div().flex_1().min_h_0().relative().bg(rgb(0x242426)).child(
-                                    div()
-                                        .absolute()
-                                        .top(px(68.0))
-                                        .w_full()
-                                        .text_center()
-                                        .text_color(rgb(MUTED))
-                                        .child("实时预览"),
-                                ),
-                            )
+                            .child(self.preview_display())
+                            .child(self.preview_strip(cx))
                             .child(self.preview_controls(layout.preview, cx)),
                     )
                     .child(
@@ -85,7 +76,7 @@ impl Desktop {
                     ),
             )
             .child(self.timeline_toolbar(layout.toolbar, cx))
-            .child(self.timeline(layout))
+            .child(self.timeline(layout, cx))
             .child(
                 div()
                     .flex()
@@ -98,59 +89,6 @@ impl Desktop {
                     .text_size(px(12.0))
                     .text_color(rgb(MUTED))
                     .child("当前任务：无"),
-            )
-    }
-
-    /// 绘制时间码、播放、音量和全屏控件；无媒体时禁用播放和全屏。
-    /// 扬声器切换会话音量，尚未连接媒体引擎，不会伪造正在播放状态。
-    fn preview_controls(&self, width: f32, cx: &mut Context<Self>) -> Div {
-        div()
-            .h(px(42.0))
-            .flex_none()
-            .flex()
-            .items_center()
-            .justify_between()
-            .px(px(10.0))
-            .border_t_1()
-            .border_color(rgb(LINE))
-            .child(
-                div()
-                    .text_size(px(10.0))
-                    .font_family("Consolas")
-                    .text_color(rgb(MUTED))
-                    .child("00:00:00 / 00:00:00"),
-            )
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap(px(1.0))
-                    .child(tool("preview-back", Icon::SkipBack, false))
-                    .child(tool("preview-play", Icon::Play, false))
-                    .child(tool("preview-next", Icon::SkipForward, false)),
-            )
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap(px(4.0))
-                    .child(
-                        tool(
-                            "preview-volume",
-                            if self.volume == 0.0 {
-                                Icon::Mute
-                            } else {
-                                Icon::Volume
-                            },
-                            true,
-                        )
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            this.volume = if this.volume == 0.0 { 1.0 } else { 0.0 };
-                            cx.notify();
-                        })),
-                    )
-                    .child(slider(width * 0.14, self.volume))
-                    .child(tool("preview-fullscreen", Icon::Fullscreen, false)),
             )
     }
 
@@ -198,7 +136,7 @@ impl Desktop {
                 tool("zoom-out", Icon::ZoomOut, true)
                     .on_click(cx.listener(|this, _, _, cx| this.change_zoom(-0.25, cx))),
             )
-            .child(slider(110.0, (self.zoom - 0.5) / 3.5))
+            .child(self.slider(crate::sliders::Pointer::Zoom, 110.0, cx))
             .child(
                 tool("zoom-in", Icon::ZoomIn, true)
                     .on_click(cx.listener(|this, _, _, cx| this.change_zoom(0.25, cx))),
@@ -211,9 +149,9 @@ impl Desktop {
         cx.notify();
     }
 
-    /// 绘制空时间线、标尺和起点播放头，轨道标题分界位于宽度约 26% 处。
+    /// 绘制空时间线、标尺和可拖动播放头，轨道标题分界位于宽度约 26% 处。
     /// 标尺表示可编辑时间坐标，不代表素材时长；空项目不生成示例片段。
-    fn timeline(&self, layout: Layout) -> Div {
+    fn timeline(&self, layout: Layout, cx: &mut Context<Self>) -> Div {
         div()
             .debug_selector(|| "timeline-panel".into())
             .flex_1()
@@ -234,6 +172,21 @@ impl Desktop {
                             .flex_1()
                             .relative()
                             .overflow_hidden()
+                            .id("timeline-seek")
+                            .debug_selector(|| "timeline-seek".into())
+                            .cursor_pointer()
+                            .on_mouse_down(
+                                gpui::MouseButton::Left,
+                                cx.listener(|this, event: &gpui::MouseDownEvent, _, cx| {
+                                    this.begin_pointer(
+                                        crate::sliders::Pointer::Timeline,
+                                        event.position.x,
+                                        cx,
+                                    );
+                                    cx.stop_propagation();
+                                }),
+                            )
+                            .child(self.pointer_bounds(crate::sliders::Pointer::Timeline, cx))
                             .children((0..30).map(|index| {
                                 let step = 100.0 * self.zoom;
                                 div()
@@ -263,40 +216,49 @@ impl Desktop {
                             .border_r_1()
                             .border_color(rgb(LINE)),
                     )
-                    .child(
-                        div().flex_1().relative().child(
-                            div()
-                                .absolute()
-                                .top(px(76.0))
-                                .w_full()
-                                .text_center()
-                                .text_color(rgb(MUTED))
-                                .child("时间线"),
-                        ),
-                    ),
+                    .child(div().flex_1().relative()),
             )
             .child(
                 div()
                     .absolute()
-                    .left(px(layout.track_header - 1.0))
+                    .left(px(layout.track_header - 1.0
+                        + self.session.timeline_position as f32 * 20.0 * self.zoom))
                     .top(px(6.0))
                     .bottom_0()
                     .w(px(1.0))
                     .bg(rgb(0xc3c3c8))
                     .child(
-                        svg()
-                            .path(Icon::Marker.path())
+                        div()
+                            .id("timeline-playhead")
+                            .debug_selector(|| "timeline-playhead".into())
                             .absolute()
                             .left(px(-6.0))
                             .top(px(-3.0))
                             .size(px(13.0))
-                            .text_color(rgb(TEXT)),
+                            .cursor_ew_resize()
+                            .on_mouse_down(
+                                gpui::MouseButton::Left,
+                                cx.listener(|this, event: &gpui::MouseDownEvent, _, cx| {
+                                    this.begin_pointer(
+                                        crate::sliders::Pointer::Timeline,
+                                        event.position.x,
+                                        cx,
+                                    );
+                                    cx.stop_propagation();
+                                }),
+                            )
+                            .child(
+                                svg()
+                                    .path(Icon::PlayheadHead.path())
+                                    .size_full()
+                                    .text_color(rgb(TEXT)),
+                            ),
                     ),
             )
     }
 }
 
-/// 创建与草图位置一致的面板名称；不添加介绍文字，保留空工作区。
+/// 创建空检查器面板，仅保留调试标识和灰阶背景，不显示占位文本。
 fn empty_panel(label: &'static str, width: f32) -> Div {
     div()
         .debug_selector(|| label.to_owned())
@@ -305,45 +267,6 @@ fn empty_panel(label: &'static str, width: f32) -> Div {
         .h_full()
         .relative()
         .bg(rgb(PANEL))
-        .child(
-            div()
-                .absolute()
-                .top(px(62.0))
-                .w_full()
-                .text_center()
-                .text_color(rgb(MUTED))
-                .child(label),
-        )
-}
-
-/// 绘制音量或缩放读数；值限制为 0–1，圆点不会越过两端。
-/// 当前调节由相邻按钮提供，此元素不宣称可拖动。
-fn slider(width: f32, value: f32) -> Div {
-    div()
-        .flex_none()
-        .w(px(width))
-        .h(px(20.0))
-        .relative()
-        .child(
-            div()
-                .absolute()
-                .left_0()
-                .right_0()
-                .top(px(9.0))
-                .h(px(2.0))
-                .bg(rgb(LINE)),
-        )
-        .child(
-            div()
-                .absolute()
-                .left(px((width - 10.0) * value.clamp(0.0, 1.0)))
-                .top(px(5.0))
-                .size(px(10.0))
-                .rounded(px(5.0))
-                .border_1()
-                .border_color(rgb(MUTED))
-                .bg(rgb(0x333336)),
-        )
 }
 
 #[cfg(test)]

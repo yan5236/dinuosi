@@ -22,3 +22,7 @@ unsafe_code = "forbid"
 
 [workspace.lints.clippy]
 all = "warn"
+
+# MIDI 合成位于音频消费路径，开发构建也需满足实时输出速度。
+[profile.dev.package.rustysynth]
+opt-level = 3
