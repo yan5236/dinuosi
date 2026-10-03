@@ -389,7 +389,10 @@ impl Render for Desktop {
             .on_mouse_down(
                 gpui::MouseButton::Left,
                 cx.listener(|this, _, window, cx| {
-                    if this.timeline.input.is_some() || this.timeline.rename.is_some() {
+                    if this.timeline.input.is_some()
+                        || this.timeline.volume_input.is_some()
+                        || this.timeline.rename.is_some()
+                    {
                         this.commit_inspector_input(cx);
                         this.focus_handle.focus(window);
                     }

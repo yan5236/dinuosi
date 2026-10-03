@@ -10,6 +10,7 @@ struct Layer {
     end: u64,
     pcm: Pcm,
     decoder: Decoder,
+    gain: f32,
 }
 pub struct TimelineAudio {
     layers: Vec<Layer>,
@@ -19,13 +20,16 @@ pub struct TimelineAudio {
 
 impl TimelineAudio {
     /// 在后台为时间线剩余音频建立流式解码；所有时间转为交错立体声 48kHz 样本。
-    /// 静音轨道/离线素材跳过，初始化失败销毁已建立的解码器，不整段缓存声音。
+    /// 静音轨道、零增益和离线素材跳过；各片段增益进入 PCM 混合，失败清理解码器。
     pub fn start(t: &Timeline, offset: f64, sources: &[Media]) -> Result<Self, String> {
         let fps = t.fps as f64;
         let sample = |seconds: f64| (seconds.max(0.0) * 96000.0).round() as u64;
         let mut layers = Vec::new();
         for c in &t.clips {
-            if t.tracks[c.track].muted || (c.start + c.duration) as f64 / fps <= offset {
+            if t.tracks[c.track].muted
+                || c.gain == 0.0
+                || (c.start + c.duration) as f64 / fps <= offset
+            {
                 continue;
             }
             let Some(m) = sources
@@ -51,6 +55,7 @@ impl TimelineAudio {
                     end: sample((c.start + c.duration) as f64 / fps - offset),
                     pcm,
                     decoder,
+                    gain: c.gain as f32,
                 });
             }
         }
@@ -69,7 +74,7 @@ impl TimelineAudio {
 }
 impl Iterator for TimelineAudio {
     type Item = f32;
-    /// 按时间线位置求和并限制输出振幅，非活动片段不消费样本，末尾结束迭代。
+    /// 按片段增益乘以 PCM 后求和并限制输出振幅；非活动片段不消费样本，末尾结束迭代。
     fn next(&mut self) -> Option<f32> {
         if self.position >= self.end {
             return None;
@@ -77,7 +82,7 @@ impl Iterator for TimelineAudio {
         let mut value = 0.0;
         for layer in &mut self.layers {
             if self.position >= layer.start && self.position < layer.end {
-                value += layer.pcm.next().unwrap_or(0.0);
+                value += layer.pcm.next().unwrap_or(0.0) * layer.gain;
             }
         }
         self.position += 1;

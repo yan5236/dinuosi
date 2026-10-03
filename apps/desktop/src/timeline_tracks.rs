@@ -9,7 +9,7 @@ use dinuosi_icons::Icon;
 use gpui::{Context, Div, MouseButton, div, prelude::*, px, rgb, svg};
 impl Desktop {
     /// 绘制实际轨道的名称、重命名、锁定、可见和静音控件，行高与片段严格共用。
-    /// 自由轨道名称接入整体拖动；字幕图标和静音入口按类型判断，不依赖行号。
+    /// 自由轨道名称接入整体拖动；媒体、字幕和音频图标及静音入口按类型判断，不依赖行号。
     pub(crate) fn track_header_view(
         &self,
         index: usize,
@@ -32,13 +32,11 @@ impl Desktop {
             .bg(rgb(PANEL))
             .child(
                 svg()
-                    .path(
-                        if track.kind == dinuosi_core::timeline::TrackKind::Subtitle {
-                            Icon::Text.path()
-                        } else {
-                            Icon::Video.path()
-                        },
-                    )
+                    .path(match track.kind {
+                        dinuosi_core::timeline::TrackKind::Subtitle => Icon::Text.path(),
+                        dinuosi_core::timeline::TrackKind::Audio => Icon::Audio.path(),
+                        _ => Icon::Video.path(),
+                    })
                     .size(px(19.0))
                     .flex_none()
                     .text_color(rgb(TEXT)),

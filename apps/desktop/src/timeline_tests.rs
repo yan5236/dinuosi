@@ -335,7 +335,14 @@ fn live_scrub_updates_preview_before_mouse_release(cx: &mut TestAppContext) {
                 }));
             v.timeline
                 .model
-                .insert(path, "color".into(), 0, index as i64 * 60, 0..60, 60)
+                .insert(
+                    (path, MediaKind::Image),
+                    "color".into(),
+                    0,
+                    index as i64 * 60,
+                    0..60,
+                    60,
+                )
                 .unwrap();
         }
         cx.notify();

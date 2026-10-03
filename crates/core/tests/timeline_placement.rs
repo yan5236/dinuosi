@@ -1,11 +1,19 @@
 //! 放置规则回归：空轨道清理、冲突复用及片段间插入，不需要图形窗口或解码器。
+use dinuosi_core::media::MediaKind;
 use dinuosi_core::timeline::{History, Timeline, TrackKind};
 use std::collections::BTreeSet;
 
 /// 插入单段一秒素材供业务断言使用；返回稳定片段身份，不访问源文件。
 fn clip(t: &mut Timeline, track: usize, start: i64) -> String {
-    t.insert("fixture.png".into(), "片段".into(), track, start, 0..30, 60)
-        .unwrap()
+    t.insert(
+        ("fixture.png".into(), MediaKind::Image),
+        "片段".into(),
+        track,
+        start,
+        0..30,
+        60,
+    )
+    .unwrap()
 }
 
 /// 清空非主轨时重映射剩余索引，主轨即使为空或已锁定也保留；撤销恢复片段和轨道一起。
@@ -74,7 +82,14 @@ fn insertion_between_clips_pushes_following_content_atomically() {
     assert_eq!(t.insertion_frame(0, 32, 4, &BTreeSet::new()), Some(30));
     assert_eq!(t.insertion_frame(0, 15, 4, &BTreeSet::new()), None);
     let inserted = t
-        .insert_ripple("insert.png".into(), "插入".into(), 0, 30, 15..60, 90)
+        .insert_ripple(
+            ("insert.png".into(), MediaKind::Image),
+            "插入".into(),
+            0,
+            30,
+            15..60,
+            90,
+        )
         .unwrap();
     assert_eq!(t.tracks.len(), 1);
     assert_eq!(t.clips.iter().find(|c| c.id == first).unwrap().start, 0);
@@ -86,13 +101,27 @@ fn insertion_between_clips_pushes_following_content_atomically() {
     );
     let before = t.clone();
     assert!(
-        t.insert_ripple("bad".into(), "bad".into(), 0, 75, 0..200, 30)
-            .is_err()
+        t.insert_ripple(
+            ("bad".into(), MediaKind::Video),
+            "bad".into(),
+            0,
+            75,
+            0..200,
+            30
+        )
+        .is_err()
     );
     assert_eq!(t, before);
     assert!(
-        t.insert_ripple("bad".into(), "bad".into(), 0, 20, 0..30, 30)
-            .is_err()
+        t.insert_ripple(
+            ("bad".into(), MediaKind::Video),
+            "bad".into(),
+            0,
+            20,
+            0..30,
+            30
+        )
+        .is_err()
     );
     assert_eq!(t, before);
     t.create_track(0, TrackKind::Media).unwrap();
@@ -115,7 +144,14 @@ fn insertion_between_clips_pushes_following_content_atomically() {
     let before = limit.clone();
     assert!(
         limit
-            .insert_ripple("limit.png".into(), "上限".into(), 0, 30, 0..30, 60)
+            .insert_ripple(
+                ("limit.png".into(), MediaKind::Image),
+                "上限".into(),
+                0,
+                30,
+                0..30,
+                60
+            )
             .is_err()
     );
     assert_eq!(limit, before, "后移越界不能留下部分修改");

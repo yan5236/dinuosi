@@ -1,5 +1,6 @@
 //! 与 GUI 无关的帧精确时间线、轨道约束、变换和事务历史。
 
+use crate::media::MediaKind;
 use std::{collections::BTreeSet, path::PathBuf};
 use uuid::Uuid;
 
@@ -94,6 +95,9 @@ pub struct Clip {
     pub source_in: i64,
     pub source_frames: i64,
     pub transform: Transform,
+    pub kind: MediaKind,
+    /// 线性音频增益：1 为 0dB，0 为负无穷，10 为 20dB；避免 JSON 保存无穷数值。
+    pub gain: f64,
 }
 
 /// 轨道职责与显示名分离；字幕类型保留，但新项目仅创建主轨。
@@ -101,7 +105,53 @@ pub struct Clip {
 pub enum TrackKind {
     Main,
     Media,
+    Audio,
     Subtitle,
+}
+
+impl TrackKind {
+    /// 按素材类型返回自由轨道职责；视频与图片共用媒体轨道，音频使用独立音频轨道。
+    pub fn for_media(kind: MediaKind) -> Self {
+        if kind == MediaKind::Audio {
+            Self::Audio
+        } else {
+            Self::Media
+        }
+    }
+    /// 判断轨道可接收的素材类型；主轨和媒体轨道仅支持图片、视频，字幕不接收这些素材。
+    pub fn accepts(self, kind: MediaKind) -> bool {
+        match self {
+            Self::Main | Self::Media => kind != MediaKind::Audio,
+            Self::Audio => kind == MediaKind::Audio,
+            Self::Subtitle => false,
+        }
+    }
+}
+
+impl Clip {
+    /// 把保存的线性增益转换为检查器 dB；零增益返回负无穷，默认增益返回 0.0。
+    pub fn volume_db(&self) -> f64 {
+        20.0 * self.gain.log10()
+    }
+}
+
+/// 将滑块比例映射为线性音频增益；零端点严格静音，其余位置覆盖 -60 至 20dB。
+/// 输入由指针夹紧，默认 0dB 位于 75%；保存有限增益，支持持久化与 PCM 混合。
+pub fn volume_gain(ratio: f64) -> f64 {
+    if ratio <= 0.0 {
+        0.0
+    } else {
+        10.0_f64.powf((ratio.clamp(0.0, 1.0) * 80.0 - 60.0) / 20.0)
+    }
+}
+
+/// 将有限线性增益转换为滑块比例；静音位于最左端，20dB 位于最右端。
+pub fn volume_ratio(gain: f64) -> f64 {
+    if gain <= 0.0 {
+        0.0
+    } else {
+        ((20.0 * gain.log10() + 60.0) / 80.0).clamp(0.0, 1.0)
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -124,7 +174,7 @@ pub struct Timeline {
 }
 
 impl Default for Timeline {
-    /// 创建唯一空主轨；字幕与媒体轨道按需创建，不生成示例素材。
+    /// 创建唯一空主轨；字幕、媒体与音频轨道按需创建，不生成示例素材。
     fn default() -> Self {
         Self {
             fps: 30,
@@ -192,6 +242,12 @@ impl Timeline {
             {
                 return Err("片段身份或时间范围无效".into());
             }
+            if !self.tracks[clip.track].kind.accepts(clip.kind) {
+                return Err("素材类型与轨道不匹配".into());
+            }
+            if !clip.gain.is_finite() || !(0.0..=10.0).contains(&clip.gain) {
+                return Err("音量参数无效".into());
+            }
             for property in [
                 Property::Opacity,
                 Property::Scale,
@@ -217,7 +273,7 @@ impl Timeline {
         }
         Ok(())
     }
-    /// 对选中且未锁定片段设置同一检查器参数；输入先校验，避免部分更新。
+    /// 对选中且未锁定的图片、视频设置同一变换参数；音频跳过，非法输入不更新任何片段。
     pub fn set_property(
         &mut self,
         ids: &BTreeSet<String>,
@@ -225,12 +281,23 @@ impl Timeline {
         value: f64,
     ) -> Result<(), String> {
         Transform::default().set(property, value)?;
-        for c in self
-            .clips
-            .iter_mut()
-            .filter(|c| ids.contains(&c.id) && !self.tracks[c.track].locked)
-        {
+        for c in self.clips.iter_mut().filter(|c| {
+            ids.contains(&c.id) && c.kind != MediaKind::Audio && !self.tracks[c.track].locked
+        }) {
             c.transform.set(property, value)?;
+        }
+        Ok(())
+    }
+    /// 对选中且未锁定的音频片段设置线性增益；拒绝非有限数值及越界，图片、视频不受影响。
+    /// 范围 0..=10 分别对应负无穷至 20dB；调用方在手势释放时保存并记录历史。
+    pub fn set_volume(&mut self, ids: &BTreeSet<String>, gain: f64) -> Result<(), String> {
+        if !gain.is_finite() || !(0.0..=10.0).contains(&gain) {
+            return Err("音量参数无效".into());
+        }
+        for c in self.clips.iter_mut().filter(|c| {
+            ids.contains(&c.id) && c.kind == MediaKind::Audio && !self.tracks[c.track].locked
+        }) {
+            c.gain = gain;
         }
         Ok(())
     }

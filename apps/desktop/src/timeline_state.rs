@@ -40,6 +40,9 @@ pub enum Gesture {
         start: Point<Pixels>,
         offset: f32,
     },
+    Volume {
+        bounds: Bounds<Pixels>,
+    },
     Property {
         property: Property,
         bounds: Bounds<Pixels>,
@@ -72,6 +75,7 @@ pub struct TimelineSession {
     pub play_revision: u64,
     pub timer: Option<Task<()>>,
     pub input: Option<(Property, Entity<TextInput>)>,
+    pub volume_input: Option<Entity<TextInput>>,
     pub input_blur: Option<gpui::Subscription>,
     pub rename: Option<(usize, Entity<TextInput>)>,
     pub scrub_preview: dinuosi_core::timeline::ScrubPreview,

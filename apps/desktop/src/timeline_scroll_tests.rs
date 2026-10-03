@@ -56,7 +56,14 @@ fn fixture<'a>(
         for track in 0..tracks {
             v.timeline
                 .model
-                .insert(source.clone(), "滚动图片".into(), track, 60, 0..30, 60)
+                .insert(
+                    (source.clone(), MediaKind::Image),
+                    "滚动图片".into(),
+                    track,
+                    60,
+                    0..30,
+                    60,
+                )
                 .unwrap();
         }
         v.commit_timeline(Default::default(), cx);
@@ -281,7 +288,7 @@ fn pointer_insertion_pushes_following_clips_and_empty_track_cleanup_is_undoable(
         v.timeline
             .model
             .insert(
-                v.session.media[0].path.clone(),
+                (v.session.media[0].path.clone(), MediaKind::Image),
                 "第二段".into(),
                 0,
                 90,

@@ -42,7 +42,7 @@ impl Desktop {
     }
 
     /// 从手势快照计算最终片段落点，插轨会先重映射原始索引，再由核心处理冲突。
-    /// 返回候选模型供落点提示和释放共用；窗口外、字幕、锁轨或非法跨轨组返回 None，不修改状态。
+    /// 返回候选模型供落点提示和释放共用；窗口外、字幕、锁轨、类型不匹配或非法跨轨组返回 None，不修改状态。
     pub(crate) fn clip_drop_model(
         &self,
         before: &Timeline,
@@ -69,7 +69,17 @@ impl Desktop {
         let (target, origin) = match target {
             DropTarget::Track(index) => (index, origin),
             DropTarget::Insert(index) => {
-                next.create_track(index, TrackKind::Media).ok()?;
+                next.create_track(
+                    index,
+                    TrackKind::for_media(
+                        before
+                            .clips
+                            .iter()
+                            .find(|c| self.timeline.selected.contains(&c.id))?
+                            .kind,
+                    ),
+                )
+                .ok()?;
                 (index, origin + usize::from(origin >= index))
             }
         };

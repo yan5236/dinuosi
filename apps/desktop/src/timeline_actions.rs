@@ -99,7 +99,8 @@ impl Desktop {
         self.timeline.moved = false;
         cx.notify();
     }
-    /// 处理活动手势的移动，业务修改每次从按下快照计算，避免累计漂移与重复历史。
+    /// 处理活动手势的移动，片段修改从按下快照计算；音量按比例映射增益并停止旧声音。
+    /// 参数只在内存更新，释放时保存并记录一次历史，避免累计漂移与重复提交。
     pub(crate) fn move_timeline_pointer(&mut self, point: Point<Pixels>, cx: &mut Context<Self>) {
         let Some(gesture) = &self.timeline.gesture else {
             return;
@@ -170,6 +171,16 @@ impl Desktop {
                         / (visible - thumb).max(1.0))
                 .clamp(0.0, (total - visible).max(0.0));
             }
+            Gesture::Volume { bounds } => {
+                let ratio = (f32::from(point.x - bounds.left())
+                    / f32::from(bounds.size.width).max(1.0))
+                .clamp(0.0, 1.0);
+                let _ = self.timeline.model.set_volume(
+                    &self.timeline.selected,
+                    dinuosi_core::timeline::volume_gain(ratio as f64),
+                );
+                self.stop_timeline();
+            }
             Gesture::Property { property, bounds } => {
                 let ratio = (f32::from(point.x - bounds.left())
                     / f32::from(bounds.size.width).max(1.0))
@@ -203,7 +214,7 @@ impl Desktop {
                         DropTarget::Insert(i) => self
                             .timeline
                             .model
-                            .create_track(i, TrackKind::Media)
+                            .create_track(i, TrackKind::for_media(self.session.media[index].kind))
                             .unwrap(),
                     };
                     self.insert_media_clip(
@@ -250,7 +261,7 @@ impl Desktop {
         cx.notify();
     }
     /// 按鼠标落点建立片段，使用当前素材选区；片段间边界插入后移后续素材，其他重叠自动分轨。
-    /// 成功后聚焦并选择新片段；失败回滚本次模型且显示实际错误。
+    /// 音频按核心规则分轨，成功后选择新片段并切换对应检查器；失败回滚并显示实际错误。
     pub(crate) fn insert_media_clip(
         &mut self,
         index: usize,
@@ -278,16 +289,23 @@ impl Desktop {
         } else {
             0..duration
         };
-        let insertion = self.timeline.model.insertion_frame(
-            track,
-            start,
-            (8.0 / self.pixels_per_second() * self.timeline.model.fps as f32).round() as i64,
-            &Default::default(),
-        );
+        let insertion = self.timeline.model.tracks[track]
+            .kind
+            .accepts(m.kind)
+            .then(|| {
+                self.timeline.model.insertion_frame(
+                    track,
+                    start,
+                    (8.0 / self.pixels_per_second() * self.timeline.model.fps as f32).round()
+                        as i64,
+                    &Default::default(),
+                )
+            })
+            .flatten();
         let start = insertion.unwrap_or(start);
         let result = if insertion.is_some() {
             self.timeline.model.insert_ripple(
-                m.path.clone(),
+                (m.path.clone(), m.kind),
                 m.name.clone(),
                 track,
                 start,
@@ -296,7 +314,7 @@ impl Desktop {
             )
         } else {
             self.timeline.model.insert(
-                m.path.clone(),
+                (m.path.clone(), m.kind),
                 m.name.clone(),
                 track,
                 start,

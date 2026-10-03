@@ -225,7 +225,7 @@ impl Desktop {
             f32::from(start.y - p.y).abs(),
         ))
     }
-    /// 在轨道边界或冲突轨道上方绘制插轨线；素材落点预览与最终核心放置规则一致。
+    /// 在轨道边界或冲突轨道上方绘制插轨线；素材落点预览与核心类型规则一致，音频跨类型落点显示上方插轨线。
     fn drop_preview(&self, _cx: &mut Context<Self>) -> Option<Div> {
         use crate::timeline_state::DropTarget;
         let target = self.timeline_drop_target(self.timeline.pointer)?;
@@ -233,7 +233,11 @@ impl Desktop {
         let inserted = matches!(target, DropTarget::Insert(_));
         let insertion = if !inserted {
             match self.timeline.gesture.as_ref()? {
-                Gesture::Library { .. } => {
+                Gesture::Library { index, .. }
+                    if self.timeline.model.tracks[track]
+                        .kind
+                        .accepts(self.session.media[*index].kind) =>
+                {
                     self.timeline_clip_insertion(&self.timeline.model, track, &Default::default())
                 }
                 Gesture::Move { .. } if self.timeline.selected.len() == 1 => self
@@ -270,6 +274,12 @@ impl Desktop {
                     return None;
                 }
                 let m = self.session.media.get(*index)?;
+                if !inserted && !self.timeline.model.tracks[track].kind.accepts(m.kind) {
+                    if m.kind != dinuosi_core::media::MediaKind::Audio {
+                        return None;
+                    }
+                    line = true;
+                }
                 let start = self.timeline_frame_at(self.timeline.pointer.x);
                 let duration = if self.session.selected == Some(*index) {
                     self.timeline.model.frame(self.session.trim_end)

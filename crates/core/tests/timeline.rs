@@ -1,3 +1,4 @@
+use dinuosi_core::media::MediaKind;
 use dinuosi_core::{
     ProjectStore, composite,
     media::{FRAME_HEIGHT, FRAME_WIDTH},
@@ -12,10 +13,24 @@ fn edits_preserve_source_limits_and_history() {
     t.create_track(0, TrackKind::Media).unwrap();
     t.create_track(0, TrackKind::Media).unwrap();
     let a = t
-        .insert("a.mp4".into(), "a".into(), 2, 30, 15..105, 120)
+        .insert(
+            ("a.mp4".into(), MediaKind::Video),
+            "a".into(),
+            2,
+            30,
+            15..105,
+            120,
+        )
         .unwrap();
     let b = t
-        .insert("b.mp4".into(), "b".into(), 2, 150, 0..90, 120)
+        .insert(
+            ("b.mp4".into(), MediaKind::Video),
+            "b".into(),
+            2,
+            150,
+            0..90,
+            120,
+        )
         .unwrap();
     let selected = BTreeSet::from([a.clone(), b.clone()]);
     let before = t.clone();
@@ -50,7 +65,14 @@ fn properties_selection_and_adaptive_ticks() {
     t.create_track(0, TrackKind::Media).unwrap();
     t.create_track(0, TrackKind::Media).unwrap();
     let id = t
-        .insert("a.png".into(), "a".into(), 1, 30, 0..150, 150)
+        .insert(
+            ("a.png".into(), MediaKind::Image),
+            "a".into(),
+            1,
+            30,
+            0..150,
+            150,
+        )
         .unwrap();
     let selected = BTreeSet::from([id]);
     assert_eq!(t.select_range(0, 31, 1, 2), selected);
@@ -85,8 +107,15 @@ fn timeline_round_trip_and_legacy_project() {
     let mut t = Timeline::default();
     t.create_track(0, TrackKind::Media).unwrap();
     t.create_track(0, TrackKind::Media).unwrap();
-    t.insert(source.clone(), "图像".into(), 2, 60, 0..150, 150)
-        .unwrap();
+    t.insert(
+        (source.clone(), MediaKind::Image),
+        "图像".into(),
+        2,
+        60,
+        0..150,
+        150,
+    )
+    .unwrap();
     t.clips[0].transform.x = -123.0;
     t.remove_empty_tracks();
     store.save_timeline(&entry, &t).unwrap();
@@ -112,10 +141,24 @@ fn dynamic_tracks_keep_positions_and_never_overlap() {
     assert_eq!(t.tracks.len(), 1);
     assert_eq!(t.tracks[0].kind, TrackKind::Main);
     let a = t
-        .insert("a.png".into(), "a".into(), 0, 30, 0..30, 150)
+        .insert(
+            ("a.png".into(), MediaKind::Image),
+            "a".into(),
+            0,
+            30,
+            0..30,
+            150,
+        )
         .unwrap();
     let b = t
-        .insert("b.png".into(), "b".into(), 0, 60, 0..30, 150)
+        .insert(
+            ("b.png".into(), MediaKind::Image),
+            "b".into(),
+            0,
+            60,
+            0..30,
+            150,
+        )
         .unwrap();
     assert_eq!(t.tracks.len(), 1);
     t.move_clips(&BTreeSet::from([b.clone()]), 90, 0).unwrap();
@@ -155,7 +198,14 @@ fn dynamic_tracks_keep_positions_and_never_overlap() {
         (1, 0, 40)
     );
     let c = t
-        .insert("c.png".into(), "c".into(), 0, 50, 0..30, 150)
+        .insert(
+            ("c.png".into(), MediaKind::Image),
+            "c".into(),
+            0,
+            50,
+            0..30,
+            150,
+        )
         .unwrap();
     assert_eq!(t.tracks.len(), 3);
     assert_eq!(
@@ -176,8 +226,15 @@ fn dynamic_tracks_keep_positions_and_never_overlap() {
     let subtitle = t.create_track(0, TrackKind::Subtitle).unwrap();
     let before = t.clone();
     assert!(
-        t.insert("x".into(), "x".into(), subtitle, 0, 0..30, 30)
-            .is_err()
+        t.insert(
+            ("x".into(), MediaKind::Video),
+            "x".into(),
+            subtitle,
+            0,
+            0..30,
+            30
+        )
+        .is_err()
     );
     assert_eq!(t, before);
     assert!(t.clips.iter().any(|c| c.id == a));
@@ -197,10 +254,24 @@ fn legacy_three_tracks_migrate_without_losing_clips() {
     t.create_track(0, TrackKind::Media).unwrap();
     t.create_track(0, TrackKind::Subtitle).unwrap();
     t.tracks[2].name = "已改名主轨".into();
-    t.insert("a.png".into(), "a".into(), 2, 60, 15..75, 120)
-        .unwrap();
-    t.insert("b.png".into(), "b".into(), 2, 180, 0..60, 120)
-        .unwrap();
+    t.insert(
+        ("a.png".into(), MediaKind::Image),
+        "a".into(),
+        2,
+        60,
+        15..75,
+        120,
+    )
+    .unwrap();
+    t.insert(
+        ("b.png".into(), MediaKind::Image),
+        "b".into(),
+        2,
+        180,
+        0..60,
+        120,
+    )
+    .unwrap();
     store.save_timeline(&entry, &t).unwrap();
     let mut json: serde_json::Value =
         serde_json::from_slice(&std::fs::read(&entry.path).unwrap()).unwrap();
@@ -291,15 +362,30 @@ fn timeline_audio_mixes_and_respects_track_mute() {
     );
     let media = dinuosi_core::media::probe(&source).unwrap();
     let mut timeline = Timeline::default();
-    timeline.create_track(0, TrackKind::Media).unwrap();
-    timeline.create_track(0, TrackKind::Media).unwrap();
-    for track in [1, 2] {
+    timeline.create_track(0, TrackKind::Audio).unwrap();
+    timeline.create_track(0, TrackKind::Audio).unwrap();
+    for track in [0, 1] {
         timeline
-            .insert(media.path.clone(), "tone".into(), track, 3, 0..6, 6)
+            .insert(
+                (media.path.clone(), MediaKind::Audio),
+                "tone".into(),
+                track,
+                3,
+                0..6,
+                6,
+            )
             .unwrap();
     }
-    for (muted, expected) in [(false, 0.25), (true, 0.125)] {
+    for (gain, muted, expected) in [
+        (1.0, false, 0.25),
+        (1.0, true, 0.125),
+        (0.5, true, 0.0625),
+        (10.0, true, 1.0),
+        (0.0, true, 0.0),
+    ] {
         timeline.tracks[1].muted = muted;
+        let ids = [timeline.clips[0].id.clone()].into();
+        timeline.set_volume(&ids, gain).unwrap();
         let mut audio = dinuosi_core::timeline_audio::TimelineAudio::start(
             &timeline,
             0.0,

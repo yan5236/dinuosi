@@ -1,6 +1,7 @@
 #![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
 
 mod assets;
+mod audio_inspector;
 mod dialogs;
 mod editor;
 mod input;
@@ -29,6 +30,8 @@ mod ui;
 mod view;
 mod windows;
 
+#[cfg(test)]
+mod audio_track_tests;
 #[cfg(test)]
 mod editor_media_tests;
 #[cfg(test)]

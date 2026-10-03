@@ -1,4 +1,5 @@
 //! 动态轨道和片段放置规则；所有时间均为项目帧，主轨与自由轨道都允许空隙。
+use crate::media::MediaKind;
 use crate::timeline::{Clip, Timeline, Track, TrackKind, Transform};
 use std::{collections::BTreeSet, path::PathBuf};
 use uuid::Uuid;
@@ -9,7 +10,7 @@ impl Timeline {
         self.tracks.len() - 1
     }
 
-    /// 在指定行上方创建媒体或字幕轨道并重映射片段索引；非法位置或重复主轨返回错误。
+    /// 在指定行上方创建媒体、音频或字幕轨道并重映射片段索引；非法位置或重复主轨返回错误。
     /// 返回新轨道索引；手势中暂留空轨道供落点使用，提交时统一清理。
     pub fn create_track(&mut self, index: usize, kind: TrackKind) -> Result<usize, String> {
         if index >= self.tracks.len() || kind == TrackKind::Main {
@@ -19,10 +20,10 @@ impl Timeline {
             index,
             Track {
                 kind,
-                name: if kind == TrackKind::Subtitle {
-                    "字幕轨道"
-                } else {
-                    "媒体轨道"
+                name: match kind {
+                    TrackKind::Subtitle => "字幕轨道",
+                    TrackKind::Audio => "音频轨道",
+                    _ => "媒体轨道",
                 }
                 .into(),
                 locked: false,
@@ -61,11 +62,12 @@ impl Timeline {
         Ok(())
     }
 
-    /// 在未锁定的主轨或媒体轨道按鼠标落点插入独立片段；源选区以项目帧表示。
-    /// 若与现有片段相交，优先复用紧邻上方空媒体轨道，否则新建；保留时间落点，非法输入不修改模型。
+    /// 按落点插入片段；source 为已探测的路径及类型，源选区单位为项目帧。
+    /// 音频落在主轨/媒体轨道时在其上方建音频轨道；图片、视频拒绝音频轨道。
+    /// 冲突复用紧邻上方同类型空轨道或新建；非法输入不修改模型。
     pub fn insert(
         &mut self,
-        source: PathBuf,
+        source: (PathBuf, MediaKind),
         name: String,
         track: usize,
         start: i64,
@@ -73,6 +75,10 @@ impl Timeline {
         source_frames: i64,
     ) -> Result<String, String> {
         self.accept_track(track)?;
+        let (source, kind) = source;
+        if kind != MediaKind::Audio && !self.tracks[track].kind.accepts(kind) {
+            return Err("此轨道不能接收此类素材".into());
+        }
         if range.start < 0
             || range.end <= range.start
             || range.end > source_frames
@@ -82,6 +88,11 @@ impl Timeline {
         {
             return Err("素材选区无效".into());
         }
+        let track = if self.tracks[track].kind.accepts(kind) {
+            track
+        } else {
+            self.create_track(track, TrackKind::Audio)?
+        };
         let id = Uuid::new_v4().to_string();
         self.clips.push(Clip {
             id: id.clone(),
@@ -93,13 +104,15 @@ impl Timeline {
             source_in: range.start,
             source_frames,
             transform: Transform::default(),
+            kind,
+            gain: 1.0,
         });
         self.resolve_overlap(&id);
         Ok(id)
     }
 
     /// 原子移动整组选中片段，保留时间间距，零点/一天边界整组夹紧；主轨也可留空隙。
-    /// 非法或锁定目标拒绝整个操作；重叠片段优先复用紧邻上方空轨道，否则新建，不覆盖已有素材。
+    /// 非法、锁定或类型不匹配目标拒绝整个操作；重叠片段优先复用紧邻上方空轨道，否则新建，不覆盖已有素材。
     pub fn move_clips(
         &mut self,
         ids: &BTreeSet<String>,
@@ -114,6 +127,9 @@ impl Timeline {
                 return Err("无法移动到此轨道".into());
             }
             self.accept_track(target as usize)?;
+            if !self.tracks[target as usize].kind.accepts(c.kind) {
+                return Err("此轨道不能接收此类素材".into());
+            }
         }
         let min = selected.iter().map(|c| c.start).min().unwrap_or(0);
         let max = selected.iter().map(|c| c.start).max().unwrap_or(0);
@@ -209,10 +225,10 @@ impl Timeline {
     }
 
     /// 在片段间插入新素材并把同轨后续片段整体后移一个新片段时长，保留后续相对空隙。
-    /// 源选区、锁轨、时间上限错误返回且整个模型不变；调用方先确认插入边界，不覆盖前段。
+    /// source 为路径及已探测类型；类型、源选区、锁轨或时间上限错误返回且整个模型不变；调用方先确认插入边界，不覆盖前段。
     pub fn insert_ripple(
         &mut self,
-        source: PathBuf,
+        source: (PathBuf, MediaKind),
         name: String,
         track: usize,
         start: i64,
@@ -220,6 +236,10 @@ impl Timeline {
         source_frames: i64,
     ) -> Result<String, String> {
         let mut next = self.clone();
+        next.accept_track(track)?;
+        if !next.tracks[track].kind.accepts(source.1) {
+            return Err("此轨道不能接收此类素材".into());
+        }
         next.shift_following(track, start, range.end.saturating_sub(range.start))?;
         let id = next.insert(source, name, track, start, range, source_frames)?;
         next.validate()?;
@@ -228,7 +248,7 @@ impl Timeline {
     }
 
     /// 将已有单个片段插入目标轨道的片段间，后续片段按其时长后移；源轨道保留时间空隙。
-    /// 锁轨、片段不存在、前段相交或时间越界拒绝整个操作，其他轨道不受影响。
+    /// 锁轨、类型不匹配、片段不存在、前段相交或时间越界拒绝整个操作，其他轨道不受影响。
     pub fn move_clip_ripple(&mut self, id: &str, track: usize, start: i64) -> Result<(), String> {
         let mut next = self.clone();
         let index = next
@@ -238,6 +258,9 @@ impl Timeline {
             .ok_or("片段不存在")?;
         next.accept_track(next.clips[index].track)?;
         next.accept_track(track)?;
+        if !next.tracks[track].kind.accepts(next.clips[index].kind) {
+            return Err("此轨道不能接收此类素材".into());
+        }
         let mut clip = next.clips.remove(index);
         next.shift_following(track, start, clip.duration)?;
         clip.start = start;
@@ -290,7 +313,7 @@ impl Timeline {
     }
 
     /// 消除指定片段与同轨其他片段的严格相交；首尾相接合法，冲突时只移动指定片段。
-    /// 先复用紧邻上方未锁定的空媒体轨道，再按需插轨并统一更新索引；不依赖显示名。
+    /// 先复用紧邻上方未锁定的同类型空轨道，再按需插轨并统一更新索引；不依赖显示名。
     pub(crate) fn resolve_overlap(&mut self, id: &str) {
         let Some(index) = self.clips.iter().position(|c| c.id == id) else {
             return;
@@ -303,15 +326,15 @@ impl Timeline {
                 && c.start < other.start + other.duration
         }) {
             let track = c.track;
+            let kind = TrackKind::for_media(c.kind);
             if track > 0
-                && self.tracks[track - 1].kind == TrackKind::Media
+                && self.tracks[track - 1].kind == kind
                 && !self.tracks[track - 1].locked
                 && !self.clips.iter().any(|c| c.track == track - 1)
             {
                 self.clips[index].track = track - 1;
             } else {
-                self.create_track(track, TrackKind::Media)
-                    .expect("有效片段轨道");
+                self.create_track(track, kind).expect("有效片段轨道");
                 self.clips[index].track = track;
             }
         }

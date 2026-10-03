@@ -10,10 +10,20 @@ use dinuosi_icons::Icon;
 use gpui::{Context, Div, MouseButton, Window, canvas, div, prelude::*, px, rgb, svg};
 
 impl Desktop {
-    /// 保持草图的“基本”页签、三组滑块和 X/Y 并排布局；没有选择时保留控件并禁用。
+    /// 保持草图的“基本”页签、图片、视频的变换布局；选中音频仅显示音量滑块及右侧 dB 值。
+    /// 没有选择时保留原变换控件并禁用，锁定片段不可修改。
     pub(crate) fn inspector(&self, width: f32, cx: &mut Context<Self>) -> Div {
+        let audio = self
+            .timeline
+            .model
+            .clips
+            .iter()
+            .find(|c| self.timeline.selected.contains(&c.id))
+            .is_some_and(|c| c.kind == dinuosi_core::media::MediaKind::Audio);
         let enabled = self.timeline.model.clips.iter().any(|c| {
-            self.timeline.selected.contains(&c.id) && !self.timeline.model.tracks[c.track].locked
+            self.timeline.selected.contains(&c.id)
+                && (c.kind == dinuosi_core::media::MediaKind::Audio) == audio
+                && !self.timeline.model.tracks[c.track].locked
         });
         div()
             .w(px(width))
@@ -38,7 +48,9 @@ impl Desktop {
                             .child("基本"),
                     ),
             )
-            .child(
+            .child(if audio {
+                self.audio_inspector(enabled, cx)
+            } else {
                 div()
                     .pt(px(38.0))
                     .px(px(20.0))
@@ -60,16 +72,19 @@ impl Desktop {
                             .child(self.property_number(Property::Y, enabled, cx)),
                     )
                     .child(div().h(px(16.0)))
-                    .child(self.inspector_row("旋转", Property::Rotation, enabled, cx)),
-            )
+                    .child(self.inspector_row("旋转", Property::Rotation, enabled, cx))
+            })
     }
-    /// 读取首个选中片段用于检查器显示，多选时写入操作会应用于全部未锁定的选中片段。
+    /// 读取首个选中的画面片段用于变换检查器显示；多选写入仅应用于未锁定的图片、视频。
     pub(crate) fn property_value(&self, property: Property) -> f64 {
         self.timeline
             .model
             .clips
             .iter()
-            .find(|c| self.timeline.selected.contains(&c.id))
+            .find(|c| {
+                c.kind != dinuosi_core::media::MediaKind::Audio
+                    && self.timeline.selected.contains(&c.id)
+            })
             .map_or_else(
                 || dinuosi_core::timeline::Transform::default().get(property),
                 |c| c.transform.get(property),
@@ -86,12 +101,34 @@ impl Desktop {
         let value = self.property_value(property);
         let (min, max) = property.range();
         let ratio = ((value - min) / (max - min)) as f32;
+        let slider = self.inspector_slider(Some(property), ratio, enabled, cx);
+        div()
+            .h(px(37.0))
+            .flex()
+            .items_center()
+            .gap(px(14.0))
+            .text_size(px(12.0))
+            .child(div().w(px(63.0)).flex_none().child(label))
+            .child(slider)
+            .child(self.property_number(property, enabled, cx))
+    }
+    /// 绘制变换或音频共用的滑块；按下保存快照并捕获根节点移动，释放提交一次历史。
+    /// property 为 None 时使用音频增益，ratio 为核心计算的 0..1 比例，禁用时忽略指针。
+    pub(crate) fn inspector_slider(
+        &self,
+        property: Option<Property>,
+        ratio: f32,
+        enabled: bool,
+        cx: &mut Context<Self>,
+    ) -> gpui::Stateful<Div> {
         let entity = cx.entity();
-        let slider = div()
-            .id(gpui::SharedString::from(format!(
-                "inspector-slider-{property:?}"
-            )))
-            .debug_selector(move || format!("inspector-slider-{property:?}"))
+        let selector: gpui::SharedString = property.map_or_else(
+            || "inspector-volume-slider".into(),
+            |p| format!("inspector-slider-{p:?}").into(),
+        );
+        div()
+            .id(selector.clone())
+            .debug_selector(move || selector.to_string())
             .flex_1()
             .min_w(px(24.0))
             .h(px(26.0))
@@ -131,10 +168,15 @@ impl Desktop {
                                     && hitbox.is_hovered(window)
                                 {
                                     entity.update(cx, |this, cx| {
+                                        this.commit_inspector_input(cx);
                                         this.focus_handle.focus(window);
                                         this.timeline.before = Some(this.timeline.model.clone());
-                                        this.timeline.gesture =
-                                            Some(Gesture::Property { property, bounds });
+                                        this.timeline.gesture = Some(match property {
+                                            Some(property) => {
+                                                Gesture::Property { property, bounds }
+                                            }
+                                            None => Gesture::Volume { bounds },
+                                        });
                                         this.timeline.preview = true;
                                         this.move_timeline_pointer(event.position, cx);
                                         cx.stop_propagation();
@@ -146,16 +188,7 @@ impl Desktop {
                 )
                 .absolute()
                 .inset_0(),
-            );
-        div()
-            .h(px(37.0))
-            .flex()
-            .items_center()
-            .gap(px(14.0))
-            .text_size(px(12.0))
-            .child(div().w(px(63.0)).flex_none().child(label))
-            .child(slider)
-            .child(self.property_number(property, enabled, cx))
+            )
     }
     /// 数字框支持直接输入、Enter/失焦提交、Esc 取消及上下箭头单步调整，不添加额外说明。
     fn property_number(&self, property: Property, enabled: bool, cx: &mut Context<Self>) -> Div {
@@ -272,9 +305,28 @@ impl Desktop {
         self.timeline.input = Some((property, input));
         cx.notify();
     }
-    /// 提交数值输入，非法数字显示真实错误并保持原参数；轨道名称仅修改所选轨道。
+    /// 提交画面或音量数值输入；音量支持 dB 后缀和负无穷，非法数字显示真实错误且保持原参数。
+    /// 轨道名称仅修改所选轨道；输入实体先取出，避免失焦回调重复提交。
     pub(crate) fn commit_inspector_input(&mut self, cx: &mut Context<Self>) {
         self.timeline.input_blur = None;
+        if let Some(input) = self.timeline.volume_input.take() {
+            let text = input
+                .read(cx)
+                .text
+                .trim()
+                .trim_end_matches("dB")
+                .trim()
+                .replace('−', "-");
+            let value = if text == "-∞" {
+                Ok(f64::NEG_INFINITY)
+            } else {
+                text.parse::<f64>()
+            };
+            match value {
+                Ok(db) => self.change_volume_db(db, cx),
+                Err(_) => self.notice = Some("请输入有效音量".into()),
+            }
+        }
         if let Some((property, input)) = self.timeline.input.take() {
             match input
                 .read(cx)

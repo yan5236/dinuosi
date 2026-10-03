@@ -17,12 +17,17 @@ impl Desktop {
             return;
         }
         let key = event.keystroke.key.as_str();
-        if self.timeline.input.is_some() || self.timeline.rename.is_some() {
+        if self.timeline.input.is_some()
+            || self.timeline.volume_input.is_some()
+            || self.timeline.rename.is_some()
+        {
             if key == "enter" {
                 self.commit_inspector_input(cx);
                 self.focus_handle.focus(window);
             } else if key == "escape" {
                 self.timeline.input = None;
+                self.timeline.volume_input = None;
+                self.timeline.input_blur = None;
                 self.timeline.rename = None;
                 self.focus_handle.focus(window);
                 cx.notify();
