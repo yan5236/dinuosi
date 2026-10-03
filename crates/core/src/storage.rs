@@ -15,6 +15,7 @@ use uuid::Uuid;
 
 const PROJECT_FILE: &str = "project.dinuosi";
 const OWNER_FILE: &str = ".dinuosi-owner";
+mod timeline;
 
 /// 项目管理的持久化摘要；路径指向项目文件，丢失的项目仍保留可移除的记录。
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -45,6 +46,8 @@ struct ProjectFormatV1 {
     media_paths: Vec<PathBuf>,
     #[serde(default)]
     media_names: std::collections::BTreeMap<PathBuf, String>,
+    #[serde(default)]
+    timeline: Option<crate::timeline_file::TimelineV1>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -301,6 +304,11 @@ impl ProjectStore {
             modified_at: file.modified_at,
             media_paths: file.media_paths,
             media_names: file.media_names,
+            timeline: file
+                .timeline
+                .map(|v| v.into_timeline())
+                .transpose()?
+                .unwrap_or_default(),
         })
     }
 
@@ -428,6 +436,9 @@ impl ProjectFormatV1 {
             modified_at: project.modified_at(),
             media_paths: project.media_paths.clone(),
             media_names: project.media_names.clone(),
+            timeline: Some(crate::timeline_file::TimelineV1::from_timeline(
+                &project.timeline,
+            )),
         }
     }
 }

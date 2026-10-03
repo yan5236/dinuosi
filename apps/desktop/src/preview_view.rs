@@ -17,8 +17,8 @@ impl Desktop {
             .session
             .selected
             .and_then(|i| self.session.media.get(i));
-        let offline = selected.is_some_and(|m| m.offline);
-        let audio = selected.is_some_and(|m| m.kind == MediaKind::Audio);
+        let offline = !self.timeline.preview && selected.is_some_and(|m| m.offline);
+        let audio = !self.timeline.preview && selected.is_some_and(|m| m.kind == MediaKind::Audio);
         div()
             .debug_selector(|| "preview-display".into())
             .flex_1()
@@ -39,7 +39,11 @@ impl Desktop {
                         s.child(crate::media_status::offline_view(false))
                     })
                     .when_some(
-                        self.session.frame.clone().filter(|_| !offline),
+                        if self.timeline.preview {
+                            self.timeline.frame.clone()
+                        } else {
+                            self.session.frame.clone().filter(|_| !offline)
+                        },
                         |s, frame| {
                             s.child(
                                 img(frame)
@@ -180,50 +184,40 @@ impl Desktop {
                             ]
                             .into_iter()
                             .map(|(kind, ratio, id)| {
-                                div().absolute().left(relative(ratio as f32)).h_full().w_0()
-                                    .child(div()
-                                    .id(id)
-                                    .debug_selector(move || id.into())
+                                div()
                                     .absolute()
-                                    .left(px(if kind == Pointer::TrimStart { -12.0 } else { 0.0 }))
-                                    .w(px(12.0))
+                                    .left(relative(ratio as f32))
                                     .h_full()
-                                    .bg(rgb(TEXT))
-                                    .when(kind == Pointer::TrimStart, |s| s.rounded_l(px(4.0)))
-                                    .when(kind == Pointer::TrimEnd, |s| s.rounded_r(px(4.0)))
-                                    .cursor_ew_resize()
-                                    .occlude()
+                                    .w_0()
                                     .child(
-                                        div()
-                                            .absolute()
-                                            .left(px(5.5))
-                                            .top(px(9.0))
-                                            .bottom(px(9.0))
-                                            .w(px(1.0))
-                                            .bg(rgb(crate::ui::MUTED)),
-                                    )
-                                    .on_mouse_down(
-                                        MouseButton::Left,
-                                        cx.listener(
-                                            move |this, event: &gpui::MouseDownEvent, _, cx| {
-                                                this.begin_pointer(kind, event.position.x, cx);
-                                                cx.stop_propagation();
-                                            },
+                                        crate::trim_handle::trim_handle(
+                                            id,
+                                            kind == Pointer::TrimStart,
+                                        )
+                                        .on_mouse_down(
+                                            MouseButton::Left,
+                                            cx.listener(
+                                                move |this, event: &gpui::MouseDownEvent, _, cx| {
+                                                    this.begin_pointer(kind, event.position.x, cx);
+                                                    cx.stop_propagation();
+                                                },
+                                            ),
                                         ),
-                                    ))
+                                    )
                             }),
                         ),
                 )
             })
     }
 
-    /// 绘制真实时间码、选区播放、前后定位及设备音量；轨道尚未实现，添加按钮保持禁用。
+    /// 按素材或时间线模式绘制时间码、播放与定位；素材模式可将当前选区添加到主轨。
     pub(crate) fn preview_controls(&self, width: f32, cx: &mut Context<Self>) -> Div {
-        let enabled = self
-            .session
-            .selected
-            .and_then(|i| self.session.media.get(i))
-            .is_some_and(|m| !m.offline);
+        let enabled = self.timeline.preview && !self.timeline.model.clips.is_empty()
+            || self
+                .session
+                .selected
+                .and_then(|i| self.session.media.get(i))
+                .is_some_and(|m| !m.offline);
         div()
             .h(px(42.0))
             .flex_none()
@@ -239,12 +233,34 @@ impl Desktop {
                     .text_size(px(10.0))
                     .child(format!(
                         "{} / {}",
-                        media::timecode(self.session.position),
-                        media::timecode(self.session.duration())
+                        media::timecode(if self.timeline.preview {
+                            self.session.timeline_position
+                        } else {
+                            self.session.position
+                        }),
+                        media::timecode(if self.timeline.preview {
+                            self.timeline.model.end() as f64 / self.timeline.model.fps as f64
+                        } else {
+                            self.session.duration()
+                        })
                     )),
             )
-            .when(enabled, |s| {
-                s.child(pill("add-to-track", "添加至轨道", 82.0, 24.0).opacity(0.4))
+            .when(enabled && !self.timeline.preview, |s| {
+                s.child(
+                    pill("add-to-track", "添加至轨道", 82.0, 24.0).on_click(cx.listener(
+                        |this, _, window, cx| {
+                            if let Some(index) = this.session.selected {
+                                this.insert_media_clip(
+                                    index,
+                                    2,
+                                    this.timeline.model.frame(this.session.timeline_position),
+                                    window,
+                                    cx,
+                                );
+                            }
+                        },
+                    )),
+                )
             })
             .child(
                 div()
@@ -253,6 +269,10 @@ impl Desktop {
                     .child(
                         tool("preview-back", Icon::SkipBack, enabled).on_click(cx.listener(
                             |this, _, _, cx| {
+                                if this.timeline.preview {
+                                    this.seek_timeline(0.0, true, cx);
+                                    return;
+                                }
                                 this.stop_preview();
                                 this.session.position = this.session.trim_start;
                                 this.request_frame(cx);
@@ -263,18 +283,36 @@ impl Desktop {
                     .child(
                         tool(
                             "preview-play",
-                            if self.session.player.is_some() || self.session.starting {
+                            if self.session.player.is_some()
+                                || self.session.starting
+                                || self.timeline.playing
+                            {
                                 Icon::Pause
                             } else {
                                 Icon::Play
                             },
                             enabled,
                         )
-                        .on_click(cx.listener(|this, _, window, cx| this.play_preview(window, cx))),
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            if this.timeline.preview {
+                                this.play_timeline(window, cx);
+                            } else {
+                                this.play_preview(window, cx);
+                            }
+                        })),
                     )
                     .child(
                         tool("preview-next", Icon::SkipForward, enabled).on_click(cx.listener(
                             |this, _, _, cx| {
+                                if this.timeline.preview {
+                                    this.seek_timeline(
+                                        this.timeline.model.end() as f64
+                                            / this.timeline.model.fps as f64,
+                                        true,
+                                        cx,
+                                    );
+                                    return;
+                                }
                                 this.stop_preview();
                                 this.session.position = this.session.trim_end;
                                 this.request_frame(cx);
@@ -293,6 +331,8 @@ impl Desktop {
                             "preview-volume",
                             if self.volume == 0.0 {
                                 Icon::Mute
+                            } else if self.volume < 0.5 {
+                                Icon::VolumeLow
                             } else {
                                 Icon::Volume
                             },
@@ -300,6 +340,9 @@ impl Desktop {
                         )
                         .on_click(cx.listener(|this, _, _, cx| {
                             this.volume = if this.volume == 0.0 { 1.0 } else { 0.0 };
+                            if let Some(sound) = &this.timeline.sound {
+                                sound.sink.set_volume(this.volume);
+                            }
                             if let Some(player) = &this.session.player {
                                 player.volume(this.volume);
                             }

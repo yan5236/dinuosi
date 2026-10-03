@@ -1,9 +1,9 @@
 {
-  "name": "轻线 · 完整界面图标集（95 枚完整版）",
-  "version": "1.6",
-  "count": 95,
-  "previousCount": 89,
-  "additionCount": 6,
+  "name": "轻线 · 完整界面图标集（102 枚完整版）",
+  "version": "1.7",
+  "count": 102,
+  "previousCount": 95,
+  "additionCount": 7,
   "viewBox": "0 0 24 24",
   "strokeWidth": 1.8,
   "stroke": "currentColor",
@@ -665,6 +665,48 @@
       "name": "warning",
       "label": "媒体离线",
       "file": "svg/warning.svg"
+    },
+    {
+      "name": "eye",
+      "label": "睁眼",
+      "file": "svg/eye.svg",
+      "addedIn": "1.7"
+    },
+    {
+      "name": "eye-closed",
+      "label": "闭眼",
+      "file": "svg/eye-closed.svg",
+      "addedIn": "1.7"
+    },
+    {
+      "name": "unlock",
+      "label": "开锁",
+      "file": "svg/unlock.svg",
+      "addedIn": "1.7"
+    },
+    {
+      "name": "chevron-up",
+      "label": "增加",
+      "file": "svg/chevron-up.svg",
+      "addedIn": "1.7"
+    },
+    {
+      "name": "chevron-down",
+      "label": "减少",
+      "file": "svg/chevron-down.svg",
+      "addedIn": "1.7"
+    },
+    {
+      "name": "text",
+      "label": "文本",
+      "file": "svg/text.svg",
+      "addedIn": "1.7"
+    },
+    {
+      "name": "volume-low",
+      "label": "低音量",
+      "file": "svg/volume-low.svg",
+      "addedIn": "1.7"
     }
   ]
 }

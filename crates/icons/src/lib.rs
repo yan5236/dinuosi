@@ -10,8 +10,8 @@ mod tests {
     /// 验证全部嵌入图标保留清单名称、中文标签和统一 SVG 规格，避免资源接入遗漏。
     #[test]
     fn embedded_icons_preserve_the_supplied_asset_contract() {
-        assert_eq!(ICON_SET_VERSION, "1.6");
-        assert_eq!(Icon::ALL.len(), 95);
+        assert_eq!(ICON_SET_VERSION, "1.7");
+        assert_eq!(Icon::ALL.len(), 102);
         let mut paths = HashSet::new();
         for icon in Icon::ALL {
             assert!(paths.insert(icon.path()));

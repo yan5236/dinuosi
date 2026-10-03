@@ -22,6 +22,7 @@ pub struct TextInput {
     pub(crate) placeholder: &'static str,
     pub(crate) control_id: &'static str,
     pub(crate) show_border: bool,
+    pub(crate) compact: bool,
 }
 
 impl TextInput {
@@ -45,6 +46,7 @@ impl TextInput {
             placeholder: "",
             control_id: "project-name",
             show_border: true,
+            compact: false,
         }
     }
 
@@ -301,9 +303,9 @@ impl Render for TextInput {
                 move || id.into()
             })
             .w_full()
-            .h(px(42.0))
-            .px(px(12.0))
-            .py(px(10.0))
+            .h(px(if self.compact { 22.0 } else { 42.0 }))
+            .px(px(if self.compact { 3.0 } else { 12.0 }))
+            .py(px(if self.compact { 1.0 } else { 10.0 }))
             .rounded(px(6.0))
             .bg(rgb(PANEL))
             .when(self.show_border, |s| s.border_1().border_color(rgb(LINE)))

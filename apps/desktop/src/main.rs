@@ -4,6 +4,7 @@ mod assets;
 mod dialogs;
 mod editor;
 mod input;
+mod inspector;
 mod library;
 mod manager;
 mod media;
@@ -13,12 +14,23 @@ mod playback;
 mod preview;
 mod preview_view;
 mod sliders;
+mod timeline_actions;
+mod timeline_clip;
+mod timeline_drag;
+mod timeline_preview;
+mod timeline_sound;
+mod timeline_state;
+mod timeline_tracks;
+mod timeline_view;
+mod trim_handle;
 mod ui;
 mod view;
 mod windows;
 
 #[cfg(test)]
 mod editor_media_tests;
+#[cfg(test)]
+mod timeline_tests;
 
 use dinuosi_core::ProjectStore;
 use gpui::{App, Application};

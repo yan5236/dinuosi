@@ -67,8 +67,8 @@ mod tests {
             matches!(logo_source(), gpui::ImageSource::Resource(gpui::Resource::Embedded(path)) if path.as_ref() == LOGO_PATH)
         );
         assert!(Assets.load("../outside.svg").unwrap().is_none());
-        assert_eq!(Assets.list("").unwrap().len(), 96);
-        assert_eq!(Assets.list("icons/").unwrap().len(), 95);
+        assert_eq!(Assets.list("").unwrap().len(), Icon::ALL.len() + 1);
+        assert_eq!(Assets.list("icons/").unwrap().len(), Icon::ALL.len());
         assert_eq!(Assets.list("brand").unwrap().len(), 1);
         assert!(Assets.list("ico").unwrap().is_empty());
     }

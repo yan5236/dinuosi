@@ -1,9 +1,9 @@
 //! 剪辑主体布局：三栏、预览控制、分组工具栏、时间线和任务栏。
 
 use dinuosi_icons::Icon;
-use gpui::{Context, Div, Window, div, prelude::*, px, rgb, svg};
+use gpui::{Context, Div, Window, div, prelude::*, px, rgb};
 
-use crate::ui::{LINE, MUTED, PANEL, TEXT, separator, tool};
+use crate::ui::{LINE, MUTED, separator, tool};
 use crate::view::Desktop;
 
 /// 草图主要边界的逻辑像素位置，随窗口尺寸按相同比例缩放。
@@ -12,12 +12,12 @@ pub(crate) struct Layout {
     pub title: f32,
     upper: f32,
     toolbar: f32,
-    ruler: f32,
+    pub width: f32,
     footer: f32,
     left: f32,
     preview: f32,
     right: f32,
-    track_header: f32,
+    pub track_header: f32,
 }
 
 impl Layout {
@@ -28,19 +28,19 @@ impl Layout {
             title: height * 0.067,
             upper: height * 0.506,
             toolbar: height * 0.041,
-            ruler: height * 0.039,
+            width,
             footer: height * 0.037,
             left: width * 0.302,
             preview: width * 0.439,
             right: width * 0.259,
-            track_header: width * 0.259,
+            track_header: width * 0.15,
         }
     }
 }
 
 impl Desktop {
     /// 构造三栏与底部区域；预览控制只放中栏，左右面板延伸至工具栏上沿。
-    /// 无素材时不伪造媒体、片段或播放状态，剪辑操作呈现禁用状态。
+    /// 时间线与检查器委派独立视图，预览模式由用户的素材/时间线选择决定。
     pub(crate) fn editor(&self, layout: Layout, window: &Window, cx: &mut Context<Self>) -> Div {
         div()
             .size_full()
@@ -66,17 +66,20 @@ impl Desktop {
                             .w(px(layout.preview))
                             .h_full()
                             .child(self.preview_display())
-                            .child(self.preview_strip(cx))
+                            .when(
+                                !self.timeline.preview && self.session.selected.is_some(),
+                                |s| s.child(self.preview_strip(cx)),
+                            )
                             .child(self.preview_controls(layout.preview, cx)),
                     )
                     .child(
-                        empty_panel("检查器", layout.right)
+                        self.inspector(layout.right, cx)
                             .border_l_1()
                             .border_color(rgb(LINE)),
                     ),
             )
             .child(self.timeline_toolbar(layout.toolbar, cx))
-            .child(self.timeline(layout, cx))
+            .child(self.timeline_panel(layout, cx))
             .child(
                 div()
                     .flex()
@@ -125,11 +128,23 @@ impl Desktop {
                     .flex()
                     .items_center()
                     .when(index > 0, |s| s.child(separator()))
-                    .children(
-                        group
-                            .iter()
-                            .map(|icon| tool(format!("timeline-{}", icon.name()), *icon, false)),
-                    )
+                    .children(group.iter().map(|icon| {
+                        tool(
+                            format!("timeline-{}", icon.name()),
+                            *icon,
+                            *icon == Icon::Select
+                                || (*icon == Icon::Trash && !self.timeline.selected.is_empty()),
+                        )
+                        .when(*icon == Icon::Select, |s| s.bg(rgb(0x38383c)))
+                        .on_click(cx.listener({
+                            let icon = *icon;
+                            move |this, _, _, cx| {
+                                if icon == Icon::Trash {
+                                    this.delete_clips(cx);
+                                }
+                            }
+                        }))
+                    }))
             }))
             .child(div().flex_1())
             .child(
@@ -143,130 +158,14 @@ impl Desktop {
             )
     }
 
-    /// 限制缩放到 0.5–4 倍并重绘；输入为相对变化量，不影响项目内容。
-    fn change_zoom(&mut self, delta: f32, cx: &mut Context<Self>) {
+    /// 调整对数缩放参数并保持视口左端时间；缩小时夹紧滚动范围，不改变项目内容。
+    pub(crate) fn change_zoom(&mut self, delta: f32, cx: &mut Context<Self>) {
+        let left = self.timeline.scroll_x / self.pixels_per_second();
         self.zoom = (self.zoom + delta).clamp(0.5, 4.0);
+        self.timeline.scroll_x = (left * self.pixels_per_second())
+            .clamp(0.0, self.timeline_width() - self.timeline_view_width());
         cx.notify();
     }
-
-    /// 绘制空时间线、标尺和可拖动播放头，轨道标题分界位于宽度约 26% 处。
-    /// 标尺表示可编辑时间坐标，不代表素材时长；空项目不生成示例片段。
-    fn timeline(&self, layout: Layout, cx: &mut Context<Self>) -> Div {
-        div()
-            .debug_selector(|| "timeline-panel".into())
-            .flex_1()
-            .min_h_0()
-            .flex()
-            .flex_col()
-            .relative()
-            .child(
-                div()
-                    .h(px(layout.ruler))
-                    .flex_none()
-                    .flex()
-                    .border_b_1()
-                    .border_color(rgb(LINE))
-                    .child(div().w(px(layout.track_header)).flex_none())
-                    .child(
-                        div()
-                            .flex_1()
-                            .relative()
-                            .overflow_hidden()
-                            .id("timeline-seek")
-                            .debug_selector(|| "timeline-seek".into())
-                            .cursor_pointer()
-                            .on_mouse_down(
-                                gpui::MouseButton::Left,
-                                cx.listener(|this, event: &gpui::MouseDownEvent, _, cx| {
-                                    this.begin_pointer(
-                                        crate::sliders::Pointer::Timeline,
-                                        event.position.x,
-                                        cx,
-                                    );
-                                    cx.stop_propagation();
-                                }),
-                            )
-                            .child(self.pointer_bounds(crate::sliders::Pointer::Timeline, cx))
-                            .children((0..30).map(|index| {
-                                let step = 100.0 * self.zoom;
-                                div()
-                                    .absolute()
-                                    .left(px(index as f32 * step))
-                                    .h_full()
-                                    .border_l_1()
-                                    .border_color(rgb(LINE))
-                                    .pl(px(7.0))
-                                    .pt(px(4.0))
-                                    .text_size(px(10.0))
-                                    .font_family("Consolas")
-                                    .text_color(rgb(MUTED))
-                                    .child(format!("{:02}:{:02}", index * 5 / 60, index * 5 % 60))
-                            })),
-                    ),
-            )
-            .child(
-                div()
-                    .flex_1()
-                    .min_h_0()
-                    .flex()
-                    .child(
-                        div()
-                            .w(px(layout.track_header))
-                            .flex_none()
-                            .border_r_1()
-                            .border_color(rgb(LINE)),
-                    )
-                    .child(div().flex_1().relative()),
-            )
-            .child(
-                div()
-                    .absolute()
-                    .left(px(layout.track_header - 1.0
-                        + self.session.timeline_position as f32 * 20.0 * self.zoom))
-                    .top(px(6.0))
-                    .bottom_0()
-                    .w(px(1.0))
-                    .bg(rgb(0xc3c3c8))
-                    .child(
-                        div()
-                            .id("timeline-playhead")
-                            .debug_selector(|| "timeline-playhead".into())
-                            .absolute()
-                            .left(px(-6.0))
-                            .top(px(-3.0))
-                            .size(px(13.0))
-                            .cursor_ew_resize()
-                            .on_mouse_down(
-                                gpui::MouseButton::Left,
-                                cx.listener(|this, event: &gpui::MouseDownEvent, _, cx| {
-                                    this.begin_pointer(
-                                        crate::sliders::Pointer::Timeline,
-                                        event.position.x,
-                                        cx,
-                                    );
-                                    cx.stop_propagation();
-                                }),
-                            )
-                            .child(
-                                svg()
-                                    .path(Icon::PlayheadHead.path())
-                                    .size_full()
-                                    .text_color(rgb(TEXT)),
-                            ),
-                    ),
-            )
-    }
-}
-
-/// 创建空检查器面板，仅保留调试标识和灰阶背景，不显示占位文本。
-fn empty_panel(label: &'static str, width: f32) -> Div {
-    div()
-        .debug_selector(|| label.to_owned())
-        .flex_none()
-        .w(px(width))
-        .h_full()
-        .relative()
-        .bg(rgb(PANEL))
 }
 
 #[cfg(test)]
@@ -280,14 +179,9 @@ mod tests {
             let layout = Layout::new(width, height);
             assert!((layout.left + layout.preview + layout.right - width).abs() < 0.01);
             assert!(((layout.title + layout.upper) / height - 0.573).abs() < 0.001);
-            assert!((layout.track_header / width - 0.259).abs() < 0.001);
+            assert!((layout.track_header / width - 0.15).abs() < 0.001);
             assert!(
-                height
-                    - layout.title
-                    - layout.upper
-                    - layout.toolbar.max(34.0)
-                    - layout.ruler
-                    - layout.footer
+                height - layout.title - layout.upper - layout.toolbar.max(34.0) - layout.footer
                     > height * 0.27
             );
         }

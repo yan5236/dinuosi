@@ -1,15 +1,19 @@
 //! 不依赖 GUI 的项目领域模型、媒体处理及版本化项目存储。
 
+pub mod composite;
 pub mod media;
 pub mod media_stream;
 mod midi;
 mod storage;
+pub mod timeline;
+pub mod timeline_audio;
+mod timeline_file;
 pub use storage::{MediaImport, ProjectEntry, ProjectStore};
 
 use uuid::Uuid;
 
 /// 项目身份与名称；不包含编辑会话、用户设置或磁盘序列化契约。
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Project {
     id: Uuid,
     name: String,
@@ -17,6 +21,7 @@ pub struct Project {
     modified_at: u64,
     media_paths: Vec<std::path::PathBuf>,
     media_names: std::collections::BTreeMap<std::path::PathBuf, String>,
+    timeline: timeline::Timeline,
 }
 
 impl Project {
@@ -32,6 +37,7 @@ impl Project {
             modified_at: now,
             media_paths: Vec::new(),
             media_names: Default::default(),
+            timeline: Default::default(),
         })
     }
 

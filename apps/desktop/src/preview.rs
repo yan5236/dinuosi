@@ -80,7 +80,11 @@ impl Desktop {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        self.commit_inspector_input(cx);
         self.stop_preview();
+        self.timeline.preview = false;
+        self.stop_timeline();
+        self.timeline.selected.clear();
         let Some(media) = self.session.media.get(index) else {
             return;
         };

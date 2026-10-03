@@ -1,3 +1,4 @@
+mod events;
 use crate::{
     dialogs::{Dialog, DialogKind},
     ui::{self, BACKGROUND, LINE, TEXT, brand, pill, tool},
@@ -24,6 +25,7 @@ pub struct Desktop {
     pub(crate) zoom: f32,
     pub(crate) volume: f32,
     pub(crate) session: crate::preview::EditorSession,
+    pub(crate) timeline: crate::timeline_state::TimelineSession,
 }
 impl Desktop {
     /// 初始化窗口角色和快捷键焦点；后台加载最近列表，损坏索引以错误提示呈现。
@@ -47,22 +49,27 @@ impl Desktop {
                 .background_spawn(async move {
                     let projects = load_store.list()?;
                     let mut media = Vec::new();
+                    let mut timeline = Default::default();
                     if let Some(entry) = load_entry {
+                        timeline = load_store.load_timeline(&entry)?;
                         media = load_store
                             .load_media(&entry)?
                             .into_iter()
                             .map(crate::media::Media::from_source)
                             .collect();
                     }
-                    Ok::<_, String>((projects, media))
+                    Ok::<_, String>((projects, media, timeline))
                 })
                 .await;
             let _ = this.update_in(cx, |this, _, cx| {
                 this.busy = false;
                 match result {
-                    Ok((entries, media)) => {
+                    Ok((entries, media, timeline)) => {
                         this.projects = entries;
                         this.session.media = media;
+                        this.timeline.model = timeline;
+                        this.timeline.preview = !this.timeline.model.clips.is_empty();
+                        this.refresh_timeline(cx);
                     }
                     Err(error) => this.notice = Some(error),
                 }
@@ -84,6 +91,7 @@ impl Desktop {
             zoom: 1.0,
             volume: 1.0,
             session: crate::preview::EditorSession::new(cx),
+            timeline: Default::default(),
         };
         desktop.watch_media(window, cx);
         desktop
@@ -378,54 +386,50 @@ impl Render for Desktop {
             .text_color(rgb(TEXT))
             .text_size(px(14.0))
             .font_family("Microsoft YaHei UI")
+            .on_mouse_down(
+                gpui::MouseButton::Left,
+                cx.listener(|this, _, window, cx| {
+                    if this.timeline.input.is_some() || this.timeline.rename.is_some() {
+                        this.commit_inspector_input(cx);
+                        this.focus_handle.focus(window);
+                    }
+                }),
+            )
             .on_mouse_move(
                 cx.listener(|this, event: &gpui::MouseMoveEvent, window, cx| {
                     if event.pressed_button == Some(gpui::MouseButton::Left) {
                         this.move_pointer(event.position.x, cx);
+                        this.move_timeline_pointer(event.position, cx);
                     } else {
                         this.end_pointer(window, cx);
+                        this.end_timeline_pointer(window, cx);
                     }
                 }),
             )
             .on_mouse_up(
                 gpui::MouseButton::Left,
-                cx.listener(|this, _, window, cx| this.end_pointer(window, cx)),
+                cx.listener(|this, event: &gpui::MouseUpEvent, window, cx| {
+                    this.timeline.pointer = event.position;
+                    this.end_pointer(window, cx);
+                    this.end_timeline_pointer(window, cx);
+                }),
             )
             .on_mouse_up_out(
                 gpui::MouseButton::Left,
-                cx.listener(|this, _, window, cx| this.end_pointer(window, cx)),
+                cx.listener(|this, event: &gpui::MouseUpEvent, window, cx| {
+                    this.timeline.pointer = event.position;
+                    this.end_pointer(window, cx);
+                    this.end_timeline_pointer(window, cx);
+                }),
             )
-            .on_key_down(cx.listener(|this, event: &gpui::KeyDownEvent, window, cx| {
-                if this.dialog.is_some() {
-                    this.dialog_key(event, window, cx);
-                    return;
-                }
-                if this.busy {
-                    return;
-                }
-                let key = event.keystroke.key.as_str();
-                if (event.keystroke.modifiers.control && key == "n")
-                    || (this.current.is_none() && matches!(key, "enter" | "space"))
-                {
-                    this.show_dialog(DialogKind::Create, window, cx);
-                } else if event.keystroke.modifiers.control && key == "o" {
-                    this.import_project(window, cx);
-                } else if event.keystroke.modifiers.control && key == "h" {
-                    this.show_manager(window, cx);
-                } else if key == "escape" {
-                    this.menu_open = false;
-                    this.project_menu = None;
-                    this.session.media_menu = None;
-                    this.notice = None;
-                    cx.notify();
-                }
-            }))
+            .on_key_down(cx.listener(Self::workspace_key))
             .child(div().absolute().size_0().track_focus(&self.focus_handle))
             .child(if self.current.is_some() {
                 self.editor(layout, window, cx)
             } else {
                 self.manager(window, cx)
             })
+            .children(self.library_drag_overlay())
             .when(
                 self.menu_open || self.project_menu.is_some() || self.session.media_menu.is_some(),
                 |s| {

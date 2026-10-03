@@ -114,14 +114,17 @@ impl Desktop {
         match kind {
             Pointer::Volume => {
                 self.volume = ratio;
+                if let Some(sound) = &self.timeline.sound {
+                    sound.sink.set_volume(ratio);
+                }
                 if let Some(player) = &self.session.player {
                     player.volume(ratio);
                 }
             }
-            Pointer::Zoom => self.zoom = 0.5 + ratio * 3.5,
+            Pointer::Zoom => self.change_zoom(0.5 + ratio * 3.5 - self.zoom, cx),
             Pointer::Timeline => {
-                self.session.timeline_position =
-                    ratio as f64 * f64::from(bounds.size.width) / (20.0 * self.zoom as f64)
+                let frame = self.timeline_frame_at(x);
+                self.seek_timeline(frame as f64 / self.timeline.model.fps as f64, false, cx);
             }
             Pointer::Seek => {
                 self.session.position = (ratio as f64 * self.session.duration())
@@ -147,8 +150,11 @@ impl Desktop {
 
     /// 释放捕获并在需要时恢复选区播放；重复释放不会重启播放器。
     pub(crate) fn end_pointer(&mut self, window: &mut gpui::Window, cx: &mut Context<Self>) {
-        if self.session.drag.take().is_none() {
+        let Some(kind) = self.session.drag.take() else {
             return;
+        };
+        if kind == Pointer::Timeline {
+            self.seek_timeline(self.session.timeline_position, true, cx);
         }
         if std::mem::take(&mut self.session.resume_after_drag) {
             self.play_preview(window, cx);

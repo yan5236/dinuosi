@@ -143,6 +143,9 @@ impl Desktop {
                                                 .w(px(tile_width))
                                                 .flex_none()
                                                 .cursor_pointer()
+                                                .on_mouse_down(gpui::MouseButton::Left, cx.listener(move |this, event: &gpui::MouseDownEvent, _, cx| {
+                                                    this.begin_library_drag(index, event.position, cx);
+                                                }))
                                                 .on_mouse_down(gpui::MouseButton::Right, cx.listener(
                                                     move |this, event: &gpui::MouseDownEvent, _, cx| {
                                                         if !this.busy {
@@ -155,7 +158,7 @@ impl Desktop {
                                                 ))
                                                 .on_click(cx.listener(
                                                     move |this, _, window, cx| {
-                                                        this.select_media(index, window, cx)
+                                                        if !this.timeline.moved { this.select_media(index, window, cx); }
                                                     },
                                                 ))
                                                 .child(
