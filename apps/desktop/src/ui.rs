@@ -56,6 +56,19 @@ pub fn pill(id: &'static str, label: &'static str, width: f32, height: f32) -> S
 /// 创建紧凑图标控件；不可用项保持位置，通过悬停提示说明状态。
 /// 此函数不修改业务数据，可用控件由调用方追加点击处理。
 pub fn tool(id: impl Into<SharedString>, icon: Icon, enabled: bool) -> Stateful<Div> {
+    tool_button(id, icon, enabled).tooltip(move |_, cx| {
+        let text = if enabled {
+            icon.label().to_string()
+        } else {
+            format!("{}（暂无可操作内容）", icon.label())
+        };
+        cx.new(|_| Hint(text)).into()
+    })
+}
+
+/// 创建不绑定提示的图标按钮，尺寸和状态样式与通用工具一致。
+/// 调用方负责按业务含义配置 Tooltip，避免将图标资源名作为操作名称。
+pub fn tool_button(id: impl Into<SharedString>, icon: Icon, enabled: bool) -> Stateful<Div> {
     let id = id.into();
     div()
         .debug_selector(|| id.to_string())
@@ -76,14 +89,6 @@ pub fn tool(id: impl Into<SharedString>, icon: Icon, enabled: bool) -> Stateful<
                     0x38383c
                 }))
             })
-        })
-        .tooltip(move |_, cx| {
-            let text = if enabled {
-                icon.label().to_string()
-            } else {
-                format!("{}（暂无可操作内容）", icon.label())
-            };
-            cx.new(|_| Hint(text)).into()
         })
         .child(
             svg()

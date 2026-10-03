@@ -45,6 +45,7 @@ Logo 来源：`E:\轻线图标-64枚完整套装\Dinuosi-Logo-Kit`。项目在 `
 - `timeline.rs` 的编辑、约束、矩形选择、参数限值、刻度生成和撤销/重做不依赖 GPUI。检查器坐标是 1920×1080 默认项目画布中心的像素偏移，X 向右、Y 向下，旋转为角度。
 - `composite.rs` 在后台解码各可见片段，使用源入点寻址，应用透明度/缩放/平移/旋转并按轨道顺序混合；`timeline_audio.rs` 按时间线的空隙、片段位置、源选区和静音状态混合 PCM。Desktop 的 `timeline_preview.rs`、`timeline_sound.rs` 仅做任务调度、图像上传、Rodio 设备与播放时钟适配。
 - `timeline_state.rs`、`timeline_actions.rs` 保存 UI 手势并调用 Core；`timeline_view.rs`、`timeline_clip.rs` 与 `timeline_tracks.rs` 绘制刻度、片段、轨道头及滚动条，`timeline_drag.rs` 绘制缩略图光标。`inspector.rs` 沿用原生 TextInput 处理参数输入。
+- `tooltip.rs` 为轨道头和时间线工具提供即时向下显示的纯文字气泡与指向控件的箭头，浮层越过轨道裁切；提示按操作及当前状态命名，与图标资源标签分离。支持鼠标悬停、Tab/Shift+Tab 聚焦和 Escape 关闭，不修改核心模型。
 - `trim_handle.rs` 是素材预览与时间线共用的裁剪把手；把手在片段两端向外延伸 12px，时间零点在轨道头右侧额外预留 12px，右端也保留对应空间。刻度、播放头、拖入和框选采用同一时间原点；轨道头与内容使用相同的垂直裁切区。
 - 连续寻址串行消费完成的中间帧并追赶最新请求，避免每次移动都丢帧造成预览饥饿。`ScrubPreview` 默认 `Live`，保留 `OnRelease` 宿主设置接口；当前没有设置窗口，也不把它写入项目。
 - 时间线元数据在释放手势时串行原子保存，索引失败回滚内存和项目；媒体探测/解码仍在后台。预览采用低分辨率软件合成，不代表最终导出分辨率或已验证的多轨实时性能。

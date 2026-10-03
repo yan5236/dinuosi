@@ -3,7 +3,7 @@
 use dinuosi_icons::Icon;
 use gpui::{Context, Div, Window, div, prelude::*, px, rgb};
 
-use crate::ui::{LINE, MUTED, separator, tool};
+use crate::ui::{LINE, MUTED, separator};
 use crate::view::Desktop;
 
 /// 草图主要边界的逻辑像素位置，随窗口尺寸按相同比例缩放。
@@ -96,7 +96,7 @@ impl Desktop {
     }
 
     /// 依草图顺序绘制分组工具，缩放控件独立靠右；空时间线中的剪辑工具禁用。
-    /// 缩放按钮实际改变标尺密度，不修改项目或创建历史记录。
+    /// 工具提示使用立即向下显示的 Tooltip；缩放按钮仅改变标尺密度，不创建历史记录。
     fn timeline_toolbar(&self, height: f32, cx: &mut Context<Self>) -> Div {
         let groups: &[&[Icon]] = &[
             &[Icon::Select, Icon::Razor],
@@ -129,13 +129,18 @@ impl Desktop {
                     .items_center()
                     .when(index > 0, |s| s.child(separator()))
                     .children(group.iter().map(|icon| {
-                        tool(
+                        crate::tooltip::Tooltip::tool(
                             format!("timeline-{}", icon.name()),
                             *icon,
                             *icon == Icon::Select
                                 || (*icon == Icon::Trash && !self.timeline.selected.is_empty()),
+                            if *icon == Icon::Lock {
+                                "锁定片段"
+                            } else {
+                                icon.label()
+                            },
                         )
-                        .when(*icon == Icon::Select, |s| s.bg(rgb(0x38383c)))
+                        .selected(*icon == Icon::Select)
                         .on_click(cx.listener({
                             let icon = *icon;
                             move |this, _, _, cx| {
@@ -148,12 +153,12 @@ impl Desktop {
             }))
             .child(div().flex_1())
             .child(
-                tool("zoom-out", Icon::ZoomOut, true)
+                crate::tooltip::Tooltip::tool("zoom-out", Icon::ZoomOut, true, "缩小时间线")
                     .on_click(cx.listener(|this, _, _, cx| this.change_zoom(-0.25, cx))),
             )
             .child(self.slider(crate::sliders::Pointer::Zoom, 110.0, cx))
             .child(
-                tool("zoom-in", Icon::ZoomIn, true)
+                crate::tooltip::Tooltip::tool("zoom-in", Icon::ZoomIn, true, "放大时间线")
                     .on_click(cx.listener(|this, _, _, cx| this.change_zoom(0.25, cx))),
             )
     }

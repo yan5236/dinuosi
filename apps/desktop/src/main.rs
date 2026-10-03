@@ -22,6 +22,7 @@ mod timeline_sound;
 mod timeline_state;
 mod timeline_tracks;
 mod timeline_view;
+mod tooltip;
 mod trim_handle;
 mod ui;
 mod view;
@@ -31,6 +32,8 @@ mod windows;
 mod editor_media_tests;
 #[cfg(test)]
 mod timeline_tests;
+#[cfg(test)]
+mod tooltip_tests;
 
 use dinuosi_core::ProjectStore;
 use gpui::{App, Application};

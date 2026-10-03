@@ -2,6 +2,7 @@
 use super::*;
 impl Desktop {
     /// 按当前焦点路由快捷键，输入参数时只接受提交/取消，防止误删片段。
+    /// 非输入状态下 Tab/Shift+Tab 遍历工具触发元素，以便键盘聚焦显示 Tooltip。
     pub(super) fn workspace_key(
         &mut self,
         event: &gpui::KeyDownEvent,
@@ -26,6 +27,15 @@ impl Desktop {
                 self.focus_handle.focus(window);
                 cx.notify();
             }
+            return;
+        }
+        if key == "tab" {
+            if event.keystroke.modifiers.shift {
+                window.focus_prev();
+            } else {
+                window.focus_next();
+            }
+            cx.stop_propagation();
             return;
         }
         if key == "delete" || key == "backspace" {

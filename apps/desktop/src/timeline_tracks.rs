@@ -1,7 +1,8 @@
 //! 时间线固定轨道头和滚动条，位置由会话中的实际内容尺寸计算。
 use crate::{
     timeline_state::Gesture,
-    ui::{PANEL, TEXT, tool},
+    tooltip::Tooltip,
+    ui::{PANEL, TEXT},
     view::Desktop,
 };
 use dinuosi_icons::Icon;
@@ -59,14 +60,20 @@ impl Desktop {
                     ),
             )
             .child(
-                tool(format!("track-rename-{index}"), Icon::Edit, true).on_click(
+                Tooltip::tool(
+                    format!("track-rename-{index}"),
+                    Icon::Edit,
+                    true,
+                    "重命名轨道名",
+                )
+                .on_click(
                     cx.listener(move |this, _, window, cx| {
                         this.begin_track_name(index, window, cx)
                     }),
                 ),
             )
             .child(
-                tool(
+                Tooltip::tool(
                     format!("track-lock-{index}"),
                     if track.locked {
                         Icon::Lock
@@ -74,11 +81,16 @@ impl Desktop {
                         Icon::Unlock
                     },
                     true,
+                    if track.locked {
+                        "解锁轨道"
+                    } else {
+                        "锁定轨道"
+                    },
                 )
                 .on_click(cx.listener(move |this, _, _, cx| this.toggle_track(index, 0, cx))),
             )
             .child(
-                tool(
+                Tooltip::tool(
                     format!("track-visible-{index}"),
                     if track.visible {
                         Icon::Eye
@@ -86,12 +98,17 @@ impl Desktop {
                         Icon::EyeClosed
                     },
                     true,
+                    if track.visible {
+                        "隐藏轨道"
+                    } else {
+                        "显示轨道"
+                    },
                 )
                 .on_click(cx.listener(move |this, _, _, cx| this.toggle_track(index, 1, cx))),
             )
             .when(index > 0, |s| {
                 s.child(
-                    tool(
+                    Tooltip::tool(
                         format!("track-mute-{index}"),
                         if track.muted {
                             Icon::Mute
@@ -99,6 +116,11 @@ impl Desktop {
                             Icon::Volume
                         },
                         true,
+                        if track.muted {
+                            "取消轨道静音"
+                        } else {
+                            "轨道静音"
+                        },
                     )
                     .on_click(cx.listener(move |this, _, _, cx| this.toggle_track(index, 2, cx))),
                 )
