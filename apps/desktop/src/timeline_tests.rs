@@ -31,7 +31,7 @@ fn dynamic_timeline_dragging_and_scroll_follow_actual_tracks(cx: &mut TestAppCon
         .add_window_view(|window, cx| Desktop::new(store.clone(), Some(entry.clone()), window, cx));
     cx.simulate_resize(size(px(1440.0), px(900.0)));
     desktop.update_in(cx, |v, _, cx| {
-        v.zoom = 2.0;
+        v.zoom = 0.5;
         v.session
             .media
             .push(Media::from_source(dinuosi_core::media::Media {
@@ -166,6 +166,7 @@ fn timeline_pointer_editing_persists_real_results(cx: &mut TestAppContext) {
     cx.run_until_parked();
     desktop.update_in(cx, |v, _, cx| {
         let mut bytes = vec![0; (FRAME_WIDTH * FRAME_HEIGHT * 4) as usize];
+        v.zoom = 0.5;
         for p in bytes.as_chunks_mut::<4>().0 {
             p.copy_from_slice(&[30, 70, 160, 255]);
         }
@@ -317,7 +318,7 @@ fn live_scrub_updates_preview_before_mouse_release(cx: &mut TestAppContext) {
     cx.simulate_resize(size(px(1440.0), px(900.0)));
     cx.run_until_parked();
     desktop.update_in(cx, |v, _, cx| {
-        v.zoom = 2.0;
+        v.zoom = 0.5;
         for (index, color) in [[220, 0, 0, 255], [0, 0, 220, 255]].into_iter().enumerate() {
             let path = std::path::PathBuf::from(format!("color-{index}.png"));
             let bytes = color.repeat((FRAME_WIDTH * FRAME_HEIGHT) as usize);

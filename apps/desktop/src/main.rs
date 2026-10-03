@@ -39,6 +39,8 @@ mod timeline_scroll_tests;
 #[cfg(test)]
 mod timeline_tests;
 #[cfg(test)]
+mod timeline_zoom_tests;
+#[cfg(test)]
 mod tooltip_tests;
 
 use dinuosi_core::ProjectStore;

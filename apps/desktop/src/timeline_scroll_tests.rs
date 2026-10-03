@@ -35,7 +35,7 @@ fn fixture<'a>(
         .add_window_view(|window, cx| Desktop::new(store.clone(), Some(entry.clone()), window, cx));
     cx.simulate_resize(size(px(1440.0), px(900.0)));
     desktop.update_in(cx, |v, _, cx| {
-        v.zoom = 2.0;
+        v.zoom = 0.5;
         v.session
             .media
             .push(Media::from_source(dinuosi_core::media::Media {
@@ -155,7 +155,7 @@ fn marquee_autoscroll_preserves_anchor_and_ctrl_wheel_is_horizontal(cx: &mut Tes
             v.timeline.scroll_y,
             v.zoom
         )),
-        (220.0, 100.0, 2.0)
+        (220.0, 100.0, 0.5)
     );
     hold(cx, 5);
     assert_eq!(desktop.read_with(cx, |v, _| v.timeline.scroll_x), 220.0);

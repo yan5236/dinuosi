@@ -41,7 +41,15 @@ impl Layout {
 impl Desktop {
     /// 构造三栏与底部区域；预览控制只放中栏，左右面板延伸至工具栏上沿。
     /// 时间线与检查器委派独立视图，预览模式由用户的素材/时间线选择决定。
-    pub(crate) fn editor(&self, layout: Layout, window: &Window, cx: &mut Context<Self>) -> Div {
+    /// 绘制前同步时间线横向尺寸，使首次显示和窗口缩放使用当帧宽度计算全览比例。
+    pub(crate) fn editor(
+        &mut self,
+        layout: Layout,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) -> Div {
+        self.timeline.bounds.size.width = px(layout.width);
+        self.timeline.header = layout.track_header + crate::trim_handle::WIDTH;
         div()
             .size_full()
             .flex()
@@ -163,12 +171,16 @@ impl Desktop {
             )
     }
 
-    /// 调整对数缩放参数并保持视口左端时间；缩小时夹紧滚动范围，不改变项目内容。
+    /// 调整对数缩放参数；最小档回到时间零点全览，其他档保持视口左端时间并夹紧滚动范围。
     pub(crate) fn change_zoom(&mut self, delta: f32, cx: &mut Context<Self>) {
         let left = self.timeline.scroll_x / self.pixels_per_second();
         self.zoom = (self.zoom + delta).clamp(0.5, 4.0);
-        self.timeline.scroll_x = (left * self.pixels_per_second())
-            .clamp(0.0, self.timeline_width() - self.timeline_view_width());
+        self.timeline.scroll_x = if self.zoom == 0.5 {
+            0.0
+        } else {
+            (left * self.pixels_per_second())
+                .clamp(0.0, self.timeline_width() - self.timeline_view_width())
+        };
         cx.notify();
     }
 }

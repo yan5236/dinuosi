@@ -357,18 +357,25 @@ pub struct Tick {
     pub major: bool,
     pub label: String,
 }
-/// 按像素密度生成可见刻度；最大缩放每帧短线、每两帧标注，秒界显示时间码。
+/// 按实际像素密度生成整屏刻度，支持长项目全览时低于每秒一像素；主刻度至少相隔 90px。
+/// 最大缩放每帧短线、每两帧标注，秒界显示时间码；非正密度以极小正值保护除法。
 pub fn ticks(fps: u32, pixels_per_second: f64, first: f64, width: f64) -> Vec<Tick> {
     let fps = fps.max(1) as i64;
-    let ppf = pixels_per_second.max(1.0) / fps as f64;
+    let pixels_per_second = pixels_per_second.max(0.000001);
+    let ppf = pixels_per_second / fps as f64;
     let mut steps = vec![1, 2, 5, 10, 15];
-    steps.extend([1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 1800, 3600].map(|s| s * fps));
+    steps.extend(
+        [
+            1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 1800, 3600, 7200, 14400, 28800, 86400,
+        ]
+        .map(|s| s * fps),
+    );
     steps.sort_unstable();
     steps.dedup();
     let major = steps
         .into_iter()
         .find(|s| *s as f64 * ppf >= 90.0)
-        .unwrap_or(3600 * fps);
+        .unwrap_or(86400 * fps);
     let minor = if major < fps {
         1
     } else if major % 10 == 0 {
@@ -377,8 +384,7 @@ pub fn ticks(fps: u32, pixels_per_second: f64, first: f64, width: f64) -> Vec<Ti
         (major / 5).max(1)
     };
     let start = ((first.max(0.0) * fps as f64) as i64 / minor) * minor;
-    let end =
-        ((first.max(0.0) + width.max(0.0) / pixels_per_second.max(1.0)) * fps as f64).ceil() as i64;
+    let end = ((first.max(0.0) + width.max(0.0) / pixels_per_second) * fps as f64).ceil() as i64;
     (start..=end)
         .step_by(minor as usize)
         .map(|frame| {

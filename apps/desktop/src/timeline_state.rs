@@ -82,9 +82,21 @@ pub struct TimelineSession {
 }
 
 impl Desktop {
-    /// 把对数缩放值映射到每秒像素；最大每帧 60 像素，支持逐帧刻度。
+    /// 最小档按所有轨道最晚结束时间适配可见宽度，并留出 15% 尾部空白；空项目显示一分钟。
+    /// 中间档对数插值到原有每秒 1800 像素上限；编辑手势使用按下快照，避免裁边时比例漂移。
     pub(crate) fn pixels_per_second(&self) -> f32 {
-        8.0 * 225.0_f32.powf((self.zoom - 0.5) / 3.5)
+        let model = self
+            .timeline
+            .before
+            .as_ref()
+            .unwrap_or(&self.timeline.model);
+        let duration = if model.end() > 0 {
+            model.end() as f32 / model.fps as f32 * 1.15
+        } else {
+            60.0
+        };
+        let minimum = (self.timeline_view_width() / duration).min(1800.0);
+        minimum * (1800.0 / minimum).powf(((self.zoom - 0.5) / 3.5).clamp(0.0, 1.0))
     }
     /// 返回时间内容总宽度，始终保留至少两屏及最后片段后的可拖放空间。
     pub(crate) fn timeline_width(&self) -> f32 {
