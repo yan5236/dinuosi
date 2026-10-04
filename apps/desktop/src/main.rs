@@ -13,6 +13,8 @@ mod media_actions;
 mod media_status;
 mod playback;
 mod preview;
+mod preview_geometry;
+mod preview_transform;
 mod preview_view;
 mod sliders;
 mod timeline_actions;
@@ -34,6 +36,8 @@ mod windows;
 mod audio_track_tests;
 #[cfg(test)]
 mod editor_media_tests;
+#[cfg(test)]
+mod preview_transform_tests;
 #[cfg(test)]
 mod timeline_scroll_tests;
 #[cfg(test)]

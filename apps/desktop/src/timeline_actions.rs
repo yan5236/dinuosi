@@ -100,13 +100,14 @@ impl Desktop {
         cx.notify();
     }
     /// 处理活动手势的移动，片段修改从按下快照计算；音量按比例映射增益并停止旧声音。
-    /// 参数只在内存更新，释放时保存并记录一次历史，避免累计漂移与重复提交。
+    /// 参数和预览变换只在内存更新，释放时保存并记录一次历史，避免累计漂移与重复提交。
     pub(crate) fn move_timeline_pointer(&mut self, point: Point<Pixels>, cx: &mut Context<Self>) {
         let Some(gesture) = &self.timeline.gesture else {
             return;
         };
         self.timeline.pointer = point;
         match gesture {
+            Gesture::Preview(_) => self.move_preview_transform(point, cx),
             Gesture::Marquee { start, additive } => {
                 let start = self.timeline_gesture_start(*start);
                 let (a, b) = (

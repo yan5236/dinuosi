@@ -11,6 +11,7 @@ pub enum DropTarget {
 }
 
 pub enum Gesture {
+    Preview(crate::preview_transform::PreviewDrag),
     Track {
         start: Point<Pixels>,
         index: usize,
@@ -67,6 +68,7 @@ pub struct TimelineSession {
     pub scroll_y: f32,
     pub content_height: f32,
     pub preview: bool,
+    pub preview_bounds: Bounds<Pixels>,
     pub frame: Option<Arc<RenderImage>>,
     pub revision: u64,
     pub rendering: bool,

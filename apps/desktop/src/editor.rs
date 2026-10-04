@@ -73,7 +73,7 @@ impl Desktop {
                             .flex_none()
                             .w(px(layout.preview))
                             .h_full()
-                            .child(self.preview_display())
+                            .child(self.preview_display(cx))
                             .when(
                                 !self.timeline.preview && self.session.selected.is_some(),
                                 |s| s.child(self.preview_strip(cx)),

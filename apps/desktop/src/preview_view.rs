@@ -11,8 +11,8 @@ use gpui::{Context, Div, MouseButton, ObjectFit, div, img, prelude::*, px, relat
 
 impl Desktop {
     /// 按素材显示比例居中绘制完整画面；四周随面板尺寸留白，透明补边透出灰色背景。
-    /// 图片采用绝对定位避免固有尺寸撑开布局；离线占位和音频图标使用相同内层区域。
-    pub(crate) fn preview_display(&self) -> Div {
+    /// 图片采用绝对定位避免固有尺寸撑开布局；时间线模式叠加受画布裁切的变换选择框。
+    pub(crate) fn preview_display(&self, cx: &mut Context<Self>) -> Div {
         let selected = self
             .session
             .selected
@@ -53,6 +53,9 @@ impl Desktop {
                             )
                         },
                     )
+                    .when(self.timeline.preview, |s| {
+                        s.child(self.preview_transform_overlay(cx))
+                    })
                     .when(audio && !offline, |s| {
                         s.flex().items_center().justify_center().child(
                             svg()
