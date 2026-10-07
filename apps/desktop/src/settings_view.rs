@@ -40,22 +40,27 @@ fn row(label: &'static str, control: impl IntoElement) -> Div {
 }
 
 impl Settings {
-    /// 渲染当前分类的实际控件；通用页通过受控 Switch 修改草稿，应用前不保存偏好。
+    /// 渲染当前分类的实际控件；通用页通过 Switch 与刀片模式下拉修改草稿，应用前不保存偏好。
     /// 语言页读取统一索引并显示单选勾选、自称和当前已应用语言译名；插件显示空列表。
     fn body(&self, cx: &mut Context<Self>) -> Div {
         let content = div().flex().flex_col().gap(px(8.0));
         match self.tab {
-            Tab::General => content.child(row(
-                crate::i18n::t("settings", "Live preview while dragging", cx),
-                Switch::new(
-                    "live-scrub",
-                    self.draft.live_scrub,
-                    cx.listener(|this, checked: &bool, _, cx| {
-                        this.draft.live_scrub = *checked;
-                        cx.notify();
-                    }),
-                ),
-            )),
+            Tab::General => content
+                .child(row(
+                    crate::i18n::t("settings", "Live preview while dragging", cx),
+                    Switch::new(
+                        "live-scrub",
+                        self.draft.live_scrub,
+                        cx.listener(|this, checked: &bool, _, cx| {
+                            this.draft.live_scrub = *checked;
+                            cx.notify();
+                        }),
+                    ),
+                ))
+                .child(row(
+                    crate::i18n::t("settings", "Blade cutting mode", cx),
+                    self.blade_mode_dropdown(cx),
+                )),
             Tab::Language => self.language_list(cx),
             Tab::Plugins => content.child(
                 div()
@@ -243,7 +248,7 @@ impl Settings {
 }
 
 impl Render for Settings {
-    /// 渲染独立窗口与搜索结果；底部取消/应用复用导出胶囊按钮，错误只展示实际操作失败。
+    /// 渲染独立窗口与搜索结果，点击下拉外部收起菜单；底部取消/应用复用导出胶囊按钮，错误只展示实际操作失败。
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         window.set_window_title(&format!(
             "Dinuosi - {}",
@@ -266,6 +271,15 @@ impl Render for Settings {
             .text_color(rgb(TEXT))
             .text_size(px(14.0))
             .font_family("Microsoft YaHei UI")
+            .on_mouse_down(
+                gpui::MouseButton::Left,
+                cx.listener(|this, _, _, cx| {
+                    if this.blade_menu_open {
+                        this.blade_menu_open = false;
+                        cx.notify();
+                    }
+                }),
+            )
             .on_key_down(cx.listener(Self::key))
             .child(div().absolute().size_0().track_focus(&self.focus))
             .child(

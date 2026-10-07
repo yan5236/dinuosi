@@ -55,6 +55,8 @@ pub struct TimelineSession {
     pub model: Timeline,
     pub history: History,
     pub selected: BTreeSet<String>,
+    pub blade: bool,
+    pub blade_pointer: Option<Point<Pixels>>,
     pub gesture: Option<Gesture>,
     pub before: Option<Timeline>,
     pub pointer: Point<Pixels>,

@@ -8,7 +8,7 @@ use dinuosi_core::timeline::Clip;
 use gpui::{Context, Div, MouseButton, ObjectFit, Stateful, div, img, prelude::*, px, rgb};
 impl Desktop {
     /// 仅绘制可见片段与真实端点把手；水平滚动截断处不伪造端点，零秒处预留把手空间。
-    /// 音频按源入点、滚动截断及当前缩放查询波形；把手补偿 1px 边框并保持片段完整高度。
+    /// 音频按源入点、滚动截断及当前缩放查询波形；把手补偿 1px 边框并保持片段完整高度，刀片模式隐藏把手。
     pub(crate) fn timeline_clip(
         &self,
         clip: &Clip,
@@ -43,7 +43,7 @@ impl Desktop {
                 .bg(rgb(0x414147))
                 .border_1()
                 .border_color(rgb(if selected { TEXT } else { 0x68686e }))
-                .cursor_grab()
+                .when(!self.timeline.blade, |s| s.cursor_grab())
                 .on_mouse_down(
                     MouseButton::Left,
                     cx.listener(move |this, e, window, cx| {
@@ -111,7 +111,11 @@ impl Desktop {
                 .children(
                     [true, false]
                         .into_iter()
-                        .filter(|left| selected && if *left { x >= 0.0 } else { x + w <= width })
+                        .filter(|left| {
+                            !self.timeline.blade
+                                && selected
+                                && if *left { x >= 0.0 } else { x + w <= width }
+                        })
                         .map(|left| {
                             let id = clip.id.clone();
                             div()

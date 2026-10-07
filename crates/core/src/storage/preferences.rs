@@ -7,16 +7,18 @@ use std::collections::BTreeMap;
 pub struct Preferences {
     pub version: u32,
     pub live_scrub: bool,
+    pub blade_requires_selection: bool,
     pub language: String,
     pub shortcuts: BTreeMap<String, Vec<String>>,
 }
 
 impl Default for Preferences {
-    /// 初始偏好保持实时拖动预览，语言跟随系统并回退英文；快捷键覆盖为空。
+    /// 初始偏好保持实时拖动预览与直接刀片切割，语言跟随系统并回退英文；快捷键覆盖为空。
     fn default() -> Self {
         Self {
             version: 1,
             live_scrub: true,
+            blade_requires_selection: false,
             language: "auto".into(),
             shortcuts: BTreeMap::new(),
         }

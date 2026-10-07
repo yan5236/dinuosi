@@ -12,6 +12,9 @@ pub enum Command {
     Redo,
     Play,
     Settings,
+    SelectTool,
+    BladeTool,
+    SplitAtPlayhead,
 }
 
 pub struct Shortcut {
@@ -69,6 +72,24 @@ pub const SHORTCUTS: &[Shortcut] = &[
         id: "settings",
         label: "Settings",
         defaults: &["ctrl-,"],
+    },
+    Shortcut {
+        command: Command::SelectTool,
+        id: "select-tool",
+        label: "Selection tool",
+        defaults: &["v"],
+    },
+    Shortcut {
+        command: Command::BladeTool,
+        id: "blade-tool",
+        label: "Blade tool",
+        defaults: &["c"],
+    },
+    Shortcut {
+        command: Command::SplitAtPlayhead,
+        id: "split-at-playhead",
+        label: "Split selected clips at playhead",
+        defaults: &["ctrl-b"],
     },
 ];
 

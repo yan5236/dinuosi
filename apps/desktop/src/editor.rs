@@ -103,7 +103,7 @@ impl Desktop {
             )
     }
 
-    /// 依草图顺序绘制分组工具，缩放控件独立靠右；空时间线中的剪辑工具禁用。
+    /// 依草图顺序绘制分组工具，选择和刀片可切换；未实现的剪辑工具禁用，缩放控件独立靠右。
     /// 工具提示使用立即向下显示的 Tooltip；缩放按钮仅改变标尺密度，不创建历史记录。
     fn timeline_toolbar(&self, height: f32, cx: &mut Context<Self>) -> Div {
         let groups: &[&[Icon]] = &[
@@ -140,7 +140,7 @@ impl Desktop {
                         crate::tooltip::Tooltip::tool(
                             format!("timeline-{}", icon.name()),
                             *icon,
-                            *icon == Icon::Select
+                            matches!(*icon, Icon::Select | Icon::Razor)
                                 || (*icon == Icon::Trash && !self.timeline.selected.is_empty()),
                             if *icon == Icon::Lock {
                                 crate::i18n::t("editor", "Lock clip", cx)
@@ -148,12 +148,18 @@ impl Desktop {
                                 crate::i18n::t("icons", icon.name(), cx)
                             },
                         )
-                        .selected(*icon == Icon::Select)
+                        .selected(if self.timeline.blade {
+                            *icon == Icon::Razor
+                        } else {
+                            *icon == Icon::Select
+                        })
                         .on_click(cx.listener({
                             let icon = *icon;
-                            move |this, _, _, cx| {
+                            move |this, _, window, cx| {
                                 if icon == Icon::Trash {
                                     this.delete_clips(cx);
+                                } else if matches!(icon, Icon::Select | Icon::Razor) {
+                                    this.set_blade_tool(icon == Icon::Razor, window, cx);
                                 }
                             }
                         }))

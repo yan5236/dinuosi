@@ -20,11 +20,13 @@ mod preview_geometry;
 mod preview_transform;
 mod preview_view;
 mod settings;
+mod settings_blade;
 mod settings_view;
 mod shortcuts;
 mod sliders;
 mod switch;
 mod timeline_actions;
+mod timeline_blade;
 mod timeline_clip;
 mod timeline_drag;
 mod timeline_preview;
@@ -50,6 +52,8 @@ mod i18n_tests;
 mod preview_transform_tests;
 #[cfg(test)]
 mod settings_tests;
+#[cfg(test)]
+mod timeline_blade_tests;
 #[cfg(test)]
 mod timeline_scroll_tests;
 #[cfg(test)]

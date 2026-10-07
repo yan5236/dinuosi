@@ -300,6 +300,7 @@ impl Render for Desktop {
             )
             .on_mouse_move(
                 cx.listener(|this, event: &gpui::MouseMoveEvent, window, cx| {
+                    this.update_blade_pointer(event.position, cx);
                     if event.pressed_button == Some(gpui::MouseButton::Left) {
                         this.move_pointer(event.position.x, cx);
                         this.move_timeline_pointer(event.position, cx);
@@ -334,6 +335,7 @@ impl Render for Desktop {
                 self.manager(window, cx)
             })
             .children(self.library_drag_overlay())
+            .children(self.blade_cursor_overlay())
             .when(
                 self.menu_open
                     || self.help_open

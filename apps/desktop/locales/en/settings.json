@@ -30,5 +30,11 @@
   "Unassigned": "Unassigned",
   "auto": "Automatic",
   "zh-CN": "Simplified Chinese",
-  "en": "English"
+  "en": "English",
+  "Selection tool": "Selection tool",
+  "Blade tool": "Blade tool",
+  "Split selected clips at playhead": "Split selected clips at playhead",
+  "Blade cutting mode": "Blade cutting mode",
+  "Require clip selection": "Require clip selection",
+  "No clip selection required": "No clip selection required"
 }

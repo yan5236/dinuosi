@@ -44,6 +44,7 @@ pub struct Settings {
     pub(crate) fields: Vec<Entity<TextInput>>,
     pub(crate) project: bool,
     pub(crate) recording: Option<usize>,
+    pub(crate) blade_menu_open: bool,
     pub(crate) error: Option<String>,
     _search_watch: Subscription,
 }
@@ -189,6 +190,7 @@ impl Settings {
             fields,
             project: model.is_some(),
             recording: None,
+            blade_menu_open: false,
             error: None,
             _search_watch: watch,
         }
@@ -216,6 +218,12 @@ impl Settings {
                 .to_lowercase()
                 .contains(&query)
             || crate::i18n::lookup("zh-CN", "settings", terms).contains(&query)
+            || (tab == Tab::General
+                && ["en", "zh-CN"].iter().any(|locale| {
+                    crate::i18n::lookup(locale, "settings", "Blade cutting mode")
+                        .to_lowercase()
+                        .contains(&query)
+                }))
             || (tab == Tab::Language
                 && dinuosi_core::language::LANGUAGES.iter().any(|item| {
                     item.id.to_lowercase().contains(&query)
@@ -296,6 +304,8 @@ impl Settings {
                     Err(e) => self.error = Some(e),
                 }
             }
+        } else if key == "escape" && self.blade_menu_open {
+            self.blade_menu_open = false;
         } else if key == "escape" {
             window.remove_window();
         } else if key == "tab" {

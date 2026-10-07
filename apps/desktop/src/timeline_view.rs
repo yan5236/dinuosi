@@ -9,7 +9,7 @@ use dinuosi_icons::Icon;
 use gpui::{Context, Div, MouseButton, canvas, div, prelude::*, px, rgb, rgba, svg};
 
 impl Desktop {
-    /// 使用实际绘制边界命中时间线；轨道头固定，横向滚动只移动内容和刻度。
+    /// 使用实际绘制边界命中时间线，刀片虚线裁在内容区内；轨道头固定，横向滚动只移动内容和刻度。
     pub(crate) fn timeline_panel(&self, layout: Layout, cx: &mut Context<Self>) -> Div {
         let header = layout.track_header;
         let origin = header + crate::trim_handle::WIDTH;
@@ -83,6 +83,7 @@ impl Desktop {
                             .iter()
                             .filter_map(|clip| self.timeline_clip(clip, width, cx)),
                     )
+                    .children(self.blade_cut_line(cx))
                     .when(self.timeline.moved, |s| s.children(self.drop_preview(cx)))
                     .when_some(self.marquee_rectangle(), |s, (x, y, w, h)| {
                         s.child(

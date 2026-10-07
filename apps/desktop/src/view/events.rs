@@ -60,6 +60,16 @@ impl Desktop {
                 }
             }
             Some(Command::Settings) => self.open_settings(crate::settings::Tab::General, cx),
+            Some(Command::SelectTool) if self.current.is_some() => {
+                self.set_blade_tool(false, window, cx);
+            }
+            Some(Command::BladeTool) if self.current.is_some() => {
+                self.set_blade_tool(true, window, cx);
+            }
+            Some(Command::SplitAtPlayhead) if self.current.is_some() => {
+                let frame = self.timeline.model.frame(self.session.timeline_position);
+                self.split_timeline_clips(self.timeline.selected.clone(), frame, cx);
+            }
             _ if self.current.is_none() && matches!(key, "enter" | "space") => {
                 self.show_dialog(DialogKind::Create, window, cx);
             }

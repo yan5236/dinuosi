@@ -30,5 +30,11 @@
   "Unassigned": "未绑定",
   "auto": "自动选择",
   "zh-CN": "简体中文",
-  "en": "英语"
+  "en": "英语",
+  "Selection tool": "选择工具",
+  "Blade tool": "刀片工具",
+  "Split selected clips at playhead": "按播放头切割选中素材",
+  "Blade cutting mode": "刀片切割模式",
+  "Require clip selection": "需要选中素材",
+  "No clip selection required": "无需选中素材"
 }

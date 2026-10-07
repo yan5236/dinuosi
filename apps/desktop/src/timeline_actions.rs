@@ -7,7 +7,7 @@ use dinuosi_core::timeline::{Property, Timeline, TrackKind};
 use gpui::{Context, MouseDownEvent, Pixels, Point, Window};
 
 impl Desktop {
-    /// 开始片段移动/修剪，保持已选组；Ctrl/Shift 点击可追加选择，锁轨忽略输入。
+    /// 刀片模式委派切割；选择模式开始片段移动/修剪，保持已选组，Ctrl/Shift 追加选择，锁轨忽略输入。
     pub(crate) fn begin_clip(
         &mut self,
         id: String,
@@ -16,6 +16,10 @@ impl Desktop {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if self.timeline.blade {
+            self.click_blade_clip(id, event, window, cx);
+            return;
+        }
         self.commit_inspector_input(cx);
         let Some(clip) = self.timeline.model.clips.iter().find(|c| c.id == id) else {
             return;
@@ -54,7 +58,7 @@ impl Desktop {
         self.refresh_timeline(cx);
         cx.stop_propagation();
     }
-    /// 在空白区按下时开始框选，不移动播放头；Shift/Ctrl 框选保留已有选择。
+    /// 在选择工具的空白区按下时开始框选，不移动播放头；Shift/Ctrl 框选保留已有选择，刀片工具忽略空白。
     pub(crate) fn begin_marquee(
         &mut self,
         event: &MouseDownEvent,
@@ -62,7 +66,7 @@ impl Desktop {
         cx: &mut Context<Self>,
     ) {
         self.commit_inspector_input(cx);
-        if self.busy {
+        if self.busy || self.timeline.blade {
             return;
         }
         self.focus_handle.focus(window);
