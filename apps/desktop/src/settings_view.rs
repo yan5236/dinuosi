@@ -2,6 +2,7 @@
 use crate::{
     settings::{Settings, TABS, Tab},
     shortcuts,
+    switch::Switch,
     ui::{self, BACKGROUND, LINE, MUTED, PANEL, TEXT},
 };
 use gpui::{Context, Div, Render, Stateful, Window, div, prelude::*, px, rgb};
@@ -37,25 +38,21 @@ fn row(label: &'static str, control: impl IntoElement) -> Div {
 }
 
 impl Settings {
-    /// 渲染当前分类的实际控件；语言仅列出可用中文与系统回退，插件没有运行时则显示空列表。
+    /// 渲染当前分类的实际控件；通用页通过受控 Switch 修改草稿，应用前不保存偏好。
+    /// 语言仅列出可用中文与系统回退，插件没有运行时则显示空列表。
     fn body(&self, cx: &mut Context<Self>) -> Div {
         let content = div().flex().flex_col().gap(px(8.0));
         match self.tab {
             Tab::General => content.child(row(
                 "拖动时实时预览",
-                button(
+                Switch::new(
                     "live-scrub",
-                    if self.draft.live_scrub {
-                        "已开启"
-                    } else {
-                        "已关闭"
-                    },
-                )
-                .debug_selector(|| "live-scrub".into())
-                .on_click(cx.listener(|this, _, _, cx| {
-                    this.draft.live_scrub = !this.draft.live_scrub;
-                    cx.notify();
-                })),
+                    self.draft.live_scrub,
+                    cx.listener(|this, checked: &bool, _, cx| {
+                        this.draft.live_scrub = *checked;
+                        cx.notify();
+                    }),
+                ),
             )),
             Tab::Language => content.child(row(
                 "界面语言",

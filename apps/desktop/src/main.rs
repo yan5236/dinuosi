@@ -22,6 +22,7 @@ mod settings;
 mod settings_view;
 mod shortcuts;
 mod sliders;
+mod switch;
 mod timeline_actions;
 mod timeline_clip;
 mod timeline_drag;

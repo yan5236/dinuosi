@@ -29,6 +29,7 @@ impl Desktop {
             .child(
                 div()
                     .id("file-menu")
+                    .debug_selector(|| "file-menu".into())
                     .px(px(14.0))
                     .py(px(8.0))
                     .cursor_pointer()
@@ -75,7 +76,7 @@ impl Desktop {
             )
             .child(ui::window_controls(window, true))
     }
-    /// 构造文件菜单，沿用原有样式；素材导入位于此处，项目入口调用持久化流程。
+    /// 构造文件菜单，沿用原有样式；项目入口调用持久化流程，设置入口打开或聚焦通用设置窗口。
     /// 浮层遮挡底层点击；关闭窗口期间检查 busy，关闭成功后由窗口观察器重新打开管理窗口。
     pub(super) fn file_menu(&self, top: f32, cx: &mut Context<Self>) -> Div {
         div()
@@ -122,6 +123,18 @@ impl Desktop {
                     .hover(|s| s.bg(rgb(LINE)))
                     .child("项目管理")
                     .on_click(cx.listener(|this, _, window, cx| this.show_manager(window, cx))),
+            )
+            .child(
+                div()
+                    .id("menu-settings")
+                    .debug_selector(|| "menu-settings".into())
+                    .p(px(10.0))
+                    .cursor_pointer()
+                    .hover(|s| s.bg(rgb(LINE)))
+                    .child("设置")
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.open_settings(crate::settings::Tab::General, cx)
+                    })),
             )
             .child(
                 div()
