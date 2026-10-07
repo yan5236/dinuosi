@@ -26,3 +26,7 @@ all = "warn"
 # MIDI 合成位于音频消费路径，开发构建也需满足实时输出速度。
 [profile.dev.package.rustysynth]
 opt-level = 3
+
+# 预览逐像素合成也位于实时交互路径，开发运行保留调试信息并优化 Core 运算。
+[profile.dev.package.dinuosi-core]
+opt-level = 3

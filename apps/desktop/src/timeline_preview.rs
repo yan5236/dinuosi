@@ -10,12 +10,14 @@ impl Desktop {
         self.request_timeline_frame(cx);
         cx.notify();
     }
-    /// 在后台由 Core 处理所有可见轨道，主线程仅上传 BGRA 图像；连续请求按完成顺序显示并追赶最新位置。
+    /// 后台串行复用 Core 源帧缓存合成，主线程仅上传 BGRA；变换不重复解码未改变的源帧。
+    /// 任务独占缓存并在完成后归还，期间合并请求；连续寻址仍显示完成帧并追赶最新位置。
     fn request_timeline_frame(&mut self, cx: &mut Context<Self>) {
         if !self.timeline.preview || self.timeline.rendering {
             return;
         }
         self.timeline.rendering = true;
+        let mut cache = std::mem::take(&mut self.timeline.frame_cache);
         let revision = self.timeline.revision;
         let model = self.timeline.model.clone();
         let frame = model.frame(self.session.timeline_position);
@@ -26,13 +28,15 @@ impl Desktop {
             .map(|m| m.source.clone())
             .collect::<Vec<_>>();
         cx.spawn(async move |this, cx| {
-            let result = cx
-                .background_spawn(
-                    async move { dinuosi_core::composite::render(&model, frame, &media) },
-                )
+            let (result, cache) = cx
+                .background_spawn(async move {
+                    let result = cache.render(&model, frame, &media);
+                    (result, cache)
+                })
                 .await;
             let _ = this.update(cx, |this, cx| {
                 this.timeline.rendering = false;
+                this.timeline.frame_cache = cache;
                 // 串行合成保证完成顺序；连续拖动时先显示刚完成的中间帧，再追赶最新位置。
                 // 若只接受完全相同版本，持续移动会一直丢帧，退化成松开后才预览。
                 if this.timeline.preview {

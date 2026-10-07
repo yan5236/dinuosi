@@ -72,6 +72,7 @@ pub struct TimelineSession {
     pub frame: Option<Arc<RenderImage>>,
     pub revision: u64,
     pub rendering: bool,
+    pub frame_cache: dinuosi_core::composite::FrameCache,
     pub playing: bool,
     pub sound: Option<crate::timeline_sound::TimelineSound>,
     pub play_revision: u64,

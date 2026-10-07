@@ -3,9 +3,26 @@ use crate::{
     media::{self, FRAME_HEIGHT, FRAME_WIDTH, MediaKind},
     timeline::{Timeline, Transform},
 };
+use std::{path::PathBuf, sync::Arc};
+
+/// 仅保留当前可见视频的源帧；参数变换不触发解码，寻址、离线及重新载入素材自动失效。
+/// 缓存随预览会话持有并交给串行后台任务，不使用全局状态或跨线程锁。
+#[derive(Default)]
+pub struct FrameCache {
+    frames: Vec<CachedFrame>,
+}
+
+struct CachedFrame {
+    path: PathBuf,
+    frame: i64,
+    fps: u32,
+    generation: Option<Arc<Vec<u8>>>,
+    bytes: Arc<Vec<u8>>,
+}
 
 /// 将固定大小的 BGRA 源画面按项目坐标变换并混合到输出；无效长度返回错误，不越界读取。
 /// 透明度、缩放和角度由核心约束，坐标从项目像素换算到预览像素，零缩放不绘制。
+/// 完全透明像素跳过，完全不透明像素直接覆盖，避免常见视频/图片逐通道浮点混合。
 pub fn blend(
     output: &mut [u8],
     source: &[u8],
@@ -35,6 +52,14 @@ pub fn blend(
             }
             let i = ((y * FRAME_WIDTH + x) * 4) as usize;
             let j = ((sy as u32 * FRAME_WIDTH + sx as u32) * 4) as usize;
+            if source[j + 3] == 0 || t.opacity == 0.0 {
+                output[i + 3] = 255;
+                continue;
+            }
+            if source[j + 3] == 255 && t.opacity == 100.0 {
+                output[i..i + 4].copy_from_slice(&source[j..j + 4]);
+                continue;
+            }
             let a = source[j + 3] as f64 / 255.0 * t.opacity / 100.0;
             for channel in 0..3 {
                 output[i + channel] = (source[j + channel] as f64 * a
@@ -47,49 +72,90 @@ pub fn blend(
     Ok(())
 }
 
-/// 寻址当前帧的各轨道素材并合成，图片使用缓存首帧；离线/音频不画入视频画布。
+#[cfg(test)]
+#[path = "composite_tests.rs"]
+mod tests;
+
+/// 一次性寻址并合成；持续预览应持有 FrameCache 复用解码结果。
 /// 调用方应在后台执行，解码错误原样返回；输出固定 640×360 BGRA，不依赖 GUI。
 pub fn render(timeline: &Timeline, frame: i64, media: &[media::Media]) -> Result<Vec<u8>, String> {
-    let mut out = vec![0; (FRAME_WIDTH * FRAME_HEIGHT * 4) as usize];
-    for p in out.as_chunks_mut::<4>().0 {
-        p[3] = 255;
-    }
-    for track in (0..timeline.tracks.len()).rev() {
-        if !timeline.tracks[track].visible {
-            continue;
+    FrameCache::default().render(timeline, frame, media)
+}
+
+impl FrameCache {
+    /// 按轨道从底到顶合成，视频按路径、源帧、帧率及素材载入代次复用，图片直接借用缩略图。
+    /// 每次只保留当前可见源帧，避免播放/寻址累积内存；失败不缓存错误，下一次允许重试。
+    pub fn render(
+        &mut self,
+        timeline: &Timeline,
+        frame: i64,
+        media: &[media::Media],
+    ) -> Result<Vec<u8>, String> {
+        let mut previous = std::mem::take(&mut self.frames);
+        let mut out = vec![0; (FRAME_WIDTH * FRAME_HEIGHT * 4) as usize];
+        for p in out.as_chunks_mut::<4>().0 {
+            p[3] = 255;
         }
-        for clip in timeline
-            .clips
-            .iter()
-            .filter(|c| c.track == track && frame >= c.start && frame < c.start + c.duration)
-        {
-            let Some(m) = media
-                .iter()
-                .find(|m| m.path == clip.source)
-                .cloned()
-                .or_else(|| crate::media::probe(&clip.source).ok())
-                .filter(|m| !m.offline && m.kind != MediaKind::Audio)
-            else {
+        for track in (0..timeline.tracks.len()).rev() {
+            if !timeline.tracks[track].visible {
                 continue;
-            };
-            let bytes = if m.kind == MediaKind::Image {
-                m.thumbnail
-                    .as_ref()
-                    .map(|b| b.as_ref().clone())
-                    .ok_or("图片没有可用画面")?
-            } else {
-                media::frame(
-                    &m.path,
-                    (clip.source_in + frame - clip.start) as f64 / timeline.fps as f64,
-                )?
-            };
-            blend(
-                &mut out,
-                &bytes,
-                &clip.transform,
-                (timeline.width, timeline.height),
-            )?;
+            }
+            for clip in timeline
+                .clips
+                .iter()
+                .filter(|c| c.track == track && frame >= c.start && frame < c.start + c.duration)
+            {
+                let Some(m) = media
+                    .iter()
+                    .find(|m| m.path == clip.source)
+                    .cloned()
+                    .or_else(|| crate::media::probe(&clip.source).ok())
+                    .filter(|m| !m.offline && m.kind != MediaKind::Audio)
+                else {
+                    continue;
+                };
+                let bytes = if m.kind == MediaKind::Image {
+                    m.thumbnail.as_ref().cloned().ok_or("图片没有可用画面")?
+                } else {
+                    let source_frame = clip.source_in + frame - clip.start;
+                    let matches = |cached: &&CachedFrame| {
+                        cached.path == m.path
+                            && cached.frame == source_frame
+                            && cached.fps == timeline.fps
+                            && match (&cached.generation, &m.thumbnail) {
+                                (Some(a), Some(b)) => Arc::ptr_eq(a, b),
+                                (None, None) => true,
+                                _ => false,
+                            }
+                    };
+                    if let Some(cached) = self.frames.iter().find(matches) {
+                        cached.bytes.clone()
+                    } else {
+                        let bytes = match previous.iter().position(|c| matches(&c)) {
+                            Some(index) => previous.swap_remove(index).bytes,
+                            None => Arc::new(media::frame(
+                                &m.path,
+                                source_frame as f64 / timeline.fps as f64,
+                            )?),
+                        };
+                        self.frames.push(CachedFrame {
+                            path: m.path.clone(),
+                            frame: source_frame,
+                            fps: timeline.fps,
+                            generation: m.thumbnail.clone(),
+                            bytes: bytes.clone(),
+                        });
+                        bytes
+                    }
+                };
+                blend(
+                    &mut out,
+                    &bytes,
+                    &clip.transform,
+                    (timeline.width, timeline.height),
+                )?;
+            }
         }
+        Ok(out)
     }
-    Ok(out)
 }
