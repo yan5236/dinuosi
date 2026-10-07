@@ -41,6 +41,7 @@ pub struct Settings {
     pub(crate) search: Entity<TextInput>,
     pub(crate) focus: FocusHandle,
     pub(crate) draft: Preferences,
+    pub(crate) system_locale: Option<String>,
     pub(crate) fields: Vec<Entity<TextInput>>,
     pub(crate) project: bool,
     pub(crate) recording: Option<usize>,
@@ -133,7 +134,8 @@ pub(crate) fn close_with_owner<T: 'static>(handle: WindowHandle<T>, cx: &mut Con
 }
 
 impl Settings {
-    /// 创建独立焦点、用户偏好草稿及项目参数输入；搜索变化重绘侧栏，不触发工作区快捷键。
+    /// 创建独立焦点、用户偏好草稿及项目参数输入，并读取系统语言供自动选择解析。
+    /// 系统语言读取失败保留 None，由语言索引回退中文；搜索变化仅重绘侧栏。
     pub(crate) fn new(
         owner: WeakEntity<Desktop>,
         store: ProjectStore,
@@ -177,6 +179,7 @@ impl Settings {
             search,
             focus,
             draft: cx.global::<UserPreferences>().0.clone(),
+            system_locale: sys_locale::get_locale(),
             fields,
             project: model.is_some(),
             recording: None,
@@ -185,12 +188,13 @@ impl Settings {
         }
     }
 
-    /// 判断标签或其具体设置名是否匹配搜索；搜索中文名称、动作及当前快捷键。
+    /// 判断标签或其具体设置名是否匹配搜索；语言同时匹配索引 ID、自称及当前语言译名。
+    /// 查询只读取草稿和已应用偏好，不修改分类或设置。
     pub(crate) fn matches(&self, tab: Tab, cx: &gpui::App) -> bool {
         let query = self.search.read(cx).text.trim().to_lowercase();
         let terms = match tab {
             Tab::General => "拖动时实时预览",
-            Tab::Language => "界面语言 简体中文 跟随系统",
+            Tab::Language => "界面语言 跟随系统",
             Tab::Plugins => "插件",
             Tab::Project => "项目设置 主轨 分辨率 宽度 高度 帧率 码率",
             Tab::Shortcuts => "",
@@ -198,6 +202,16 @@ impl Settings {
         query.is_empty()
             || tab.label().contains(&query)
             || terms.contains(&query)
+            || (tab == Tab::Language
+                && dinuosi_core::language::LANGUAGES.iter().any(|item| {
+                    let locale = dinuosi_core::language::resolve(
+                        &cx.global::<UserPreferences>().0.language,
+                        self.system_locale.as_deref(),
+                    );
+                    item.id.to_lowercase().contains(&query)
+                        || item.native_name.to_lowercase().contains(&query)
+                        || item.name(locale).to_lowercase().contains(&query)
+                }))
             || (tab == Tab::Shortcuts
                 && crate::shortcuts::SHORTCUTS.iter().any(|s| {
                     s.label.contains(&query)

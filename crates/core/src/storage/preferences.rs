@@ -24,9 +24,13 @@ impl Default for Preferences {
 }
 
 impl Preferences {
-    /// 校验磁盘版本与受支持语言；快捷键语义由宿主统一注册表校验。
+    /// 校验磁盘版本与语言索引中的稳定 ID；未知语言返回错误，快捷键语义由宿主统一注册表校验。
     fn validate(&self) -> Result<(), String> {
-        if self.version != 1 || !matches!(self.language.as_str(), "auto" | "zh-CN") {
+        if self.version != 1
+            || !crate::language::LANGUAGES
+                .iter()
+                .any(|item| item.id == self.language)
+        {
             return Err("用户设置版本或语言无效".into());
         }
         Ok(())

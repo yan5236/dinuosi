@@ -5,6 +5,8 @@ use crate::{
     switch::Switch,
     ui::{self, BACKGROUND, LINE, MUTED, PANEL, TEXT},
 };
+use dinuosi_core::language::{self, LANGUAGES};
+use dinuosi_icons::Icon;
 use gpui::{Context, Div, Render, Stateful, Window, div, prelude::*, px, rgb};
 
 /// 绘制可聚焦的矩形设置按钮，不引入新的品牌样式或装饰文案。
@@ -39,7 +41,7 @@ fn row(label: &'static str, control: impl IntoElement) -> Div {
 
 impl Settings {
     /// 渲染当前分类的实际控件；通用页通过受控 Switch 修改草稿，应用前不保存偏好。
-    /// 语言仅列出可用中文与系统回退，插件没有运行时则显示空列表。
+    /// 语言页读取统一索引并显示单选勾选、自称和当前已应用语言译名；插件显示空列表。
     fn body(&self, cx: &mut Context<Self>) -> Div {
         let content = div().flex().flex_col().gap(px(8.0));
         match self.tab {
@@ -54,21 +56,7 @@ impl Settings {
                     }),
                 ),
             )),
-            Tab::Language => content.child(row(
-                "界面语言",
-                div().flex().gap(px(8.0)).children(
-                    [("auto", "跟随系统"), ("zh-CN", "简体中文")]
-                        .into_iter()
-                        .map(|(id, name)| {
-                            button(id, name)
-                                .when(self.draft.language == id, |s| s.bg(rgb(LINE)))
-                                .on_click(cx.listener(move |this, _, _, cx| {
-                                    this.draft.language = id.into();
-                                    cx.notify();
-                                }))
-                        }),
-                ),
-            )),
+            Tab::Language => self.language_list(cx),
             Tab::Plugins => {
                 content.child(div().py(px(20.0)).text_color(rgb(MUTED)).child("暂无插件"))
             }
@@ -157,6 +145,85 @@ impl Settings {
                     )
             }
         }
+    }
+
+    /// 绘制索引中的六个语言行，三列固定为 28px 勾选区、160px 自称及弹性译名区。
+    /// 点击或空格/Enter 仅更新单选草稿；译名使用已应用偏好，auto 按系统语言解析。
+    fn language_list(&self, cx: &mut Context<Self>) -> Div {
+        let locale = language::resolve(
+            &cx.global::<crate::preferences::UserPreferences>()
+                .0
+                .language,
+            self.system_locale.as_deref(),
+        );
+        div()
+            .flex()
+            .flex_col()
+            .children(LANGUAGES.iter().map(|item| {
+                let id = item.id;
+                let checked = self.draft.language == id;
+                let name = item.name(locale);
+                div()
+                    .id(id)
+                    .debug_selector(move || format!("language-{id}"))
+                    .focusable()
+                    .tab_index(0)
+                    .flex()
+                    .items_center()
+                    .gap(px(16.0))
+                    .px(px(12.0))
+                    .h(px(48.0))
+                    .border_b_1()
+                    .border_color(rgb(LINE))
+                    .cursor_pointer()
+                    .hover(|s| s.bg(rgb(PANEL)))
+                    .focus(|s| s.bg(rgb(LINE)))
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.draft.language = id.into();
+                        cx.notify();
+                    }))
+                    .on_key_down(cx.listener(move |this, event: &gpui::KeyDownEvent, _, cx| {
+                        if !event.keystroke.modifiers.modified()
+                            && matches!(event.keystroke.key.as_str(), "space" | "enter")
+                        {
+                            cx.stop_propagation();
+                            if !event.is_held {
+                                this.draft.language = id.into();
+                                cx.notify();
+                            }
+                        }
+                    }))
+                    .child(
+                        div().w(px(28.0)).flex_none().child(
+                            div()
+                                .debug_selector(move || format!("language-check-{id}"))
+                                .size(px(if checked { 18.0 } else { 0.0 }))
+                                .when(checked, |s| {
+                                    s.child(
+                                        gpui::svg()
+                                            .path(Icon::Check.path())
+                                            .size(px(18.0))
+                                            .text_color(rgb(TEXT)),
+                                    )
+                                }),
+                        ),
+                    )
+                    .child(
+                        div()
+                            .w(px(160.0))
+                            .flex_none()
+                            .debug_selector(move || format!("language-native-{id}"))
+                            .child(if id == "auto" { name } else { item.native_name }),
+                    )
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .text_color(rgb(MUTED))
+                            .debug_selector(move || format!("language-name-{id}"))
+                            .child(name),
+                    )
+            }))
     }
 }
 

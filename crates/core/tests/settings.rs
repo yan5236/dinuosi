@@ -70,7 +70,7 @@ fn project_settings_round_trip_and_frame_conversion() {
     std::fs::remove_dir_all(root).unwrap();
 }
 
-/// 验证偏好与项目独立保存、覆盖值和禁用快捷键重开保留，损坏及未来版本不会静默重置。
+/// 验证偏好独立保存、六种语言与快捷键覆盖重开保留，未知语言、损坏及未来版本不会覆盖旧值。
 #[test]
 fn preferences_persist_and_reject_corrupt_data() {
     let root = std::env::temp_dir().join(format!("dinuosi-preferences-{}", uuid::Uuid::new_v4()));
@@ -86,8 +86,17 @@ fn preferences_persist_and_reject_corrupt_data() {
     data.shortcuts.insert("delete".into(), Vec::new());
     store.save_preferences(&data).unwrap();
     assert_eq!(store.load_preferences().unwrap(), data);
+    for language in dinuosi_core::language::LANGUAGES {
+        data.language = language.id.into();
+        store.save_preferences(&data).unwrap();
+        assert_eq!(store.load_preferences().unwrap(), data);
+    }
     let path = root.join("preferences.json");
     let previous = std::fs::read(&path).unwrap();
+    data.language = "fr".into();
+    assert!(store.save_preferences(&data).is_err());
+    assert_eq!(std::fs::read(&path).unwrap(), previous);
+    data.language = "auto".into();
     data.version = 2;
     assert!(store.save_preferences(&data).is_err());
     assert_eq!(std::fs::read(&path).unwrap(), previous);
@@ -95,6 +104,61 @@ fn preferences_persist_and_reject_corrupt_data() {
     assert!(store.load_preferences().is_err());
     assert_eq!(std::fs::read(&path).unwrap(), b"broken");
     std::fs::remove_dir_all(root).unwrap();
+}
+
+/// 校验语言索引顺序、自称和译名，并覆盖系统语言的地区、脚本、缺失及不支持回退。
+#[test]
+fn language_index_names_and_system_resolution() {
+    use dinuosi_core::language::{LANGUAGES, resolve};
+    assert_eq!(
+        LANGUAGES.each_ref().map(|l| l.id),
+        ["auto", "zh-CN", "zh-TW", "en", "es", "ru"]
+    );
+    assert_eq!(
+        LANGUAGES.each_ref().map(|l| l.native_name),
+        [
+            "自动选择",
+            "简体中文",
+            "繁體中文",
+            "English",
+            "Español",
+            "Русский"
+        ]
+    );
+    assert_eq!(
+        LANGUAGES.each_ref().map(|l| l.name("zh-CN")),
+        [
+            "自动选择",
+            "简体中文",
+            "繁体中文",
+            "英语",
+            "西班牙语",
+            "俄语"
+        ]
+    );
+    for locale in ["zh-CN", "zh-TW", "en", "es", "ru"] {
+        assert!(LANGUAGES.iter().all(|l| !l.name(locale).is_empty()));
+    }
+    assert_eq!(LANGUAGES[3].name("zh-TW"), "英語");
+    assert_eq!(LANGUAGES[3].name("es"), "Inglés");
+    assert_eq!(LANGUAGES[4].name("en"), "Spanish");
+    assert_eq!(LANGUAGES[3].name("ru"), "Английский");
+    for (tag, expected) in [
+        ("en-US", "en"),
+        ("ES_mx", "es"),
+        ("ru-RU", "ru"),
+        ("zh-HK", "zh-TW"),
+        ("zh-MO", "zh-TW"),
+        ("zh-Hant-CN", "zh-TW"),
+        ("zh-Hans-TW", "zh-CN"),
+        ("zh-SG", "zh-CN"),
+        ("fr-FR", "zh-CN"),
+        ("", "zh-CN"),
+    ] {
+        assert_eq!(resolve("auto", Some(tag)), expected);
+    }
+    assert_eq!(resolve("auto", None), "zh-CN");
+    assert_eq!(resolve("ru", Some("en-US")), "ru");
 }
 
 /// 验证小素材不放大且四边黑色、竖屏项目画布比例与中心位置正确，大素材等比适配。

@@ -143,6 +143,134 @@ fn settings_switch_toggles_draft_without_applying(cx: &mut TestAppContext) {
     std::fs::remove_dir_all(root).unwrap();
 }
 
+/// 点击全部语言行验证三列对齐、单选草稿隔离及应用/重开持久化；键盘选择不冒泡应用。
+/// 系统语言固定为中文以消除测试机器差异，所有磁盘写入限制在独占临时目录。
+#[gpui::test]
+fn language_rows_select_and_persist(cx: &mut TestAppContext) {
+    let root = std::env::temp_dir().join(format!("dinuosi-language-ui-{}", std::process::id()));
+    std::fs::create_dir_all(&root).unwrap();
+    let store = ProjectStore::new(root.join("recent.json"));
+    let (desktop, editor) =
+        cx.add_window_view(|window, cx| Desktop::new(store.clone(), None, window, cx));
+    editor.run_until_parked();
+    let (settings, visual) = cx.add_window_view(|window, cx| {
+        let mut view = Settings::new(
+            desktop.downgrade(),
+            store.clone(),
+            None,
+            Tab::Language,
+            window,
+            cx,
+        );
+        view.system_locale = Some("zh-CN".into());
+        view
+    });
+    visual.simulate_resize(size(px(860.0), px(600.0)));
+    visual.run_until_parked();
+    let rows = [
+        (
+            "auto",
+            "language-auto",
+            "language-native-auto",
+            "language-name-auto",
+            "language-check-auto",
+        ),
+        (
+            "zh-CN",
+            "language-zh-CN",
+            "language-native-zh-CN",
+            "language-name-zh-CN",
+            "language-check-zh-CN",
+        ),
+        (
+            "zh-TW",
+            "language-zh-TW",
+            "language-native-zh-TW",
+            "language-name-zh-TW",
+            "language-check-zh-TW",
+        ),
+        (
+            "en",
+            "language-en",
+            "language-native-en",
+            "language-name-en",
+            "language-check-en",
+        ),
+        (
+            "es",
+            "language-es",
+            "language-native-es",
+            "language-name-es",
+            "language-check-es",
+        ),
+        (
+            "ru",
+            "language-ru",
+            "language-native-ru",
+            "language-name-ru",
+            "language-check-ru",
+        ),
+    ];
+    let native_x = visual.debug_bounds("language-native-en").unwrap().origin.x;
+    let translated_x = visual.debug_bounds("language-name-en").unwrap().origin.x;
+    let mut previous_y = px(0.0);
+    for (id, selector, native_selector, translated_selector, check_selector) in rows {
+        let row = visual.debug_bounds(selector).unwrap();
+        let native = visual.debug_bounds(native_selector).unwrap();
+        let translated = visual.debug_bounds(translated_selector).unwrap();
+        assert_eq!(native.origin.x, native_x);
+        assert_eq!(translated.origin.x, translated_x);
+        assert!(row.origin.y > previous_y);
+        previous_y = row.origin.y;
+        let saved = store.load_preferences().unwrap().language;
+        click(visual, selector);
+        assert_eq!(
+            settings.read_with(visual, |s, _| s.draft.language.clone()),
+            id
+        );
+        assert_eq!(store.load_preferences().unwrap().language, saved);
+        for (other, _, _, _, check_selector) in rows {
+            assert_eq!(
+                visual.debug_bounds(check_selector).unwrap().size.width > px(0.0),
+                other == id
+            );
+        }
+        let check = visual.debug_bounds(check_selector).unwrap();
+        assert!(check.origin.x < native_x && native_x < translated_x);
+        click(visual, "settings-apply");
+        assert!(settings.read_with(visual, |s, _| s.error.is_none()));
+        assert_eq!(store.load_preferences().unwrap().language, id);
+        assert_eq!(
+            visual.read(|cx| cx.global::<UserPreferences>().0.language.clone()),
+            id
+        );
+    }
+    click(visual, "language-en");
+    visual.simulate_keystrokes("enter");
+    visual.run_until_parked();
+    assert_eq!(store.load_preferences().unwrap().language, "ru");
+    visual.simulate_keystrokes("tab space");
+    visual.run_until_parked();
+    assert_eq!(
+        settings.read_with(visual, |s, _| s.draft.language.clone()),
+        "es"
+    );
+    assert_eq!(store.load_preferences().unwrap().language, "ru");
+    click(visual, "settings-search");
+    visual.simulate_input("English");
+    visual.run_until_parked();
+    assert!(visual.debug_bounds("language-en").is_some());
+    let owner = desktop.downgrade();
+    let (reopened, other) = cx.add_window_view(|window, cx| {
+        Settings::new(owner, store.clone(), None, Tab::Language, window, cx)
+    });
+    assert_eq!(
+        reopened.read_with(other, |s, _| s.draft.language.clone()),
+        "ru"
+    );
+    std::fs::remove_dir_all(root).unwrap();
+}
+
 /// 使用独立 GPUI 窗口验证录制不触发编辑、冲突提示、应用持久化、搜索与修改项目后的撤销。
 #[gpui::test]
 fn settings_window_isolates_input_and_applies_to_live_project(cx: &mut TestAppContext) {
