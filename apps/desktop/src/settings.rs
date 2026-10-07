@@ -1,5 +1,8 @@
 //! 独立非模态设置窗口；项目修改在原编辑会话上提交，不持有过期时间线副本。
-use crate::{input::TextInput, preferences::UserPreferences, view::Desktop};
+use crate::{
+    input::TextInput, preferences::UserPreferences, settings_dropdown::GeneralDropdown,
+    view::Desktop,
+};
 use dinuosi_core::{Preferences, ProjectStore, timeline::Timeline};
 use gpui::{
     Context, Entity, EntityInputHandler, FocusHandle, KeyDownEvent, Subscription, WeakEntity,
@@ -44,7 +47,7 @@ pub struct Settings {
     pub(crate) fields: Vec<Entity<TextInput>>,
     pub(crate) project: bool,
     pub(crate) recording: Option<usize>,
-    pub(crate) blade_menu_open: bool,
+    pub(crate) general_menu: Option<GeneralDropdown>,
     pub(crate) error: Option<String>,
     _search_watch: Subscription,
 }
@@ -190,13 +193,13 @@ impl Settings {
             fields,
             project: model.is_some(),
             recording: None,
-            blade_menu_open: false,
+            general_menu: None,
             error: None,
             _search_watch: watch,
         }
     }
 
-    /// 判断标签或其具体设置名是否匹配搜索；语言同时匹配索引 ID、自称及当前语言译名。
+    /// 判断标签或具体设置名是否匹配搜索；通用模式检索中英文名称，语言同时匹配索引 ID、自称及当前语言译名。
     /// 查询只读取草稿和已应用偏好，不修改分类或设置。
     pub(crate) fn matches(&self, tab: Tab, cx: &gpui::App) -> bool {
         let query = self.search.read(cx).text.trim().to_lowercase();
@@ -220,9 +223,18 @@ impl Settings {
             || crate::i18n::lookup("zh-CN", "settings", terms).contains(&query)
             || (tab == Tab::General
                 && ["en", "zh-CN"].iter().any(|locale| {
-                    crate::i18n::lookup(locale, "settings", "Blade cutting mode")
-                        .to_lowercase()
-                        .contains(&query)
+                    [
+                        "Blade cutting mode",
+                        "Clip appearance while dragging",
+                        "Follow mouse",
+                        "Keep in timeline",
+                    ]
+                    .iter()
+                    .any(|key| {
+                        crate::i18n::lookup(locale, "settings", key)
+                            .to_lowercase()
+                            .contains(&query)
+                    })
                 }))
             || (tab == Tab::Language
                 && dinuosi_core::language::LANGUAGES.iter().any(|item| {
@@ -271,7 +283,8 @@ impl Settings {
         cx.notify();
     }
 
-    /// 设置窗口处理录制、取消和焦点导航；未处理字符交给本窗口 IME，独立窗口隔离编辑器。
+    /// 设置窗口处理录制、取消和焦点导航；Esc 先收起模式下拉，再关闭设置，未处理字符交给本窗口 IME。
+    /// 独立窗口隔离编辑器，修改草稿不会直接发布已应用偏好。
     pub(crate) fn key(
         &mut self,
         event: &KeyDownEvent,
@@ -304,8 +317,8 @@ impl Settings {
                     Err(e) => self.error = Some(e),
                 }
             }
-        } else if key == "escape" && self.blade_menu_open {
-            self.blade_menu_open = false;
+        } else if key == "escape" && self.general_menu.is_some() {
+            self.general_menu = None;
         } else if key == "escape" {
             window.remove_window();
         } else if key == "tab" {

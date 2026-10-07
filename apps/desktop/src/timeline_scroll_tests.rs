@@ -339,3 +339,138 @@ fn pointer_insertion_pushes_following_clips_and_empty_track_cleanup_is_undoable(
     assert_eq!(store.load_timeline(&entry).unwrap().tracks.len(), 2);
     std::fs::remove_dir_all(root).unwrap();
 }
+
+/// 用真实库素材拖放检查较大、刚好、差一帧及裁剪选区的空隙；预览与释放使用相同帧位置和时长。
+/// 足够时必须显示素材块且后段不动，不足时显示竖线并后移，持久化与撤销保持一致。
+#[gpui::test]
+fn gap_drop_preview_and_commit_use_actual_clip_duration(cx: &mut TestAppContext) {
+    for (case, following, seconds) in [(0, 210, 2.0), (1, 180, 2.0), (2, 179, 2.0), (3, 150, 1.0)] {
+        let (desktop, visual, store, entry, root) = fixture(cx, &format!("空隙插入{case}"), 1);
+        let next_id = desktop.update_in(visual, |v, _, cx| {
+            let id = v
+                .timeline
+                .model
+                .insert(
+                    (v.session.media[0].path.clone(), MediaKind::Image),
+                    "后段".into(),
+                    0,
+                    following,
+                    0..30,
+                    60,
+                )
+                .unwrap();
+            v.session.selected = Some(0);
+            v.session.trim_start = 0.0;
+            v.session.trim_end = seconds;
+            v.commit_timeline(Default::default(), cx);
+            id
+        });
+        visual.run_until_parked();
+        let before = store.load_timeline(&entry).unwrap();
+        let card = visual.debug_bounds("media-0").unwrap().center();
+        let drop = desktop.read_with(visual, |v, _| {
+            let (top, h) = v.track_geometry(0);
+            point(
+                v.timeline.bounds.left() + px(v.timeline.header + 4.0 * v.pixels_per_second()),
+                v.timeline.bounds.top() + px(top + h / 2.0),
+            )
+        });
+        visual.simulate_mouse_down(card, MouseButton::Left, Modifiers::none());
+        visual.simulate_mouse_move(drop, MouseButton::Left, Modifiers::none());
+        let duration = (seconds * 30.0) as i64;
+        let shifts = 120 + duration > following;
+        assert_eq!(
+            visual.debug_bounds("timeline-clip-insert-line").is_some(),
+            shifts
+        );
+        assert_eq!(
+            visual.debug_bounds("timeline-drop-block").is_some(),
+            !shifts
+        );
+        if !shifts {
+            let block = visual.debug_bounds("timeline-drop-block").unwrap();
+            assert!((block.left() - drop.x).abs() < px(1.0));
+            let width =
+                desktop.read_with(visual, |v, _| px(seconds as f32 * v.pixels_per_second()));
+            assert!((block.size.width - width).abs() < px(1.0));
+        }
+        visual.simulate_mouse_up(drop, MouseButton::Left, Modifiers::none());
+        visual.run_until_parked();
+        let saved = store.load_timeline(&entry).unwrap();
+        assert_eq!(saved.tracks.len(), 1);
+        assert_eq!(
+            saved.clips.iter().find(|c| c.id == next_id).unwrap().start,
+            following + if shifts { duration } else { 0 }
+        );
+        let inserted = saved.clips.last().unwrap();
+        assert_eq!((inserted.start, inserted.duration), (120, duration));
+        visual.simulate_keystrokes("ctrl-z");
+        visual.run_until_parked();
+        assert_eq!(store.load_timeline(&entry).unwrap(), before);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+}
+
+/// 已有单片段跨轨放入空隙时复用库素材的块/竖线规则；释放只在空间不足时后移目标轨后段。
+/// 核对候选预览、磁盘落点及撤销，排除移动片段自身后再判断可用空间。
+#[gpui::test]
+fn moving_clip_into_gap_shifts_only_when_space_is_insufficient(cx: &mut TestAppContext) {
+    for following in [180, 140] {
+        let (desktop, visual, store, entry, root) = fixture(cx, &format!("移动空隙{following}"), 2);
+        let (moving, next_id) = desktop.update_in(visual, |v, _, cx| {
+            let moving = v.timeline.model.clips[0].id.clone();
+            let id = v
+                .timeline
+                .model
+                .insert(
+                    (v.session.media[0].path.clone(), MediaKind::Image),
+                    "后段".into(),
+                    1,
+                    following,
+                    0..30,
+                    60,
+                )
+                .unwrap();
+            v.commit_timeline(Default::default(), cx);
+            (moving, id)
+        });
+        visual.run_until_parked();
+        let before = store.load_timeline(&entry).unwrap();
+        let clip = visual
+            .debug_bounds(Box::leak(format!("clip-{moving}").into_boxed_str()))
+            .unwrap();
+        let drop = desktop.read_with(visual, |v, _| {
+            let (top, h) = v.track_geometry(1);
+            point(
+                v.timeline.bounds.left() + px(v.timeline.header + 4.0 * v.pixels_per_second()),
+                v.timeline.bounds.top() + px(top + h / 2.0),
+            )
+        });
+        visual.simulate_mouse_down(clip.center(), MouseButton::Left, Modifiers::none());
+        visual.simulate_mouse_move(drop, MouseButton::Left, Modifiers::none());
+        let shifts = following < 150;
+        assert_eq!(
+            visual.debug_bounds("timeline-clip-insert-line").is_some(),
+            shifts
+        );
+        assert_eq!(
+            visual.debug_bounds("timeline-drop-block").is_some(),
+            !shifts
+        );
+        visual.simulate_mouse_up(drop, MouseButton::Left, Modifiers::none());
+        visual.run_until_parked();
+        let saved = store.load_timeline(&entry).unwrap();
+        assert_eq!(
+            saved.clips.iter().find(|c| c.id == moving).unwrap().start,
+            120
+        );
+        assert_eq!(
+            saved.clips.iter().find(|c| c.id == next_id).unwrap().start,
+            following + if shifts { 30 } else { 0 }
+        );
+        visual.simulate_keystrokes("ctrl-z");
+        visual.run_until_parked();
+        assert_eq!(store.load_timeline(&entry).unwrap(), before);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+}

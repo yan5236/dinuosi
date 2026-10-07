@@ -36,5 +36,8 @@
   "Split selected clips at playhead": "Split selected clips at playhead",
   "Blade cutting mode": "Blade cutting mode",
   "Require clip selection": "Require clip selection",
-  "No clip selection required": "No clip selection required"
+  "No clip selection required": "No clip selection required",
+  "Clip appearance while dragging": "Clip appearance while dragging",
+  "Follow mouse": "Follow mouse",
+  "Keep in timeline": "Keep in timeline"
 }

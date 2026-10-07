@@ -43,7 +43,7 @@ fn blade_mode_dropdown_applies_only_after_confirmation(cx: &mut TestAppContext) 
     assert!(visual.read(|cx| cx.global::<UserPreferences>().0.blade_requires_selection));
     visual.simulate_click(trigger, Modifiers::none());
     visual.simulate_keystrokes("escape");
-    assert!(!settings.read_with(visual, |v, _| v.blade_menu_open));
+    assert!(settings.read_with(visual, |v, _| v.general_menu.is_none()));
     visual.simulate_click(trigger, Modifiers::none());
     let option = visual.debug_bounds("blade-mode-direct").unwrap().center();
     visual.simulate_click(option, Modifiers::none());

@@ -9,7 +9,8 @@ use dinuosi_icons::Icon;
 use gpui::{Context, Div, MouseButton, canvas, div, prelude::*, px, rgb, rgba, svg};
 
 impl Desktop {
-    /// 使用实际绘制边界命中时间线，刀片虚线裁在内容区内；轨道头固定，横向滚动只移动内容和刻度。
+    /// 使用实际绘制边界命中时间线；全部把手在片段内容之后绘制，显示和命中均优先于邻片且保留轨道裁切。
+    /// 刀片虚线裁在内容区内；轨道头固定，横向滚动只移动内容和刻度。
     pub(crate) fn timeline_panel(&self, layout: Layout, cx: &mut Context<Self>) -> Div {
         let header = layout.track_header;
         let origin = header + crate::trim_handle::WIDTH;
@@ -23,6 +24,13 @@ impl Desktop {
             (self.timeline.scroll_x / pps) as f64,
             width as f64,
         );
+        let (clips, handles): (Vec<_>, Vec<_>) = self
+            .timeline
+            .model
+            .clips
+            .iter()
+            .filter_map(|clip| self.timeline_clip(clip, width, cx))
+            .unzip();
         div()
             .debug_selector(|| "timeline-panel".into())
             .flex_1()
@@ -76,13 +84,8 @@ impl Desktop {
                             .h(px(h))
                             .bg(rgb(PANEL))
                     }))
-                    .children(
-                        self.timeline
-                            .model
-                            .clips
-                            .iter()
-                            .filter_map(|clip| self.timeline_clip(clip, width, cx)),
-                    )
+                    .children(clips)
+                    .children(handles)
                     .children(self.blade_cut_line(cx))
                     .when(self.timeline.moved, |s| s.children(self.drop_preview(cx)))
                     .when_some(self.marquee_rectangle(), |s, (x, y, w, h)| {
@@ -226,7 +229,8 @@ impl Desktop {
             f32::from(start.y - p.y).abs(),
         ))
     }
-    /// 在轨道边界或冲突轨道上方绘制插轨线；素材落点预览与核心类型规则一致，音频跨类型落点显示上方插轨线。
+    /// 片段间空隙足够时显示实际落点素材块，不足时显示竖向插入线；使用与提交一致的核心空间判定。
+    /// 轨道边界或冲突显示上方插轨线，音频跨类型落点遵守核心类型规则。
     fn drop_preview(&self, _cx: &mut Context<Self>) -> Option<Div> {
         use crate::timeline_state::DropTarget;
         let target = self.timeline_drop_target(self.timeline.pointer)?;
@@ -249,19 +253,52 @@ impl Desktop {
             None
         };
         if let Some(frame) = insertion {
-            let (top, height) = self.track_geometry(track);
-            let x = frame as f32 / self.timeline.model.fps as f32 * self.pixels_per_second()
-                - self.timeline.scroll_x;
-            return Some(
-                div()
-                    .debug_selector(|| "timeline-clip-insert-line".into())
-                    .absolute()
-                    .left(px(x + crate::trim_handle::WIDTH))
-                    .top(px(top - 38.0))
-                    .w(px(2.0))
-                    .h(px(height))
-                    .bg(rgb(TEXT)),
-            );
+            let duration = match self.timeline.gesture.as_ref()? {
+                Gesture::Library { index, .. } => {
+                    if self.session.selected == Some(*index) {
+                        self.timeline.model.frame(self.session.trim_end)
+                            - self.timeline.model.frame(self.session.trim_start)
+                    } else {
+                        self.timeline
+                            .model
+                            .frame(self.session.media[*index].duration)
+                    }
+                }
+                Gesture::Move { .. } => {
+                    self.timeline
+                        .model
+                        .clips
+                        .iter()
+                        .find(|c| self.timeline.selected.contains(&c.id))?
+                        .duration
+                }
+                _ => return None,
+            };
+            let empty = Default::default();
+            let exclude = if matches!(self.timeline.gesture, Some(Gesture::Move { .. })) {
+                &self.timeline.selected
+            } else {
+                &empty
+            };
+            if self
+                .timeline
+                .model
+                .insertion_requires_shift(track, frame, duration, exclude)
+            {
+                let (top, height) = self.track_geometry(track);
+                let x = frame as f32 / self.timeline.model.fps as f32 * self.pixels_per_second()
+                    - self.timeline.scroll_x;
+                return Some(
+                    div()
+                        .debug_selector(|| "timeline-clip-insert-line".into())
+                        .absolute()
+                        .left(px(x + crate::trim_handle::WIDTH))
+                        .top(px(top - 38.0))
+                        .w(px(2.0))
+                        .h(px(height))
+                        .bg(rgb(TEXT)),
+                );
+            }
         }
         let mut line = inserted;
         let mut placed = None;
@@ -281,7 +318,8 @@ impl Desktop {
                     }
                     line = true;
                 }
-                let start = self.timeline_frame_at(self.timeline.pointer.x);
+                let start =
+                    insertion.unwrap_or_else(|| self.timeline_frame_at(self.timeline.pointer.x));
                 let duration = if self.session.selected == Some(*index) {
                     self.timeline.model.frame(self.session.trim_end)
                         - self.timeline.model.frame(self.session.trim_start)
@@ -332,6 +370,7 @@ impl Desktop {
                 - self.timeline.scroll_x;
             Some(
                 div()
+                    .debug_selector(|| "timeline-drop-block".into())
                     .absolute()
                     .left(px(x + crate::trim_handle::WIDTH))
                     .top(px(top - 34.0))

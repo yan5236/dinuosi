@@ -71,6 +71,49 @@ fn collisions_reuse_empty_upper_track_before_creating_another() {
     t.validate().unwrap();
 }
 
+/// 插入素材能完全放入剩余空隙（含刚好放满）时保留后续位置；不足时才按原插入规则后移。
+/// 同时验证已有片段移动复用相同空间规则，不改变其他轨道、源选区或后续空隙。
+#[test]
+fn insertion_uses_available_gap_before_shifting_following_clips() {
+    for duration in [29, 30, 31] {
+        let mut t = Timeline::default();
+        clip(&mut t, 0, 0);
+        let following = clip(&mut t, 0, 90);
+        let later = clip(&mut t, 0, 150);
+        t.insert_ripple(
+            ("gap.png".into(), MediaKind::Image),
+            "空隙素材".into(),
+            0,
+            60,
+            5..5 + duration,
+            60,
+        )
+        .unwrap();
+        let shift = if duration > 30 { duration } else { 0 };
+        assert_eq!(
+            t.clips.iter().find(|c| c.id == following).unwrap().start,
+            90 + shift
+        );
+        assert_eq!(
+            t.clips.iter().find(|c| c.id == later).unwrap().start,
+            150 + shift
+        );
+        t.validate().unwrap();
+    }
+    let mut t = Timeline::default();
+    clip(&mut t, 0, 0);
+    let following = clip(&mut t, 0, 120);
+    t.create_track(0, TrackKind::Media).unwrap();
+    let moved = clip(&mut t, 0, 60);
+    t.move_clip_ripple(&moved, 1, 60).unwrap();
+    assert_eq!(
+        t.clips.iter().find(|c| c.id == following).unwrap().start,
+        120
+    );
+    assert_eq!(t.clips.iter().find(|c| c.id == moved).unwrap().start, 60);
+    t.validate().unwrap();
+}
+
 /// 插入边界只后移同轨后续素材，保留其他轨道、参数和源选区；非法选区/上限失败完全回滚。
 /// 移动已有片段到片段间也使用同一后移规则，删除原空轨道后内容不会丢失。
 #[test]
@@ -148,11 +191,25 @@ fn insertion_between_clips_pushes_following_content_atomically() {
                 ("limit.png".into(), MediaKind::Image),
                 "上限".into(),
                 0,
-                30,
+                last_frame - 15,
                 0..30,
                 60
             )
             .is_err()
     );
     assert_eq!(limit, before, "后移越界不能留下部分修改");
+    limit
+        .insert_ripple(
+            ("fits.png".into(), MediaKind::Image),
+            "足够空隙".into(),
+            0,
+            30,
+            0..30,
+            60,
+        )
+        .unwrap();
+    assert_eq!(
+        limit.clips[1].start, last_frame,
+        "远处片段不能因为无须后移的插入越界"
+    );
 }

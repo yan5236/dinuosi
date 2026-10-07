@@ -239,7 +239,24 @@ impl Timeline {
         })
     }
 
-    /// 在片段间插入新素材并把同轨后续片段整体后移一个新片段时长，保留后续相对空隙。
+    /// 判断片段间落点的剩余空隙是否不足，start/duration 为项目帧；排除正在移动的片段。
+    /// 仅当新片段严格覆盖同轨后续片段的起点时返回 true；刚好放满空隙无需后移，不修改模型。
+    pub fn insertion_requires_shift(
+        &self,
+        track: usize,
+        start: i64,
+        duration: i64,
+        exclude: &BTreeSet<String>,
+    ) -> bool {
+        self.clips.iter().any(|c| {
+            c.track == track
+                && !exclude.contains(&c.id)
+                && c.start >= start
+                && c.start < start.saturating_add(duration)
+        })
+    }
+
+    /// 在片段间插入新素材；剩余空隙足够时保留后续位置，不足时整体后移一个新片段时长，保留后续相对空隙。
     /// source 为路径及已探测类型；类型、源选区、锁轨或时间上限错误返回且整个模型不变；调用方先确认插入边界，不覆盖前段。
     pub fn insert_ripple(
         &mut self,
@@ -262,7 +279,7 @@ impl Timeline {
         Ok(id)
     }
 
-    /// 将已有单个片段插入目标轨道的片段间，后续片段按其时长后移；源轨道保留时间空隙。
+    /// 将已有单个片段插入目标轨道的片段间，剩余空隙不足时后续片段按其时长后移；源轨道保留时间空隙。
     /// 锁轨、类型不匹配、片段不存在、前段相交或时间越界拒绝整个操作，其他轨道不受影响。
     pub fn move_clip_ripple(&mut self, id: &str, track: usize, start: i64) -> Result<(), String> {
         let mut next = self.clone();
@@ -286,9 +303,15 @@ impl Timeline {
         Ok(())
     }
 
-    /// 检查并后移同轨起点及之后的片段；先验证全部时间上限，避免一半成功一半失败。
+    /// 检查片段间落点，空隙足够时不后移；不足时先验证全部后续片段的时间上限再整体后移。
+    /// start/duration 为项目帧；锁轨、前段相交或时间越界返回错误，避免一半成功一半失败。
     fn shift_following(&mut self, track: usize, start: i64, duration: i64) -> Result<(), String> {
         self.accept_track(track)?;
+        let shift = if self.insertion_requires_shift(track, start, duration, &BTreeSet::new()) {
+            duration
+        } else {
+            0
+        };
         if start < 0
             || duration < 1
             || self
@@ -299,7 +322,7 @@ impl Timeline {
                 c.track == track
                     && c.start >= start
                     && c.start
-                        .checked_add(duration)
+                        .checked_add(shift)
                         .is_none_or(|s| s > 86400 * self.fps as i64)
             })
         {
@@ -310,7 +333,7 @@ impl Timeline {
             .iter_mut()
             .filter(|c| c.track == track && c.start >= start)
         {
-            c.start += duration;
+            c.start += shift;
         }
         Ok(())
     }

@@ -7,14 +7,29 @@ use crate::{
 use dinuosi_core::timeline::Clip;
 use gpui::{Context, Div, MouseButton, ObjectFit, Stateful, div, img, prelude::*, px, rgb};
 impl Desktop {
-    /// 仅绘制可见片段与真实端点把手；水平滚动截断处不伪造端点，零秒处预留把手空间。
-    /// 音频按源入点、滚动截断及当前缩放查询波形；把手补偿 1px 边框并保持片段完整高度，刀片模式隐藏把手。
+    /// 返回可见片段内容和独立把手层，调用方须先绘制全部内容，再绘制全部把手，避免邻片遮挡及抢占命中。
+    /// 水平滚动截断处不伪造端点；音频按源入点、滚动截断及缩放查询波形，刀片模式隐藏把手。
+    /// 跟随鼠标模式仅在实际片段拖动时隐藏选中原块及把手；保留模式、点击和其他手势正常绘制，不修改模型。
     pub(crate) fn timeline_clip(
         &self,
         clip: &Clip,
         width: f32,
         cx: &mut Context<Self>,
-    ) -> Option<Stateful<Div>> {
+    ) -> Option<(Stateful<Div>, Div)> {
+        let dragging = self.timeline.moved
+            && matches!(
+                self.timeline.gesture,
+                Some(crate::timeline_state::Gesture::Move { .. })
+            )
+            && self.timeline.selected.contains(&clip.id);
+        if dragging
+            && !cx
+                .global::<crate::preferences::UserPreferences>()
+                .0
+                .keep_dragged_clip
+        {
+            return None;
+        }
         let pps = self.pixels_per_second();
         let x = clip.start as f32 / self.timeline.model.fps as f32 * pps - self.timeline.scroll_x;
         let w = clip.duration as f32 / self.timeline.model.fps as f32 * pps;
@@ -27,12 +42,18 @@ impl Desktop {
         let media = self.session.media.iter().find(|m| m.path == clip.source);
         let thumbnail = media.and_then(|m| m.thumbnail.clone());
         let visible = (w + x.min(0.0)).min(width - x.max(0.0)).max(2.0);
-        Some(
+        Some((
             div()
                 .id(gpui::SharedString::from(format!("clip-{}", clip.id)))
                 .debug_selector({
                     let id = id.clone();
-                    move || format!("clip-{id}")
+                    move || {
+                        if dragging {
+                            format!("drag-original-{id}")
+                        } else {
+                            format!("clip-{id}")
+                        }
+                    }
                 })
                 .absolute()
                 .left(px(x.max(0.0) + WIDTH))
@@ -107,7 +128,14 @@ impl Desktop {
                                 .whitespace_nowrap()
                                 .child(clip.name.clone()),
                         ),
-                )
+                ),
+            div()
+                .absolute()
+                // 内容的 1px 边框内沿仍是把手锚点；把手上下沿与片段外框平齐。
+                .left(px(x.max(0.0) + WIDTH + 1.0))
+                .top(px(top - 34.0))
+                .w(px(visible - 2.0))
+                .h(px(h - 8.0))
                 .children(
                     [true, false]
                         .into_iter()
@@ -120,7 +148,7 @@ impl Desktop {
                             let id = clip.id.clone();
                             div()
                                 .absolute()
-                                .top(px(-1.0))
+                                .top_0()
                                 .h(px(h - 8.0))
                                 .w_0()
                                 .when(left, |s| s.left_0())
@@ -135,6 +163,6 @@ impl Desktop {
                                 )
                         }),
                 ),
-        )
+        ))
     }
 }

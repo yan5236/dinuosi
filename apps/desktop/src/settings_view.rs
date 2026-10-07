@@ -1,6 +1,7 @@
 //! 设置界面：顶部搜索、左侧分类和右侧参数；使用现有灰阶及原生输入控件。
 use crate::{
     settings::{Settings, TABS, Tab},
+    settings_dropdown::GeneralDropdown,
     shortcuts,
     switch::Switch,
     ui::{self, BACKGROUND, LINE, MUTED, PANEL, TEXT},
@@ -40,7 +41,7 @@ fn row(label: &'static str, control: impl IntoElement) -> Div {
 }
 
 impl Settings {
-    /// 渲染当前分类的实际控件；通用页通过 Switch 与刀片模式下拉修改草稿，应用前不保存偏好。
+    /// 渲染当前分类的实际控件；通用页通过 Switch、刀片与素材拖动模式下拉修改草稿，应用前不保存偏好。
     /// 语言页读取统一索引并显示单选勾选、自称和当前已应用语言译名；插件显示空列表。
     fn body(&self, cx: &mut Context<Self>) -> Div {
         let content = div().flex().flex_col().gap(px(8.0));
@@ -59,7 +60,11 @@ impl Settings {
                 ))
                 .child(row(
                     crate::i18n::t("settings", "Blade cutting mode", cx),
-                    self.blade_mode_dropdown(cx),
+                    self.mode_dropdown(GeneralDropdown::Blade, cx),
+                ))
+                .child(row(
+                    crate::i18n::t("settings", "Clip appearance while dragging", cx),
+                    self.mode_dropdown(GeneralDropdown::ClipDrag, cx),
                 )),
             Tab::Language => self.language_list(cx),
             Tab::Plugins => content.child(
@@ -274,8 +279,8 @@ impl Render for Settings {
             .on_mouse_down(
                 gpui::MouseButton::Left,
                 cx.listener(|this, _, _, cx| {
-                    if this.blade_menu_open {
-                        this.blade_menu_open = false;
+                    if this.general_menu.is_some() {
+                        this.general_menu = None;
                         cx.notify();
                     }
                 }),

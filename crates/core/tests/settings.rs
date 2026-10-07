@@ -85,7 +85,8 @@ fn project_settings_round_trip_and_frame_conversion() {
     std::fs::remove_dir_all(root).unwrap();
 }
 
-/// 验证偏好独立保存、三种有效语言与快捷键覆盖重开保留，未知语言、损坏及未来版本不会覆盖旧值。
+/// 验证偏好独立保存、拖动显示模式、三种有效语言与快捷键覆盖重开保留，未知语言、损坏及未来版本不会覆盖旧值。
+/// 旧文件缺少拖动显示字段时默认跟随鼠标，不改写磁盘中的已有设置。
 #[test]
 fn preferences_persist_and_reject_corrupt_data() {
     let root = std::env::temp_dir().join(format!("dinuosi-preferences-{}", uuid::Uuid::new_v4()));
@@ -93,6 +94,7 @@ fn preferences_persist_and_reject_corrupt_data() {
     assert_eq!(store.load_preferences().unwrap(), Preferences::default());
     let mut data = Preferences {
         live_scrub: false,
+        keep_dragged_clip: true,
         language: "zh-CN".into(),
         ..Default::default()
     };
@@ -107,6 +109,17 @@ fn preferences_persist_and_reject_corrupt_data() {
         assert_eq!(store.load_preferences().unwrap(), data);
     }
     let path = root.join("preferences.json");
+    let mut old = serde_json::to_value(&data).unwrap();
+    old.as_object_mut().unwrap().remove("keep_dragged_clip");
+    std::fs::write(&path, serde_json::to_vec(&old).unwrap()).unwrap();
+    assert!(!store.load_preferences().unwrap().keep_dragged_clip);
+    assert!(
+        serde_json::from_slice::<serde_json::Value>(&std::fs::read(&path).unwrap())
+            .unwrap()
+            .get("keep_dragged_clip")
+            .is_none()
+    );
+    store.save_preferences(&data).unwrap();
     for legacy in ["zh-TW", "es", "ru"] {
         let mut old = serde_json::to_value(&data).unwrap();
         old["language"] = legacy.into();

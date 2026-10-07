@@ -36,5 +36,8 @@
   "Split selected clips at playhead": "按播放头切割选中素材",
   "Blade cutting mode": "刀片切割模式",
   "Require clip selection": "需要选中素材",
-  "No clip selection required": "无需选中素材"
+  "No clip selection required": "无需选中素材",
+  "Clip appearance while dragging": "拖动素材时",
+  "Follow mouse": "跟随鼠标",
+  "Keep in timeline": "保留在时间线"
 }
