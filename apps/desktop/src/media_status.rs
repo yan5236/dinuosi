@@ -99,6 +99,7 @@ impl Desktop {
             self.select_media(index, window, cx);
         }
         if changed {
+            self.load_waveforms(cx);
             cx.notify();
         }
     }

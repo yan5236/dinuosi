@@ -9,6 +9,7 @@ pub mod timeline;
 pub mod timeline_audio;
 mod timeline_edit;
 mod timeline_file;
+pub mod waveform;
 pub use storage::{MediaImport, ProjectEntry, ProjectStore};
 
 use uuid::Uuid;

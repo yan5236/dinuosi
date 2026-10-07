@@ -11,7 +11,7 @@ use gpui::{Context, Div, MouseButton, ObjectFit, div, img, prelude::*, px, relat
 
 impl Desktop {
     /// 按素材显示比例居中绘制完整画面；四周随面板尺寸留白，透明补边透出灰色背景。
-    /// 图片采用绝对定位避免固有尺寸撑开布局；时间线模式叠加受画布裁切的变换选择框。
+    /// 图片采用绝对定位避免固有尺寸撑开布局；音频素材显示完整源波形，时间线叠加变换选择框。
     pub(crate) fn preview_display(&self, cx: &mut Context<Self>) -> Div {
         let selected = self
             .session
@@ -57,17 +57,22 @@ impl Desktop {
                         s.child(self.preview_transform_overlay(cx))
                     })
                     .when(audio && !offline, |s| {
-                        s.flex().items_center().justify_center().child(
-                            svg()
-                                .path(Icon::Audio.path())
-                                .size(px(64.0))
-                                .text_color(rgb(TEXT)),
+                        s.child(
+                            div()
+                                .debug_selector(|| "preview-waveform".into())
+                                .absolute()
+                                .inset_0()
+                                .child(crate::waveform::waveform_view(
+                                    selected.and_then(|m| m.waveform.clone()),
+                                    0.0,
+                                    selected.map_or(0.0, |m| m.duration),
+                                )),
                         )
                     }),
             )
     }
 
-    /// 绘制预览长度选区、两端拖柄和可寻址播放头；选区范围与设备实际播放范围一致。
+    /// 绘制预览长度选区、音频源波形、两端拖柄和可寻址播放头；范围与设备实际播放一致。
     /// 所有位置使用实际轨道宽度比例，与鼠标寻址共用边界；把手最后绘制以遮盖边框和播放线。
     pub(crate) fn preview_strip(&self, cx: &mut Context<Self>) -> Div {
         let duration = if self
@@ -131,6 +136,25 @@ impl Desktop {
                                     s.child(img(frame).size_full().object_fit(ObjectFit::Cover))
                                 })
                         }))
+                        .when_some(
+                            self.session
+                                .selected
+                                .and_then(|i| self.session.media.get(i))
+                                .filter(|m| m.kind == MediaKind::Audio && !m.offline),
+                            |s, media| {
+                                s.child(
+                                    div()
+                                        .debug_selector(|| "preview-strip-waveform".into())
+                                        .absolute()
+                                        .inset_0()
+                                        .child(crate::waveform::waveform_view(
+                                            media.waveform.clone(),
+                                            0.0,
+                                            media.duration,
+                                        )),
+                                )
+                            },
+                        )
                         .child(
                             div()
                                 .debug_selector(|| "preview-selection".into())

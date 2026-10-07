@@ -30,6 +30,7 @@ mod tooltip;
 mod trim_handle;
 mod ui;
 mod view;
+mod waveform;
 mod windows;
 
 #[cfg(test)]
@@ -46,6 +47,8 @@ mod timeline_tests;
 mod timeline_zoom_tests;
 #[cfg(test)]
 mod tooltip_tests;
+#[cfg(test)]
+mod waveform_tests;
 
 use dinuosi_core::ProjectStore;
 use gpui::{App, Application};

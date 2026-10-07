@@ -13,7 +13,7 @@ fn write_midi(path: &Path, program: u8) {
     fs::write(path, bytes).unwrap();
 }
 
-/// 验证无需 FFmpeg 的 MIDI 探测、GM 乐器切换、准确寻址、区间长度及损坏文件拒绝。
+/// 验证无需 FFmpeg 的 MIDI 探测、GM 乐器切换、准确寻址、波形峰值及损坏文件拒绝。
 #[test]
 fn sampled_midi_respects_instruments_and_seek() {
     let root = std::env::temp_dir().join(format!("dinuosi-midi-{}", uuid::Uuid::new_v4()));
@@ -36,6 +36,15 @@ fn sampled_midi_respects_instruments_and_seek() {
     assert_eq!(full.len(), 192000);
     assert!(full.iter().all(|s| s.is_finite() && s.abs() <= 1.0));
     assert!(full.iter().any(|s| s.abs() > 0.01));
+    let waveform = dinuosi_core::waveform::Waveform::decode(&piano).unwrap();
+    assert_eq!(
+        waveform.peak(0.0, 2.0).max,
+        full.iter().copied().fold(0.0, f32::max)
+    );
+    assert_eq!(
+        waveform.peak(0.0, 2.0).min,
+        full.iter().copied().fold(0.0, f32::min)
+    );
     assert_eq!(render(&piano, 0.25, 0.75), full[24000..72000]);
     let violin = media::probe(&violin).unwrap();
     assert_ne!(render(&violin, 0.0, 1.0), full[..96000]);

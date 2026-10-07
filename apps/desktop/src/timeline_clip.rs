@@ -8,7 +8,7 @@ use dinuosi_core::timeline::Clip;
 use gpui::{Context, Div, MouseButton, ObjectFit, Stateful, div, img, prelude::*, px, rgb};
 impl Desktop {
     /// 仅绘制可见片段与真实端点把手；水平滚动截断处不伪造端点，零秒处预留把手空间。
-    /// 把手锚点补偿父容器的 1px 边框，并使用片段完整高度，保持上下外边框平齐及原有圆角。
+    /// 音频按源入点、滚动截断及当前缩放查询波形；把手补偿 1px 边框并保持片段完整高度。
     pub(crate) fn timeline_clip(
         &self,
         clip: &Clip,
@@ -24,12 +24,8 @@ impl Desktop {
         let (top, h) = self.track_geometry(clip.track);
         let selected = self.timeline.selected.contains(&clip.id);
         let id = clip.id.clone();
-        let thumbnail = self
-            .session
-            .media
-            .iter()
-            .find(|m| m.path == clip.source)
-            .and_then(|m| m.thumbnail.clone());
+        let media = self.session.media.iter().find(|m| m.path == clip.source);
+        let thumbnail = media.and_then(|m| m.thumbnail.clone());
         let visible = (w + x.min(0.0)).min(width - x.max(0.0)).max(2.0);
         Some(
             div()
@@ -76,6 +72,29 @@ impl Desktop {
                                             .opacity(0.7),
                                     )
                             }))
+                        })
+                        .when(clip.kind == crate::media::MediaKind::Audio, |s| {
+                            s.child(
+                                div()
+                                    .debug_selector({
+                                        let id = clip.id.clone();
+                                        move || format!("waveform-{id}")
+                                    })
+                                    .absolute()
+                                    .left_0()
+                                    .right_0()
+                                    .top(px(21.0))
+                                    .bottom(px(3.0))
+                                    .child(crate::waveform::waveform_view(
+                                        media
+                                            .filter(|m| !m.offline)
+                                            .and_then(|m| m.waveform.clone()),
+                                        clip.source_in as f64 / self.timeline.model.fps as f64
+                                            + (-x).max(0.0) as f64 / pps as f64
+                                            + 1.0 / pps as f64,
+                                        (visible - 2.0).max(0.0) as f64 / pps as f64,
+                                    )),
+                            )
                         })
                         .child(
                             div()

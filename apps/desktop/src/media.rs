@@ -9,6 +9,8 @@ use std::{ops::Deref, path::Path, sync::Arc};
 pub struct Media {
     pub source: core::Media,
     pub thumbnail: Option<Arc<RenderImage>>,
+    pub waveform: Option<Arc<dinuosi_core::waveform::Waveform>>,
+    pub waveform_requested: bool,
 }
 
 impl Media {
@@ -19,7 +21,12 @@ impl Media {
             .thumbnail
             .as_ref()
             .map(|bytes| render_frame(bytes.as_ref().clone(), source.preview_size));
-        Self { source, thumbnail }
+        Self {
+            source,
+            thumbnail,
+            waveform: None,
+            waveform_requested: false,
+        }
     }
 }
 

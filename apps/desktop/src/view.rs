@@ -67,6 +67,7 @@ impl Desktop {
                     Ok((entries, media, timeline)) => {
                         this.projects = entries;
                         this.session.media = media;
+                        this.load_waveforms(cx);
                         this.timeline.model = timeline;
                         this.timeline.preview = !this.timeline.model.clips.is_empty();
                         this.refresh_timeline(cx);

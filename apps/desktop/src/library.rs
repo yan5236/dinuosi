@@ -326,6 +326,7 @@ impl Desktop {
                                 this.session.media.push(media);
                             }
                         }
+                        this.load_waveforms(cx);
                         if !errors.is_empty() {
                             this.notice = Some(errors.join("\n"));
                         }
