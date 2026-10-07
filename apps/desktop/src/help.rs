@@ -1,0 +1,156 @@
+//! 帮助菜单与独立关于窗口，链接使用用户提供的正式目标。
+use crate::{
+    settings::{self, Tab},
+    ui::{self, BACKGROUND, LINE, MUTED, TEXT},
+    view::Desktop,
+};
+use gpui::{
+    App, Bounds, Context, Div, Render, TitlebarOptions, Window, WindowBounds, WindowOptions, div,
+    prelude::*, px, rgb, size,
+};
+
+pub const SOURCE_URL: &str = "https://github.com/yan5236/dinuosi";
+
+/// 返回可拖动的独立辅助窗口参数；保持自绘标题栏，不设置模态父窗口。
+pub(crate) fn auxiliary_options(title: &str, width: f32, height: f32, cx: &App) -> WindowOptions {
+    WindowOptions {
+        window_bounds: Some(WindowBounds::Windowed(Bounds::centered(
+            None,
+            size(px(width), px(height)),
+            cx,
+        ))),
+        window_min_size: Some(size(px(width), px(height))),
+        is_resizable: false,
+        titlebar: Some(TitlebarOptions {
+            title: Some(format!("Dinuosi - {title}").into()),
+            appears_transparent: true,
+            ..Default::default()
+        }),
+        ..Default::default()
+    }
+}
+
+impl Desktop {
+    /// 帮助下拉只包含用户要求的键盘快捷键与关于；菜单保持文字列表与点击遮挡。
+    pub(crate) fn help_menu(&self, top: f32, cx: &mut Context<Self>) -> Div {
+        div()
+            .absolute()
+            .top(px(top))
+            .left(px(288.0))
+            .w(px(200.0))
+            .occlude()
+            .bg(rgb(0x303034))
+            .border_1()
+            .border_color(rgb(LINE))
+            .rounded(px(6.0))
+            .p(px(5.0))
+            .child(
+                div()
+                    .id("help-shortcuts")
+                    .debug_selector(|| "help-shortcuts".into())
+                    .p(px(10.0))
+                    .cursor_pointer()
+                    .hover(|s| s.bg(rgb(LINE)))
+                    .child("键盘快捷键")
+                    .on_click(cx.listener(|this, _, _, cx| this.open_settings(Tab::Shortcuts, cx))),
+            )
+            .child(
+                div()
+                    .id("help-about")
+                    .debug_selector(|| "help-about".into())
+                    .p(px(10.0))
+                    .cursor_pointer()
+                    .hover(|s| s.bg(rgb(LINE)))
+                    .child("关于")
+                    .on_click(cx.listener(|this, _, _, cx| this.open_about(cx))),
+            )
+    }
+
+    /// 重用现有关于窗口；关闭工作区时自动关闭，不修改编辑状态和正在播放的媒体。
+    pub(crate) fn open_about(&mut self, cx: &mut Context<Self>) {
+        self.help_open = false;
+        if let Some(handle) = self.about_window
+            && handle.update(cx, |_, w, _| w.activate_window()).is_ok()
+        {
+            cx.notify();
+            return;
+        }
+        let options = auxiliary_options("关于", 520.0, 340.0, cx);
+        match cx.open_window(options, |window, cx| {
+            cx.new(|cx| {
+                let focus = cx.focus_handle();
+                focus.focus(window);
+                About { focus }
+            })
+        }) {
+            Ok(handle) => {
+                self.about_window = Some(handle);
+                settings::close_with_owner(handle, cx);
+            }
+            Err(e) => self.notice = Some(format!("打开关于失败：{e}")),
+        }
+        cx.notify();
+    }
+}
+
+pub struct About {
+    focus: gpui::FocusHandle,
+}
+impl Render for About {
+    /// 显示编译版本与品牌，官网显示暂无；独立零尺寸焦点保留系统标题栏命中，链接交给浏览器。
+    fn render(&mut self, window: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        div()
+            .size_full()
+            .flex()
+            .flex_col()
+            .bg(rgb(BACKGROUND))
+            .text_color(rgb(TEXT))
+            .font_family("Microsoft YaHei UI")
+            .text_size(px(14.0))
+            .child(div().absolute().size_0().track_focus(&self.focus))
+            .on_key_down(|event, window, cx| {
+                if event.keystroke.key == "escape" {
+                    window.remove_window();
+                }
+                cx.stop_propagation();
+            })
+            .child(
+                div()
+                    .h(px(48.0))
+                    .flex_none()
+                    .px(px(16.0))
+                    .flex()
+                    .items_center()
+                    .child("关于")
+                    .child(ui::title_drag())
+                    .child(ui::window_controls(window, false)),
+            )
+            .child(
+                div()
+                    .p(px(30.0))
+                    .flex()
+                    .flex_col()
+                    .gap(px(22.0))
+                    .child(ui::brand(72.0))
+                    .child(format!("版本 {}", env!("CARGO_PKG_VERSION")))
+                    .child(
+                        div()
+                            .flex()
+                            .gap(px(28.0))
+                            .child("官网")
+                            .child(div().text_color(rgb(MUTED)).child("暂无")),
+                    )
+                    .child(
+                        div().flex().gap(px(28.0)).child("开源地址").child(
+                            div()
+                                .id("source-link")
+                                .focusable()
+                                .cursor_pointer()
+                                .underline()
+                                .child(SOURCE_URL)
+                                .on_click(|_, _, cx| cx.open_url(SOURCE_URL)),
+                        ),
+                    ),
+            )
+    }
+}

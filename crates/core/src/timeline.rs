@@ -169,6 +169,7 @@ pub struct Timeline {
     pub fps: u32,
     pub width: u32,
     pub height: u32,
+    pub bitrate_kbps: u32,
     pub tracks: Vec<Track>,
     pub clips: Vec<Clip>,
 }
@@ -180,6 +181,7 @@ impl Default for Timeline {
             fps: 30,
             width: 1920,
             height: 1080,
+            bitrate_kbps: 12000,
             clips: Vec::new(),
             tracks: vec![Track {
                 kind: TrackKind::Main,
@@ -208,13 +210,14 @@ impl Timeline {
             .max()
             .unwrap_or(0)
     }
-    /// 校验载入/提交数据的轨道、时长、唯一身份和参数；错误不修改状态。
+    /// 校验载入/提交数据的画布、码率、轨道、时长、唯一身份和参数；错误不修改状态。
     pub fn validate(&self) -> Result<(), String> {
         if !(1..=240).contains(&self.fps)
             || self.width == 0
             || self.height == 0
             || self.width > 16384
             || self.height > 16384
+            || !(100..=1_000_000).contains(&self.bitrate_kbps)
             || self.tracks.is_empty()
             || self.tracks.last().is_none_or(|t| t.kind != TrackKind::Main)
             || self

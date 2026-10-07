@@ -15,6 +15,7 @@ use uuid::Uuid;
 
 const PROJECT_FILE: &str = "project.dinuosi";
 const OWNER_FILE: &str = ".dinuosi-owner";
+pub(crate) mod preferences;
 mod timeline;
 
 /// 项目管理的持久化摘要；路径指向项目文件，丢失的项目仍保留可移除的记录。

@@ -12,7 +12,7 @@ use gpui::{Context, Div, Window, div, prelude::*, px, rgb, svg};
 
 impl Desktop {
     /// 绘制紧凑横向项目列表；固定标题与入口尺寸，滚动区只包含项目记录。
-    /// 卡片打开持久化项目，更多按钮阻止卡片点击冒泡；仅保留项目名与真实创建/修改时间。
+    /// 卡片打开持久化项目，设置进入独立窗口；列表仅保留项目名与真实创建/修改时间。
     pub(crate) fn manager(&self, window: &Window, cx: &mut Context<Self>) -> Div {
         div()
             .size_full()
@@ -47,11 +47,9 @@ impl Desktop {
                     .child(pill("import-project", "打开项目", 142.0, 32.0).on_click(
                         cx.listener(|this, _, window, cx| this.import_project(window, cx)),
                     ))
-                    .child(
-                        pill("settings", "设置", 142.0, 32.0).on_click(
-                            cx.listener(|this, _, _, cx| this.inform("设置尚未开放", cx)),
-                        ),
-                    ),
+                    .child(pill("settings", "设置", 142.0, 32.0).on_click(cx.listener(
+                        |this, _, _, cx| this.open_settings(crate::settings::Tab::General, cx),
+                    ))),
             )
             .child(
                 div()

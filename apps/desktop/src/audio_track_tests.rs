@@ -41,6 +41,7 @@ fn audio_drop_and_volume_slider_persist_pointer_results(cx: &mut TestAppContext)
                     duration: 2.0,
                     has_audio: kind == MediaKind::Audio,
                     preview_size: (640, 360),
+                    source_size: (1920, 1080),
                     thumbnail: None,
                     offline: false,
                 }));

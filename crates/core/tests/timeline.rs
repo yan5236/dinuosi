@@ -170,6 +170,7 @@ fn dynamic_tracks_keep_positions_and_never_overlap() {
         duration: 5.0,
         has_audio: false,
         preview_size: (640, 360),
+        source_size: (1920, 1080),
         offline: false,
         thumbnail: Some(std::sync::Arc::new(
             [60, 80, 160, 255].repeat((FRAME_WIDTH * FRAME_HEIGHT) as usize),

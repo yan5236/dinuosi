@@ -29,6 +29,26 @@ pub fn blend(
     t: &Transform,
     canvas: (u32, u32),
 ) -> Result<(), String> {
+    blend_mapped(
+        output,
+        source,
+        t,
+        canvas,
+        (canvas.0 as f64, canvas.1 as f64),
+        (FRAME_WIDTH, FRAME_HEIGHT),
+    )
+}
+
+/// 在项目像素坐标内逆变换采样，输出仍使用固定缓冲；有效项目矩形外保持黑色。
+/// source_extent 为整个带透明边源缓冲在项目中的覆盖范围，支持小素材不放大。
+fn blend_mapped(
+    output: &mut [u8],
+    source: &[u8],
+    t: &Transform,
+    canvas: (u32, u32),
+    source_extent: (f64, f64),
+    output_size: (u32, u32),
+) -> Result<(), String> {
     let len = (FRAME_WIDTH * FRAME_HEIGHT * 4) as usize;
     if output.len() != len || source.len() != len || canvas.0 == 0 || canvas.1 == 0 {
         return Err("预览像素尺寸无效".into());
@@ -39,14 +59,22 @@ pub fn blend(
     let angle = t.rotation.to_radians();
     let (sin, cos) = angle.sin_cos();
     let scale = t.scale / 100.0;
-    let tx = t.x * FRAME_WIDTH as f64 / canvas.0 as f64;
-    let ty = t.y * FRAME_HEIGHT as f64 / canvas.1 as f64;
-    for y in 0..FRAME_HEIGHT {
-        for x in 0..FRAME_WIDTH {
-            let dx = x as f64 + 0.5 - FRAME_WIDTH as f64 / 2.0 - tx;
-            let dy = y as f64 + 0.5 - FRAME_HEIGHT as f64 / 2.0 - ty;
-            let sx = ((dx * cos + dy * sin) / scale + FRAME_WIDTH as f64 / 2.0).floor() as i32;
-            let sy = ((-dx * sin + dy * cos) / scale + FRAME_HEIGHT as f64 / 2.0).floor() as i32;
+    let left = (FRAME_WIDTH - output_size.0) / 2;
+    let top = (FRAME_HEIGHT - output_size.1) / 2;
+    for y in top..top + output_size.1 {
+        for x in left..left + output_size.0 {
+            let dx = (x as f64 + 0.5 - left as f64 - output_size.0 as f64 / 2.0) * canvas.0 as f64
+                / output_size.0 as f64
+                - t.x;
+            let dy = (y as f64 + 0.5 - top as f64 - output_size.1 as f64 / 2.0) * canvas.1 as f64
+                / output_size.1 as f64
+                - t.y;
+            let sx = ((dx * cos + dy * sin) / scale * FRAME_WIDTH as f64 / source_extent.0
+                + FRAME_WIDTH as f64 / 2.0)
+                .floor() as i32;
+            let sy = ((-dx * sin + dy * cos) / scale * FRAME_HEIGHT as f64 / source_extent.1
+                + FRAME_HEIGHT as f64 / 2.0)
+                .floor() as i32;
             if sx < 0 || sy < 0 || sx >= FRAME_WIDTH as i32 || sy >= FRAME_HEIGHT as i32 {
                 continue;
             }
@@ -84,6 +112,7 @@ pub fn render(timeline: &Timeline, frame: i64, media: &[media::Media]) -> Result
 
 impl FrameCache {
     /// 按轨道从底到顶合成，视频按路径、源帧、帧率及素材载入代次复用，图片直接借用缩略图。
+    /// 小素材保持原始显示尺寸，大素材等比缩小到项目画布；未覆盖区域为黑色。
     /// 每次只保留当前可见源帧，避免播放/寻址累积内存；失败不缓存错误，下一次允许重试。
     pub fn render(
         &mut self,
@@ -148,14 +177,31 @@ impl FrameCache {
                         bytes
                     }
                 };
-                blend(
+                let fitted = fitted_size(m.source_size, (timeline.width, timeline.height));
+                blend_mapped(
                     &mut out,
                     &bytes,
                     &clip.transform,
                     (timeline.width, timeline.height),
+                    (
+                        fitted.0 * FRAME_WIDTH as f64 / m.preview_size.0.max(1) as f64,
+                        fitted.1 * FRAME_HEIGHT as f64 / m.preview_size.1.max(1) as f64,
+                    ),
+                    media::preview_dimensions((timeline.width, timeline.height)),
                 )?;
             }
         }
         Ok(out)
     }
+}
+
+/// 返回素材在项目中的初始显示大小：仅缩小超出画布的素材，小素材不放大。
+pub fn fitted_size(source: (u32, u32), canvas: (u32, u32)) -> (f64, f64) {
+    let scale = (canvas.0 as f64 / source.0.max(1) as f64)
+        .min(canvas.1 as f64 / source.1.max(1) as f64)
+        .min(1.0);
+    (
+        source.0.max(1) as f64 * scale,
+        source.1.max(1) as f64 * scale,
+    )
 }

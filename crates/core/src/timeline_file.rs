@@ -8,6 +8,8 @@ use std::path::PathBuf;
 pub(crate) struct TimelineV1 {
     fps: u32,
     canvas: [u32; 2],
+    #[serde(default = "default_bitrate")]
+    bitrate_kbps: u32,
     tracks: Vec<TrackV1>,
     clips: Vec<ClipV1>,
 }
@@ -40,12 +42,17 @@ struct ClipV1 {
 fn default_gain() -> f64 {
     1.0
 }
+/// 旧项目未指定码率时使用 12Mbps，保持旧文件可直接打开。
+fn default_bitrate() -> u32 {
+    12000
+}
 impl TimelineV1 {
-    /// 显式复制领域数据到版本化字段，不保存选择、拖动和历史会话。
+    /// 显式复制领域数据及项目码率到版本化字段，不保存选择、拖动和历史会话。
     pub fn from_timeline(t: &Timeline) -> Self {
         Self {
             fps: t.fps,
             canvas: [t.width, t.height],
+            bitrate_kbps: t.bitrate_kbps,
             tracks: t
                 .tracks
                 .iter()
@@ -97,7 +104,7 @@ impl TimelineV1 {
                 .collect(),
         }
     }
-    /// 校验外部字段并迁移无类型的旧三轨格式；载入后移除所有空非主轨，主轨始终保留。
+    /// 校验外部字段及码率并迁移无类型的旧三轨格式；载入后移除所有空非主轨，主轨始终保留。
     /// 旧音频片段迁移至独立音频轨道且音量默认 0dB；源选区、时间、轨道开关保持不变。
     /// 旧重叠片段分配到上方新轨道；损坏类型或增益返回错误，不进入编辑器。
     pub fn into_timeline(self) -> Result<Timeline, String> {
@@ -123,6 +130,7 @@ impl TimelineV1 {
             fps: self.fps,
             width: self.canvas[0],
             height: self.canvas[1],
+            bitrate_kbps: self.bitrate_kbps,
             tracks: self
                 .tracks
                 .into_iter()

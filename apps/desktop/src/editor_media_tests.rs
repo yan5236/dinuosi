@@ -133,6 +133,7 @@ fn media_controls_follow_actual_mouse_drag_and_filter(cx: &mut TestAppContext) {
                 duration: 12.0,
                 has_audio: false,
                 preview_size: (640, 360),
+                source_size: (1920, 1080),
                 thumbnail: None,
                 offline: false,
             })

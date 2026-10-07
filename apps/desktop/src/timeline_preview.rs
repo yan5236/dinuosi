@@ -11,7 +11,7 @@ impl Desktop {
         cx.notify();
     }
     /// 后台串行复用 Core 源帧缓存合成，主线程仅上传 BGRA；变换不重复解码未改变的源帧。
-    /// 任务独占缓存并在完成后归还，期间合并请求；连续寻址仍显示完成帧并追赶最新位置。
+    /// 任务独占缓存并在完成后归还；按请求时项目比例裁切画布，连续寻址追赶最新位置。
     fn request_timeline_frame(&mut self, cx: &mut Context<Self>) {
         if !self.timeline.preview || self.timeline.rendering {
             return;
@@ -21,6 +21,7 @@ impl Desktop {
         let revision = self.timeline.revision;
         let model = self.timeline.model.clone();
         let frame = model.frame(self.session.timeline_position);
+        let canvas = (model.width, model.height);
         let media = self
             .session
             .media
@@ -42,7 +43,10 @@ impl Desktop {
                 if this.timeline.preview {
                     match result {
                         Ok(bytes) => {
-                            let frame = crate::media::render_frame(bytes, (640, 360));
+                            let frame = crate::media::render_frame(
+                                bytes,
+                                dinuosi_core::media::preview_dimensions(canvas),
+                            );
                             if let Some(old) = this.timeline.frame.replace(frame) {
                                 this.session.retired_frames.push(old);
                             }

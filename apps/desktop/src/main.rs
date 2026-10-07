@@ -4,6 +4,7 @@ mod assets;
 mod audio_inspector;
 mod dialogs;
 mod editor;
+mod help;
 mod input;
 mod inspector;
 mod library;
@@ -12,10 +13,14 @@ mod media;
 mod media_actions;
 mod media_status;
 mod playback;
+mod preferences;
 mod preview;
 mod preview_geometry;
 mod preview_transform;
 mod preview_view;
+mod settings;
+mod settings_view;
+mod shortcuts;
 mod sliders;
 mod timeline_actions;
 mod timeline_clip;
@@ -39,6 +44,8 @@ mod audio_track_tests;
 mod editor_media_tests;
 #[cfg(test)]
 mod preview_transform_tests;
+#[cfg(test)]
+mod settings_tests;
 #[cfg(test)]
 mod timeline_scroll_tests;
 #[cfg(test)]

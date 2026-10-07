@@ -1,0 +1,300 @@
+//! 设置界面：顶部搜索、左侧分类和右侧参数；使用现有灰阶及原生输入控件。
+use crate::{
+    settings::{Settings, TABS, Tab},
+    shortcuts,
+    ui::{self, BACKGROUND, LINE, MUTED, PANEL, TEXT},
+};
+use gpui::{Context, Div, Render, Stateful, Window, div, prelude::*, px, rgb};
+
+/// 绘制可聚焦的矩形设置按钮，不引入新的品牌样式或装饰文案。
+fn button(id: impl Into<gpui::ElementId>, text: impl Into<gpui::SharedString>) -> Stateful<Div> {
+    div()
+        .id(id)
+        .focusable()
+        .px(px(12.0))
+        .py(px(8.0))
+        .rounded(px(4.0))
+        .bg(rgb(PANEL))
+        .border_1()
+        .border_color(rgb(LINE))
+        .cursor_pointer()
+        .hover(|s| s.bg(rgb(LINE)))
+        .child(text.into())
+}
+
+/// 每个设置行左侧显示字段名，右侧提供固定区域控件，避免长文本挤出边界。
+fn row(label: &'static str, control: impl IntoElement) -> Div {
+    div()
+        .flex()
+        .items_center()
+        .justify_between()
+        .gap(px(20.0))
+        .py(px(12.0))
+        .border_b_1()
+        .border_color(rgb(LINE))
+        .child(label)
+        .child(control)
+}
+
+impl Settings {
+    /// 渲染当前分类的实际控件；语言仅列出可用中文与系统回退，插件没有运行时则显示空列表。
+    fn body(&self, cx: &mut Context<Self>) -> Div {
+        let content = div().flex().flex_col().gap(px(8.0));
+        match self.tab {
+            Tab::General => content.child(row(
+                "拖动时实时预览",
+                button(
+                    "live-scrub",
+                    if self.draft.live_scrub {
+                        "已开启"
+                    } else {
+                        "已关闭"
+                    },
+                )
+                .debug_selector(|| "live-scrub".into())
+                .on_click(cx.listener(|this, _, _, cx| {
+                    this.draft.live_scrub = !this.draft.live_scrub;
+                    cx.notify();
+                })),
+            )),
+            Tab::Language => content.child(row(
+                "界面语言",
+                div().flex().gap(px(8.0)).children(
+                    [("auto", "跟随系统"), ("zh-CN", "简体中文")]
+                        .into_iter()
+                        .map(|(id, name)| {
+                            button(id, name)
+                                .when(self.draft.language == id, |s| s.bg(rgb(LINE)))
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    this.draft.language = id.into();
+                                    cx.notify();
+                                }))
+                        }),
+                ),
+            )),
+            Tab::Plugins => {
+                content.child(div().py(px(20.0)).text_color(rgb(MUTED)).child("暂无插件"))
+            }
+            Tab::Project => content
+                .child(row(
+                    "主轨分辨率",
+                    div()
+                        .w(px(278.0))
+                        .flex()
+                        .items_center()
+                        .gap(px(8.0))
+                        .child(self.fields[0].clone())
+                        .child("×")
+                        .child(self.fields[1].clone()),
+                ))
+                .child(row(
+                    "帧率（fps）",
+                    div().w(px(160.0)).child(self.fields[2].clone()),
+                ))
+                .child(row(
+                    "码率（kbps）",
+                    div().w(px(160.0)).child(self.fields[3].clone()),
+                )),
+            Tab::Shortcuts => {
+                let query = self.search.read(cx).text.trim().to_lowercase();
+                content
+                    .children(
+                        shortcuts::SHORTCUTS
+                            .iter()
+                            .enumerate()
+                            .filter(|(_, item)| {
+                                query.is_empty()
+                                    || Tab::Shortcuts.label().contains(&query)
+                                    || item.label.contains(&query)
+                                    || shortcuts::label(&shortcuts::bindings(item, &self.draft))
+                                        .to_lowercase()
+                                        .contains(&query)
+                            })
+                            .map(|(index, item)| {
+                                let keys = shortcuts::bindings(item, &self.draft);
+                                let text = if self.recording == Some(index) {
+                                    "按下快捷键…".into()
+                                } else {
+                                    shortcuts::label(&keys)
+                                };
+                                row(
+                                    item.label,
+                                    div()
+                                        .flex()
+                                        .gap(px(6.0))
+                                        .child(
+                                            button(("binding", index), text)
+                                                .min_w(px(165.0))
+                                                .debug_selector(move || format!("binding-{index}"))
+                                                .on_click(cx.listener(
+                                                    move |this, _, window, cx| {
+                                                        this.recording = Some(index);
+                                                        this.error = None;
+                                                        this.focus.focus(window);
+                                                        cx.notify();
+                                                    },
+                                                )),
+                                        )
+                                        .child(button(("clear", index), "清除").on_click(
+                                            cx.listener(move |this, _, _, cx| {
+                                                this.draft
+                                                    .shortcuts
+                                                    .insert(item.id.into(), Vec::new());
+                                                this.recording = None;
+                                                this.error = None;
+                                                cx.notify();
+                                            }),
+                                        )),
+                                )
+                            }),
+                    )
+                    .child(
+                        button("reset-shortcuts", "恢复默认快捷键")
+                            .debug_selector(|| "reset-shortcuts".into())
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.draft.shortcuts.clear();
+                                this.recording = None;
+                                this.error = None;
+                                cx.notify();
+                            })),
+                    )
+            }
+        }
+    }
+}
+
+impl Render for Settings {
+    /// 渲染独立窗口与搜索结果；底部取消/应用复用导出胶囊按钮，错误只展示实际操作失败。
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let tabs: Vec<_> = TABS
+            .into_iter()
+            .filter(|t| (*t != Tab::Project || self.project) && self.matches(*t, cx))
+            .collect();
+        if !tabs.contains(&self.tab)
+            && let Some(tab) = tabs.first()
+        {
+            self.tab = *tab;
+        }
+        div()
+            .size_full()
+            .flex()
+            .flex_col()
+            .bg(rgb(BACKGROUND))
+            .text_color(rgb(TEXT))
+            .text_size(px(14.0))
+            .font_family("Microsoft YaHei UI")
+            .on_key_down(cx.listener(Self::key))
+            .child(div().absolute().size_0().track_focus(&self.focus))
+            .child(
+                div()
+                    .h(px(48.0))
+                    .flex_none()
+                    .px(px(16.0))
+                    .flex()
+                    .items_center()
+                    .child("设置")
+                    .child(ui::title_drag())
+                    .child(ui::window_controls(window, false)),
+            )
+            .child(div().px(px(18.0)).pb(px(16.0)).child(self.search.clone()))
+            .child(
+                div()
+                    .flex()
+                    .flex_1()
+                    .min_h_0()
+                    .border_t_1()
+                    .border_color(rgb(LINE))
+                    .child(
+                        div()
+                            .w(px(180.0))
+                            .flex_none()
+                            .p(px(12.0))
+                            .border_r_1()
+                            .border_color(rgb(LINE))
+                            .children(tabs.iter().map(|tab| {
+                                let tab = *tab;
+                                div()
+                                    .when(tab == Tab::Project, |s| {
+                                        s.child(
+                                            div()
+                                                .pt(px(22.0))
+                                                .pb(px(8.0))
+                                                .px(px(12.0))
+                                                .text_color(rgb(MUTED))
+                                                .child("项目设置"),
+                                        )
+                                    })
+                                    .child(
+                                        div()
+                                            .id(tab.label())
+                                            .focusable()
+                                            .debug_selector(move || {
+                                                format!("settings-tab-{}", tab.label())
+                                            })
+                                            .px(px(12.0))
+                                            .py(px(12.0))
+                                            .rounded(px(4.0))
+                                            .cursor_pointer()
+                                            .when(tab == self.tab, |s| s.bg(rgb(LINE)))
+                                            .hover(|s| s.bg(rgb(PANEL)))
+                                            .child(tab.label())
+                                            .on_click(cx.listener(move |this, _, window, cx| {
+                                                this.tab = tab;
+                                                this.recording = None;
+                                                this.error = None;
+                                                this.focus.focus(window);
+                                                cx.notify();
+                                            })),
+                                    )
+                            })),
+                    )
+                    .child(
+                        div()
+                            .id("settings-content")
+                            .flex_1()
+                            .min_w_0()
+                            .overflow_y_scroll()
+                            .p(px(24.0))
+                            .when(!tabs.is_empty(), |s| {
+                                s.child(
+                                    div()
+                                        .text_size(px(18.0))
+                                        .mb(px(18.0))
+                                        .child(self.tab.label()),
+                                )
+                                .child(self.body(cx))
+                            })
+                            .when(tabs.is_empty(), |s| {
+                                s.child(div().text_color(rgb(MUTED)).child("无匹配设置"))
+                            }),
+                    ),
+            )
+            .child(
+                div()
+                    .flex_none()
+                    .p(px(14.0))
+                    .border_t_1()
+                    .border_color(rgb(LINE))
+                    .flex()
+                    .items_center()
+                    .gap(px(12.0))
+                    .child(
+                        div()
+                            .flex_1()
+                            .text_color(rgb(0xe6a39c))
+                            .children(self.error.clone()),
+                    )
+                    .child(
+                        ui::pill("settings-close", "取消", 110.0, 26.0)
+                            .on_click(|_, window, _| window.remove_window()),
+                    )
+                    .when(!tabs.is_empty() && self.tab != Tab::Plugins, |s| {
+                        s.child(
+                            ui::pill("settings-apply", "应用", 110.0, 26.0)
+                                .debug_selector(|| "settings-apply".into())
+                                .on_click(cx.listener(|this, _, _, cx| this.apply(cx))),
+                        )
+                    }),
+            )
+    }
+}

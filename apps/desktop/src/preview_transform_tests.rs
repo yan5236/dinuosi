@@ -15,10 +15,13 @@ use gpui::{Bounds, Modifiers, MouseButton, TestAppContext, point, px, size};
 #[test]
 fn preview_geometry_matches_compositor_and_clips_controls() {
     for dimensions in [(800.0, 300.0), (320.0, 600.0), (640.0, 360.0)] {
-        let bounds = canvas_bounds(Bounds::new(
-            point(px(50.0), px(40.0)),
-            size(px(dimensions.0), px(dimensions.1)),
-        ));
+        let bounds = canvas_bounds(
+            Bounds::new(
+                point(px(50.0), px(40.0)),
+                size(px(dimensions.0), px(dimensions.1)),
+            ),
+            (1920, 1080),
+        );
         assert!(
             (f32::from(bounds.size.width) / f32::from(bounds.size.height) - 16.0 / 9.0).abs()
                 < 0.001
@@ -70,6 +73,7 @@ fn preview_transform_mouse_updates_inspector_and_persistence(cx: &mut TestAppCon
                     duration: 5.0,
                     has_audio: false,
                     preview_size: effective,
+                    source_size: (effective.0 * 3, effective.1 * 3),
                     offline: false,
                     thumbnail: Some(std::sync::Arc::new([40, 80, 180, 255].repeat(640 * 360))),
                 }));

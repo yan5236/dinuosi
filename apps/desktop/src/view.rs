@@ -1,4 +1,5 @@
 mod events;
+mod menus;
 use crate::{
     dialogs::{Dialog, DialogKind},
     ui::{self, BACKGROUND, LINE, TEXT, brand, pill, tool},
@@ -18,7 +19,10 @@ pub struct Desktop {
     pub(crate) current: Option<ProjectEntry>,
     pub(crate) project_menu: Option<ProjectEntry>,
     pub(crate) project_menu_y: f32,
-    menu_open: bool,
+    pub(crate) menu_open: bool,
+    pub(crate) help_open: bool,
+    pub(crate) settings_window: Option<gpui::WindowHandle<crate::settings::Settings>>,
+    pub(crate) about_window: Option<gpui::WindowHandle<crate::help::About>>,
     pub(crate) dialog: Option<Dialog>,
     pub(crate) notice: Option<String>,
     pub(crate) busy: bool,
@@ -28,7 +32,7 @@ pub struct Desktop {
     pub(crate) timeline: crate::timeline_state::TimelineSession,
 }
 impl Desktop {
-    /// 初始化窗口角色和快捷键焦点；后台加载最近列表，损坏索引以错误提示呈现。
+    /// 初始化窗口角色、共享偏好和快捷键焦点；后台加载最近列表，损坏设置或索引显示错误。
     /// 原生关闭在磁盘操作期间被阻止，避免窗口销毁后遗失错误反馈或重复创建。
     pub fn new(
         store: ProjectStore,
@@ -36,6 +40,20 @@ impl Desktop {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
+        let preferences_error = crate::preferences::initialize(&store, cx).err();
+        cx.observe_global::<crate::preferences::UserPreferences>(|this, cx| {
+            this.timeline.scrub_preview = if cx
+                .global::<crate::preferences::UserPreferences>()
+                .0
+                .live_scrub
+            {
+                dinuosi_core::timeline::ScrubPreview::Live
+            } else {
+                dinuosi_core::timeline::ScrubPreview::OnRelease
+            };
+            cx.notify();
+        })
+        .detach();
         let focus_handle = cx.focus_handle();
         focus_handle.focus(window);
         let weak = cx.weak_entity();
@@ -86,13 +104,25 @@ impl Desktop {
             project_menu: None,
             project_menu_y: 0.0,
             menu_open: false,
+            help_open: false,
+            settings_window: None,
+            about_window: None,
             dialog: None,
-            notice: None,
+            notice: preferences_error,
             busy: true,
             zoom: 1.0,
             volume: 1.0,
             session: crate::preview::EditorSession::new(cx),
             timeline: Default::default(),
+        };
+        desktop.timeline.scrub_preview = if cx
+            .global::<crate::preferences::UserPreferences>()
+            .0
+            .live_scrub
+        {
+            dinuosi_core::timeline::ScrubPreview::Live
+        } else {
+            dinuosi_core::timeline::ScrubPreview::OnRelease
         };
         desktop.watch_media(window, cx);
         desktop
@@ -113,6 +143,7 @@ impl Desktop {
         self.project_menu = None;
         self.session.media_menu = None;
         self.menu_open = false;
+        self.help_open = false;
         self.notice = None;
         cx.notify();
     }
@@ -227,140 +258,8 @@ impl Desktop {
     pub(crate) fn inform(&mut self, message: &str, cx: &mut Context<Self>) {
         self.notice = Some(message.to_owned());
         self.menu_open = false;
+        self.help_open = false;
         cx.notify();
-    }
-    /// 构造剪辑标题栏；品牌导航创建独立管理窗口，系统命中区保留原生拖动与窗口控制。
-    pub(crate) fn editor_titlebar(
-        &self,
-        height: f32,
-        window: &Window,
-        cx: &mut Context<Self>,
-    ) -> Div {
-        div()
-            .h(px(height))
-            .flex_none()
-            .flex()
-            .items_center()
-            .px(px(12.0))
-            .border_b_1()
-            .border_color(rgb(LINE))
-            .child(
-                div()
-                    .id("brand-home")
-                    .debug_selector(|| "brand-home".into())
-                    .cursor_pointer()
-                    .mr(px(22.0))
-                    .child(brand(42.0))
-                    .tooltip(|_, cx| cx.new(|_| ui::Hint("项目管理".into())).into())
-                    .on_click(cx.listener(|this, _, window, cx| this.show_manager(window, cx))),
-            )
-            .child(
-                div()
-                    .id("file-menu")
-                    .px(px(14.0))
-                    .py(px(8.0))
-                    .cursor_pointer()
-                    .hover(|s| s.bg(rgb(crate::ui::PANEL)))
-                    .child("文件")
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        if !this.busy {
-                            this.menu_open = !this.menu_open;
-                            this.notice = None;
-                            cx.notify();
-                        }
-                    })),
-            )
-            .child(
-                div()
-                    .id("edit-menu")
-                    .px(px(14.0))
-                    .py(px(8.0))
-                    .cursor_pointer()
-                    .hover(|s| s.bg(rgb(crate::ui::PANEL)))
-                    .child("编辑")
-                    .on_click(cx.listener(|this, _, _, cx| this.inform("暂无可编辑的片段", cx))),
-            )
-            .child(
-                div()
-                    .id("help-menu")
-                    .px(px(14.0))
-                    .py(px(8.0))
-                    .cursor_pointer()
-                    .hover(|s| s.bg(rgb(crate::ui::PANEL)))
-                    .child("帮助")
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.inform("Ctrl+N 新建项目 · Ctrl+O 打开项目 · Ctrl+H 项目管理", cx)
-                    })),
-            )
-            .child(ui::title_drag())
-            .child(
-                pill("export", "导出", 110.0, 26.0)
-                    .mr(px(18.0))
-                    .on_click(cx.listener(|this, _, _, cx| this.inform("导出尚未开放", cx))),
-            )
-            .child(ui::window_controls(window, true))
-    }
-    /// 构造文件菜单，沿用原有样式；素材导入位于此处，项目入口调用持久化流程。
-    /// 浮层遮挡底层点击；关闭窗口期间检查 busy，关闭成功后由窗口观察器重新打开管理窗口。
-    fn file_menu(&self, top: f32, cx: &mut Context<Self>) -> Div {
-        div()
-            .occlude()
-            .absolute()
-            .top(px(top))
-            .left(px(160.0))
-            .w(px(200.0))
-            .bg(rgb(0x303034))
-            .border_1()
-            .border_color(rgb(LINE))
-            .rounded(px(6.0))
-            .p(px(5.0))
-            .child(
-                div()
-                    .id("menu-new")
-                    .p(px(10.0))
-                    .cursor_pointer()
-                    .hover(|s| s.bg(rgb(LINE)))
-                    .child("新建项目")
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        this.show_dialog(DialogKind::Create, window, cx)
-                    })),
-            )
-            .child(
-                div()
-                    .id("menu-import-media")
-                    .debug_selector(|| "menu-import-media".into())
-                    .p(px(10.0))
-                    .cursor_pointer()
-                    .hover(|s| s.bg(rgb(LINE)))
-                    .child("导入素材")
-                    .on_click(cx.listener(|this, event, window, cx| {
-                        this.menu_open = false;
-                        this.choose_media(event, window, cx);
-                        cx.notify();
-                    })),
-            )
-            .child(
-                div()
-                    .id("menu-home")
-                    .p(px(10.0))
-                    .cursor_pointer()
-                    .hover(|s| s.bg(rgb(LINE)))
-                    .child("项目管理")
-                    .on_click(cx.listener(|this, _, window, cx| this.show_manager(window, cx))),
-            )
-            .child(
-                div()
-                    .id("menu-close")
-                    .p(px(10.0))
-                    .cursor_pointer()
-                    .hover(|s| s.bg(rgb(LINE)))
-                    .child("关闭窗口")
-                    .on_click(cx.listener(|this, _, window, _| {
-                        if !this.busy {
-                            window.remove_window();
-                        }
-                    })),
-            )
     }
 }
 impl Render for Desktop {
@@ -436,7 +335,10 @@ impl Render for Desktop {
             })
             .children(self.library_drag_overlay())
             .when(
-                self.menu_open || self.project_menu.is_some() || self.session.media_menu.is_some(),
+                self.menu_open
+                    || self.help_open
+                    || self.project_menu.is_some()
+                    || self.session.media_menu.is_some(),
                 |s| {
                     s.child(
                         div()
@@ -446,6 +348,7 @@ impl Render for Desktop {
                             .id("menu-dismiss")
                             .on_click(cx.listener(|this, _, _, cx| {
                                 this.menu_open = false;
+                                this.help_open = false;
                                 this.project_menu = None;
                                 this.session.media_menu = None;
                                 cx.notify();
@@ -453,6 +356,9 @@ impl Render for Desktop {
                     )
                     .when(self.menu_open, |s| {
                         s.child(self.file_menu(layout.title, cx))
+                    })
+                    .when(self.help_open, |s| {
+                        s.child(self.help_menu(layout.title, cx))
                     })
                     .when(self.session.media_menu.is_some(), |s| {
                         s.child(self.media_actions(window, cx))

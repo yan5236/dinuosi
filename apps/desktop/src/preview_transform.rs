@@ -29,7 +29,7 @@ pub struct PreviewShape {
 
 impl Desktop {
     /// 按合成器的图层顺序列出当前帧可编辑的画面；排除离线、隐藏、锁定、音频及时间范围外片段。
-    /// 仅使用已加载元数据，不在绘制或鼠标事件中探测磁盘；返回顺序从最上层到背景。
+    /// 使用源尺寸与项目画布匹配合成器的补边，仅读取已加载元数据；返回顺序从顶层到底层。
     pub(crate) fn preview_shapes(&self) -> Vec<PreviewShape> {
         if !self.timeline.preview {
             return Vec::new();
@@ -57,12 +57,19 @@ impl Desktop {
                     .media
                     .iter()
                     .find(|m| m.path == clip.source && !m.offline)?;
+                let fitted = dinuosi_core::composite::fitted_size(
+                    media.source_size,
+                    (model.width, model.height),
+                );
                 Some(PreviewShape {
                     id: clip.id.clone(),
                     geometry: Geometry::new(
                         self.timeline.preview_bounds,
                         &clip.transform,
-                        media.preview_size,
+                        (
+                            (fitted.0 / model.width as f64 * 640.0).round() as u32,
+                            (fitted.1 / model.height as f64 * 360.0).round() as u32,
+                        ),
                         (model.width, model.height),
                     ),
                     selected: self.timeline.selected.contains(&clip.id),
@@ -71,7 +78,7 @@ impl Desktop {
             .collect()
     }
 
-    /// 在合成图上覆盖透明鼠标层；布局阶段记录实际画布，绘制阶段统一裁切选择框和控件。
+    /// 在合成图上覆盖鼠标层；布局按项目比例记录画布，绘制时统一裁切选择框和控件。
     pub(crate) fn preview_transform_overlay(&self, cx: &mut Context<Self>) -> gpui::Stateful<Div> {
         let entity = cx.entity();
         let paint_entity = entity.clone();
@@ -88,7 +95,10 @@ impl Desktop {
                 canvas(
                     move |bounds, _, cx| {
                         entity.update(cx, |this, _| {
-                            this.timeline.preview_bounds = canvas_bounds(bounds)
+                            this.timeline.preview_bounds = canvas_bounds(
+                                bounds,
+                                (this.timeline.model.width, this.timeline.model.height),
+                            )
                         })
                     },
                     move |_, _, window, cx| {

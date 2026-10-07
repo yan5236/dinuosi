@@ -4,12 +4,14 @@ pub mod composite;
 pub mod media;
 pub mod media_stream;
 mod midi;
+mod project_settings;
 mod storage;
 pub mod timeline;
 pub mod timeline_audio;
 mod timeline_edit;
 mod timeline_file;
 pub mod waveform;
+pub use storage::preferences::Preferences;
 pub use storage::{MediaImport, ProjectEntry, ProjectStore};
 
 use uuid::Uuid;

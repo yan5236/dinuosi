@@ -41,6 +41,7 @@ fn dynamic_timeline_dragging_and_scroll_follow_actual_tracks(cx: &mut TestAppCon
                 duration: 2.0,
                 has_audio: false,
                 preview_size: (640, 360),
+                source_size: (1920, 1080),
                 thumbnail: Some(std::sync::Arc::new(
                     [60, 80, 160, 255].repeat((FRAME_WIDTH * FRAME_HEIGHT) as usize),
                 )),
@@ -179,6 +180,7 @@ fn timeline_pointer_editing_persists_real_results(cx: &mut TestAppContext) {
                 duration: 5.0,
                 has_audio: false,
                 preview_size: (640, 360),
+                source_size: (1920, 1080),
                 thumbnail: Some(std::sync::Arc::new(bytes)),
                 offline: false,
             }));
@@ -331,6 +333,7 @@ fn live_scrub_updates_preview_before_mouse_release(cx: &mut TestAppContext) {
                     duration: 2.0,
                     has_audio: false,
                     preview_size: (640, 360),
+                    source_size: (1920, 1080),
                     thumbnail: Some(std::sync::Arc::new(bytes)),
                     offline: false,
                 }));

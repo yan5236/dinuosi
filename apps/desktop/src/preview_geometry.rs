@@ -17,12 +17,13 @@ pub struct Geometry {
     pub angle: f32,
 }
 
-/// 在可用预览区域内居中适配合成器的 16:9 输出，返回实际画面边界，不包括面板留白。
-pub fn canvas_bounds(viewport: Bounds<Pixels>) -> Bounds<Pixels> {
-    let ratio = (f32::from(viewport.size.width) / 640.0)
-        .min(f32::from(viewport.size.height) / 360.0)
+/// 在预览区域内按项目宽高比居中适配，返回真实画布边界，不包括面板留白。
+pub fn canvas_bounds(viewport: Bounds<Pixels>, project: (u32, u32)) -> Bounds<Pixels> {
+    let (w, h) = (project.0.max(1) as f32, project.1.max(1) as f32);
+    let ratio = (f32::from(viewport.size.width) / w)
+        .min(f32::from(viewport.size.height) / h)
         .max(0.0);
-    let dimensions = size(px(640.0 * ratio), px(360.0 * ratio));
+    let dimensions = size(px(w * ratio), px(h * ratio));
     Bounds::new(
         viewport.center() - point(dimensions.width / 2.0, dimensions.height / 2.0),
         dimensions,

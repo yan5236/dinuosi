@@ -25,6 +25,7 @@ pub struct Media {
     pub duration: f64,
     pub has_audio: bool,
     pub preview_size: (u32, u32),
+    pub source_size: (u32, u32),
     pub thumbnail: Option<Arc<Vec<u8>>>,
     pub offline: bool,
 }
@@ -50,7 +51,7 @@ pub fn command(program: &str) -> Command {
 }
 
 /// 规范化文件路径并读取真实流类型、时长和首帧；拒绝目录、未知类型及损坏文件。
-/// MIDI 由采样合成器读取真实时长；静态图片默认五秒，不复制源素材或写缩略图文件。
+/// MIDI 由采样合成器读取真实时长；图片默认五秒，保留计入旋转和像素比例的源尺寸。
 pub fn probe(path: &Path) -> Result<Media, String> {
     let path =
         std::fs::canonicalize(path).map_err(|e| format!("素材不可用 {}：{e}", path.display()))?;
@@ -69,6 +70,7 @@ pub fn probe(path: &Path) -> Result<Media, String> {
             kind: MediaKind::Audio,
             has_audio: true,
             preview_size: (FRAME_WIDTH, FRAME_HEIGHT),
+            source_size: (FRAME_WIDTH, FRAME_HEIGHT),
             thumbnail: None,
             offline: false,
         });
@@ -153,13 +155,18 @@ pub fn probe(path: &Path) -> Result<Media, String> {
         duration,
         has_audio,
         preview_size,
+        source_size: streams
+            .iter()
+            .find(|s| s["codec_type"] == "video")
+            .map(source_size)
+            .unwrap_or((FRAME_WIDTH, FRAME_HEIGHT)),
         thumbnail,
         offline: false,
     })
 }
 
 /// 为失去源文件的已有项目引用保留可筛选的素材项；不删除引用或擅自搜索其他路径。
-/// 时长与缩略图未知时留空，文件回到原路径后由后台监测重新探测恢复。
+/// 时长与缩略图未知时留空，尺寸使用占位值，文件恢复后由后台重新探测。
 pub fn offline(path: PathBuf) -> Media {
     let name = path
         .file_name()
@@ -191,14 +198,14 @@ pub fn offline(path: PathBuf) -> Media {
         duration: 0.0,
         has_audio: false,
         preview_size: (FRAME_WIDTH, FRAME_HEIGHT),
+        source_size: (FRAME_WIDTH, FRAME_HEIGHT),
         thumbnail: None,
         offline: true,
     }
 }
 
-/// 计算等比缩放后的有效画面尺寸，计入非方形像素和旋转；音频或无效尺寸采用固定帧尺寸。
-/// 返回解码透明补边内的矩形大小，宿主可裁去补边再按任意预览面板比例完整适配。
-fn preview_size(stream: &Value) -> (u32, u32) {
+/// 返回计入非方形像素和旋转的源显示尺寸；异常元数据回退为固定解码尺寸。
+fn source_size(stream: &Value) -> (u32, u32) {
     let width = stream["width"].as_f64().unwrap_or(FRAME_WIDTH as f64);
     let height = stream["height"].as_f64().unwrap_or(FRAME_HEIGHT as f64);
     let sar = stream["sample_aspect_ratio"]
@@ -207,18 +214,36 @@ fn preview_size(stream: &Value) -> (u32, u32) {
         .and_then(|(n, d)| Some(n.parse::<f64>().ok()? / d.parse::<f64>().ok()?))
         .filter(|s| s.is_finite() && *s > 0.0)
         .unwrap_or(1.0);
-    let mut ratio = width * sar / height;
+    let mut dimensions = (width * sar, height);
     let rotation = stream["side_data_list"]
         .as_array()
         .and_then(|items| items.iter().find_map(|s| s["rotation"].as_f64()))
         .or_else(|| stream["tags"]["rotate"].as_str()?.parse().ok())
         .unwrap_or(0.0);
     if rotation.abs().rem_euclid(180.0) == 90.0 {
-        ratio = 1.0 / ratio;
+        dimensions = (dimensions.1, dimensions.0);
     }
-    if !ratio.is_finite() || ratio <= 0.0 {
+    if !dimensions.0.is_finite()
+        || !dimensions.1.is_finite()
+        || dimensions.0 <= 0.0
+        || dimensions.1 <= 0.0
+    {
         return (FRAME_WIDTH, FRAME_HEIGHT);
     }
+    (
+        dimensions.0.round().max(1.0) as u32,
+        dimensions.1.round().max(1.0) as u32,
+    )
+}
+
+/// 将源显示尺寸等比适配至固定解码画布，返回透明补边中的有效矩形。
+fn preview_size(stream: &Value) -> (u32, u32) {
+    preview_dimensions(source_size(stream))
+}
+
+/// 将任意合法宽高比适配至 640×360 内，供项目预览裁切和源缩略图共用。
+pub fn preview_dimensions(dimensions: (u32, u32)) -> (u32, u32) {
+    let ratio = dimensions.0.max(1) as f64 / dimensions.1.max(1) as f64;
     if ratio >= FRAME_WIDTH as f64 / FRAME_HEIGHT as f64 {
         (
             FRAME_WIDTH,

@@ -1,7 +1,7 @@
 //! 工作区键盘路由：输入框优先，时间线快捷键委派核心编辑。
 use super::*;
 impl Desktop {
-    /// 按当前焦点路由快捷键，输入参数时只接受提交/取消，防止误删片段。
+    /// 按当前焦点与统一快捷键注册表路由；输入参数时只接受提交/取消，防止误删片段。
     /// 非输入状态下 Tab/Shift+Tab 遍历工具触发元素，以便键盘聚焦显示 Tooltip。
     pub(super) fn workspace_key(
         &mut self,
@@ -43,36 +43,36 @@ impl Desktop {
             cx.stop_propagation();
             return;
         }
-        if key == "delete" || key == "backspace" {
-            self.delete_clips(cx);
-            return;
+        use crate::shortcuts::Command;
+        let preferences = &cx.global::<crate::preferences::UserPreferences>().0;
+        match crate::shortcuts::resolve(&event.keystroke, preferences) {
+            Some(Command::New) => self.show_dialog(DialogKind::Create, window, cx),
+            Some(Command::Open) => self.import_project(window, cx),
+            Some(Command::Home) => self.show_manager(window, cx),
+            Some(Command::Delete) => self.delete_clips(cx),
+            Some(Command::Undo) => self.timeline_history(false, cx),
+            Some(Command::Redo) => self.timeline_history(true, cx),
+            Some(Command::Play) if self.current.is_some() => {
+                if self.timeline.preview {
+                    self.play_timeline(window, cx);
+                } else {
+                    self.play_preview(window, cx);
+                }
+            }
+            Some(Command::Settings) => self.open_settings(crate::settings::Tab::General, cx),
+            _ if self.current.is_none() && matches!(key, "enter" | "space") => {
+                self.show_dialog(DialogKind::Create, window, cx);
+            }
+            _ if key == "escape" => {
+                self.menu_open = false;
+                self.help_open = false;
+                self.project_menu = None;
+                self.session.media_menu = None;
+                self.notice = None;
+                cx.notify();
+            }
+            _ => return,
         }
-        if event.keystroke.modifiers.control && key == "z" {
-            self.timeline_history(event.keystroke.modifiers.shift, cx);
-            return;
-        }
-        if event.keystroke.modifiers.control && key == "y" {
-            self.timeline_history(true, cx);
-            return;
-        }
-        if key == "space" && self.timeline.preview {
-            self.play_timeline(window, cx);
-            return;
-        }
-        if (event.keystroke.modifiers.control && key == "n")
-            || (self.current.is_none() && matches!(key, "enter" | "space"))
-        {
-            self.show_dialog(DialogKind::Create, window, cx);
-        } else if event.keystroke.modifiers.control && key == "o" {
-            self.import_project(window, cx);
-        } else if event.keystroke.modifiers.control && key == "h" {
-            self.show_manager(window, cx);
-        } else if key == "escape" {
-            self.menu_open = false;
-            self.project_menu = None;
-            self.session.media_menu = None;
-            self.notice = None;
-            cx.notify();
-        }
+        cx.stop_propagation();
     }
 }
