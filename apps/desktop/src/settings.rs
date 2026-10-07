@@ -15,14 +15,14 @@ pub enum Tab {
     Project,
 }
 impl Tab {
-    /// 返回设置分类的显示名，供侧边栏、搜索与主体标题复用。
+    /// 返回设置模块的稳定英文消息键，供侧边栏 ID、搜索与翻译后的主体标题复用。
     pub fn label(self) -> &'static str {
         match self {
-            Self::General => "通用",
-            Self::Shortcuts => "键盘快捷键",
-            Self::Language => "语言",
-            Self::Plugins => "插件",
-            Self::Project => "主要设置",
+            Self::General => "General",
+            Self::Shortcuts => "Keyboard shortcuts",
+            Self::Language => "Language",
+            Self::Plugins => "Plugins",
+            Self::Project => "Main settings",
         }
     }
 }
@@ -41,7 +41,6 @@ pub struct Settings {
     pub(crate) search: Entity<TextInput>,
     pub(crate) focus: FocusHandle,
     pub(crate) draft: Preferences,
-    pub(crate) system_locale: Option<String>,
     pub(crate) fields: Vec<Entity<TextInput>>,
     pub(crate) project: bool,
     pub(crate) recording: Option<usize>,
@@ -77,7 +76,12 @@ impl Desktop {
         let store = self.store.clone();
         let owner = cx.weak_entity();
         let model = self.current.as_ref().map(|_| self.timeline.model.clone());
-        let options = crate::help::auxiliary_options("设置", 860.0, 600.0, cx);
+        let options = crate::help::auxiliary_options(
+            crate::i18n::t("settings", "Settings", cx),
+            860.0,
+            600.0,
+            cx,
+        );
         match cx.open_window(options, |window, cx| {
             cx.new(|cx| Settings::new(owner, store, model, tab, window, cx))
         }) {
@@ -134,8 +138,8 @@ pub(crate) fn close_with_owner<T: 'static>(handle: WindowHandle<T>, cx: &mut Con
 }
 
 impl Settings {
-    /// 创建独立焦点、用户偏好草稿及项目参数输入，并读取系统语言供自动选择解析。
-    /// 系统语言读取失败保留 None，由语言索引回退中文；搜索变化仅重绘侧栏。
+    /// 创建独立焦点、用户偏好草稿及项目参数输入，使用全局已应用语言，不重新解析草稿。
+    /// 语言变化重绘窗口和独立输入实体；搜索变化仅重绘侧栏。
     pub(crate) fn new(
         owner: WeakEntity<Desktop>,
         store: ProjectStore,
@@ -144,9 +148,12 @@ impl Settings {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
+        cx.observe_global::<crate::i18n::Locale>(|_, cx| cx.notify())
+            .detach();
         let search = cx.new(|cx| {
             let mut input = TextInput::new(String::new(), cx);
-            input.placeholder = "搜索设置";
+            input.placeholder = "Search settings";
+            input.placeholder_module = "settings";
             input.control_id = "settings-search";
             input
         });
@@ -179,7 +186,6 @@ impl Settings {
             search,
             focus,
             draft: cx.global::<UserPreferences>().0.clone(),
-            system_locale: sys_locale::get_locale(),
             fields,
             project: model.is_some(),
             recording: None,
@@ -193,28 +199,36 @@ impl Settings {
     pub(crate) fn matches(&self, tab: Tab, cx: &gpui::App) -> bool {
         let query = self.search.read(cx).text.trim().to_lowercase();
         let terms = match tab {
-            Tab::General => "拖动时实时预览",
-            Tab::Language => "界面语言 跟随系统",
-            Tab::Plugins => "插件",
-            Tab::Project => "项目设置 主轨 分辨率 宽度 高度 帧率 码率",
+            Tab::General => "Live preview while dragging",
+            Tab::Language => "Interface language Follow system",
+            Tab::Plugins => "Plugins",
+            Tab::Project => {
+                "Project settings Main track Resolution Width Height Frame rate Bitrate"
+            }
             Tab::Shortcuts => "",
         };
         query.is_empty()
-            || tab.label().contains(&query)
-            || terms.contains(&query)
+            || crate::i18n::t("settings", tab.label(), cx)
+                .to_lowercase()
+                .contains(&query)
+            || crate::i18n::lookup("zh-CN", "settings", tab.label()).contains(&query)
+            || crate::i18n::t("settings", terms, cx)
+                .to_lowercase()
+                .contains(&query)
+            || crate::i18n::lookup("zh-CN", "settings", terms).contains(&query)
             || (tab == Tab::Language
                 && dinuosi_core::language::LANGUAGES.iter().any(|item| {
-                    let locale = dinuosi_core::language::resolve(
-                        &cx.global::<UserPreferences>().0.language,
-                        self.system_locale.as_deref(),
-                    );
                     item.id.to_lowercase().contains(&query)
                         || item.native_name.to_lowercase().contains(&query)
-                        || item.name(locale).to_lowercase().contains(&query)
+                        || crate::i18n::t("settings", item.id, cx)
+                            .to_lowercase()
+                            .contains(&query)
                 }))
             || (tab == Tab::Shortcuts
                 && crate::shortcuts::SHORTCUTS.iter().any(|s| {
-                    s.label.contains(&query)
+                    crate::i18n::t("settings", s.label, cx)
+                        .to_lowercase()
+                        .contains(&query)
                         || crate::shortcuts::label(&crate::shortcuts::bindings(s, &self.draft))
                             .to_lowercase()
                             .contains(&query)

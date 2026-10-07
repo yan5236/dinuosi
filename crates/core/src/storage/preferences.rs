@@ -12,7 +12,7 @@ pub struct Preferences {
 }
 
 impl Default for Preferences {
-    /// 初始偏好保持实时拖动预览，语言跟随系统并回退简体中文；快捷键覆盖为空。
+    /// 初始偏好保持实时拖动预览，语言跟随系统并回退英文；快捷键覆盖为空。
     fn default() -> Self {
         Self {
             version: 1,
@@ -39,6 +39,7 @@ impl Preferences {
 
 impl ProjectStore {
     /// 从最近项目索引同目录读取用户偏好；文件不存在使用默认值，损坏时返回错误。
+    /// 旧版尚未实现的三种语言选择在内存中迁移为英文，保留其他偏好，不主动覆写磁盘。
     pub fn load_preferences(&self) -> Result<Preferences, String> {
         let path = self.index_path.with_file_name("preferences.json");
         let bytes = match fs::read(path) {
@@ -46,8 +47,11 @@ impl ProjectStore {
             Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(Preferences::default()),
             Err(e) => return Err(format!("读取用户设置失败：{e}")),
         };
-        let preferences: Preferences =
+        let mut preferences: Preferences =
             serde_json::from_slice(&bytes).map_err(|e| format!("用户设置损坏：{e}"))?;
+        if matches!(preferences.language.as_str(), "zh-TW" | "es" | "ru") {
+            preferences.language = "en".into();
+        }
         preferences.validate()?;
         Ok(preferences)
     }

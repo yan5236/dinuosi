@@ -1434,6 +1434,7 @@ dependencies = [
  "gpui",
  "image",
  "rodio",
+ "serde_json",
  "sys-locale",
  "unicode-segmentation",
 ]

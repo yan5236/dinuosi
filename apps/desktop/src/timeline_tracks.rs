@@ -7,6 +7,20 @@ use crate::{
 };
 use dinuosi_icons::Icon;
 use gpui::{Context, Div, MouseButton, div, prelude::*, px, rgb, svg};
+
+/// 按职责翻译默认轨道名；用户明确重命名后的名称保持原文，即使与某个默认名相同。
+pub(crate) fn track_name(track: &dinuosi_core::timeline::Track, cx: &gpui::App) -> String {
+    if track.custom_name {
+        return track.name.clone();
+    }
+    let key = match track.kind {
+        dinuosi_core::timeline::TrackKind::Main => "Main track",
+        dinuosi_core::timeline::TrackKind::Media => "Media track",
+        dinuosi_core::timeline::TrackKind::Audio => "Audio track",
+        dinuosi_core::timeline::TrackKind::Subtitle => "Subtitle track",
+    };
+    crate::i18n::t("timeline", key, cx).to_owned()
+}
 impl Desktop {
     /// 绘制实际轨道的名称、重命名、锁定、可见和静音控件，行高与片段严格共用。
     /// 自由轨道名称接入整体拖动；媒体、字幕和音频图标及静音入口按类型判断，不依赖行号。
@@ -61,7 +75,7 @@ impl Desktop {
                             .rename
                             .as_ref()
                             .is_none_or(|(i, _)| *i != index),
-                        |s| s.child(track.name.clone()),
+                        |s| s.child(track_name(track, cx)),
                     )
                     .when_some(
                         self.timeline.rename.as_ref().filter(|(i, _)| *i == index),
@@ -73,7 +87,7 @@ impl Desktop {
                     format!("track-rename-{index}"),
                     Icon::Edit,
                     true,
-                    "重命名轨道名",
+                    crate::i18n::t("timeline", "Rename track", cx),
                 )
                 .on_click(
                     cx.listener(move |this, _, window, cx| {
@@ -91,9 +105,9 @@ impl Desktop {
                     },
                     true,
                     if track.locked {
-                        "解锁轨道"
+                        crate::i18n::t("timeline", "Unlock track", cx)
                     } else {
-                        "锁定轨道"
+                        crate::i18n::t("timeline", "Lock track", cx)
                     },
                 )
                 .on_click(cx.listener(move |this, _, _, cx| this.toggle_track(index, 0, cx))),
@@ -108,9 +122,9 @@ impl Desktop {
                     },
                     true,
                     if track.visible {
-                        "隐藏轨道"
+                        crate::i18n::t("timeline", "Hide track", cx)
                     } else {
-                        "显示轨道"
+                        crate::i18n::t("timeline", "Show track", cx)
                     },
                 )
                 .on_click(cx.listener(move |this, _, _, cx| this.toggle_track(index, 1, cx))),
@@ -128,9 +142,9 @@ impl Desktop {
                             },
                             true,
                             if track.muted {
-                                "取消轨道静音"
+                                crate::i18n::t("timeline", "Unmute track", cx)
                             } else {
-                                "轨道静音"
+                                crate::i18n::t("timeline", "Mute track", cx)
                             },
                         )
                         .on_click(

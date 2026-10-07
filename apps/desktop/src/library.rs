@@ -28,12 +28,12 @@ impl Filter {
     /// 返回草图规定的分类顺序及专用 SVG，不增加素材计数或额外状态文字。
     pub fn items() -> [(Self, &'static str, Icon); 6] {
         [
-            (Self::All, "全部", Icon::AllMedia),
-            (Self::Video, "视频", Icon::Video),
-            (Self::Audio, "音频", Icon::Audio),
-            (Self::Image, "图片", Icon::Image),
-            (Self::Motion, "动效", Icon::Motion),
-            (Self::Effects, "特效", Icon::Effects),
+            (Self::All, "All", Icon::AllMedia),
+            (Self::Video, "Video", Icon::Video),
+            (Self::Audio, "Audio", Icon::Audio),
+            (Self::Image, "Images", Icon::Image),
+            (Self::Motion, "Motion", Icon::Motion),
+            (Self::Effects, "Effects", Icon::Effects),
         ]
     }
     /// 分类仅筛选已导入素材；动效/特效当前没有对应素材，列表保持空白。
@@ -50,9 +50,15 @@ impl Filter {
 
 impl Desktop {
     /// 创建左侧分类与右侧缩略图列表，接收资源管理器的多文件拖放；点击素材切换实时预览。
+    /// 分类图标固定为 18px 且禁止收缩；英文分类栏扩宽，缩略图网格按剩余宽度计算。
     pub(crate) fn library(&self, width: f32, cx: &mut Context<Self>) -> Div {
         let query = self.session.search.read(cx).text.to_lowercase();
-        let tile_width = ((width - 106.0) / 3.0 - 12.0).max(72.0);
+        let filter_width = if crate::i18n::locale(cx) == "en" {
+            96.0
+        } else {
+            84.0
+        };
+        let tile_width = ((width - filter_width - 22.0) / 3.0 - 12.0).max(72.0);
         div()
             .debug_selector(|| "素材库".into())
             .flex_none()
@@ -62,7 +68,8 @@ impl Desktop {
             .bg(rgb(PANEL))
             .child(
                 div()
-                    .w(px(84.0))
+                    .debug_selector(|| "library-filters".into())
+                    .w(px(filter_width))
                     .flex_none()
                     .h_full()
                     .border_r_1()
@@ -78,11 +85,14 @@ impl Desktop {
                             .gap(px(8.0))
                             .px(px(10.0))
                             .text_size(px(13.0))
+                            .whitespace_nowrap()
                             .cursor_pointer()
                             .when(self.session.filter == filter, |s| s.bg(rgb(LINE)))
                             .hover(|s| s.bg(rgb(LINE)))
-                            .child(svg().path(icon.path()).size(px(18.0)).text_color(rgb(TEXT)))
-                            .child(label)
+                            .child(svg().path(icon.path()).size(px(18.0)).flex_none()
+                                .debug_selector(move || format!("filter-icon-{}", icon.name()))
+                                .text_color(rgb(TEXT)))
+                            .child(crate::i18n::t("library", label, cx))
                             .on_click(cx.listener(move |this, _, _, cx| {
                                 this.session.filter = filter;
                                 cx.notify();
@@ -197,7 +207,7 @@ impl Desktop {
                                                         .when(media.offline, |s| {
                                                             s.child(
                                                                 crate::media_status::offline_view(
-                                                                    true,
+                                                                    true, cx,
                                                                 ),
                                                             )
                                                         })
@@ -269,7 +279,7 @@ impl Desktop {
             files: true,
             directories: false,
             multiple: true,
-            prompt: Some("导入素材".into()),
+            prompt: Some(crate::i18n::t("library", "Import media", cx).into()),
         });
         cx.spawn_in(window, async move |this, cx| {
             let result = receiver.await;
@@ -345,7 +355,8 @@ impl Desktop {
 pub fn search(cx: &mut Context<Desktop>) -> gpui::Entity<TextInput> {
     let search = cx.new(|cx| {
         let mut input = TextInput::new(String::new(), cx);
-        input.placeholder = "搜索文件名";
+        input.placeholder = "Search filenames";
+        input.placeholder_module = "library";
         input.control_id = "media-search";
         input.show_border = false;
         input

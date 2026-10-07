@@ -36,7 +36,7 @@ impl Desktop {
                     .overflow_hidden()
                     .bg(rgb(PANEL))
                     .when(offline, |s| {
-                        s.child(crate::media_status::offline_view(false))
+                        s.child(crate::media_status::offline_view(false, cx))
                     })
                     .when_some(
                         if self.timeline.preview {
@@ -274,19 +274,23 @@ impl Desktop {
             )
             .when(enabled && !self.timeline.preview, |s| {
                 s.child(
-                    pill("add-to-track", "添加至轨道", 82.0, 24.0).on_click(cx.listener(
-                        |this, _, window, cx| {
-                            if let Some(index) = this.session.selected {
-                                this.insert_media_clip(
-                                    index,
-                                    this.timeline.model.main_track(),
-                                    this.timeline.model.frame(this.session.timeline_position),
-                                    window,
-                                    cx,
-                                );
-                            }
-                        },
-                    )),
+                    pill(
+                        "add-to-track",
+                        crate::i18n::t("editor", "Add to track", cx),
+                        82.0,
+                        24.0,
+                    )
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        if let Some(index) = this.session.selected {
+                            this.insert_media_clip(
+                                index,
+                                this.timeline.model.main_track(),
+                                this.timeline.model.frame(this.session.timeline_position),
+                                window,
+                                cx,
+                            );
+                        }
+                    })),
                 )
             })
             .child(

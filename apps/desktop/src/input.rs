@@ -20,6 +20,7 @@ pub struct TextInput {
     scroll: Pixels,
     selecting: bool,
     pub(crate) placeholder: &'static str,
+    pub(crate) placeholder_module: &'static str,
     pub(crate) control_id: &'static str,
     pub(crate) show_border: bool,
     pub(crate) compact: bool,
@@ -32,6 +33,8 @@ impl TextInput {
     }
     /// 初始化项目名称输入，默认全选已有名称；首次创建可立即覆盖“未命名项目”。
     pub fn new(text: String, cx: &mut Context<Self>) -> Self {
+        cx.observe_global::<crate::i18n::Locale>(|_, cx| cx.notify())
+            .detach();
         let caret = text.len();
         Self {
             text,
@@ -44,6 +47,7 @@ impl TextInput {
             scroll: px(0.0),
             selecting: false,
             placeholder: "",
+            placeholder_module: "common",
             control_id: "project-name",
             show_border: true,
             compact: false,
@@ -348,7 +352,8 @@ impl Render for TextInput {
                         let input = input.read(cx);
                         let empty = input.text.is_empty();
                         let text = if empty {
-                            input.placeholder.to_owned()
+                            crate::i18n::t(input.placeholder_module, input.placeholder, cx)
+                                .to_owned()
                         } else {
                             input.text.clone()
                         };

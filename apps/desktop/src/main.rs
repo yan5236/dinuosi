@@ -5,6 +5,7 @@ mod audio_inspector;
 mod dialogs;
 mod editor;
 mod help;
+mod i18n;
 mod input;
 mod inspector;
 mod library;
@@ -43,6 +44,8 @@ mod windows;
 mod audio_track_tests;
 #[cfg(test)]
 mod editor_media_tests;
+#[cfg(test)]
+mod i18n_tests;
 #[cfg(test)]
 mod preview_transform_tests;
 #[cfg(test)]

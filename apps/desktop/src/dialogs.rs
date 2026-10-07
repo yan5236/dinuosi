@@ -39,7 +39,7 @@ impl Dialog {
     /// 初始化所选操作的表单；删除默认不勾选目录，新建目录必须由用户显式选择。
     pub(crate) fn new(kind: DialogKind, store: &ProjectStore, cx: &mut Context<Desktop>) -> Self {
         let name = match &kind {
-            DialogKind::Create => Some("未命名项目".into()),
+            DialogKind::Create => Some(crate::i18n::t("dialogs", "Untitled project", cx).into()),
             DialogKind::Rename(entry) => Some(entry.name.clone()),
             DialogKind::RenameMedia { name, .. } => Some(name.clone()),
             DialogKind::Delete(_) => None,
@@ -98,7 +98,7 @@ impl Desktop {
             files: false,
             directories: true,
             multiple: false,
-            prompt: Some("选择项目存放目录".into()),
+            prompt: Some(crate::i18n::t("dialogs", "Choose project folder", cx).into()),
         });
         cx.spawn_in(window, async move |this, cx| {
             let result = receiver.await;
@@ -234,10 +234,22 @@ impl Desktop {
     pub(crate) fn dialog_view(&self, cx: &mut Context<Self>) -> gpui::Stateful<Div> {
         let dialog = self.dialog.as_ref().expect("仅在弹窗存在时渲染");
         let (title, submit) = match dialog.kind {
-            DialogKind::Create => ("新建项目", "创建"),
-            DialogKind::Rename(_) => ("重命名项目", "保存"),
-            DialogKind::RenameMedia { .. } => ("重命名素材", "保存"),
-            DialogKind::Delete(_) => ("删除项目", "删除"),
+            DialogKind::Create => (
+                crate::i18n::t("dialogs", "New project", cx),
+                crate::i18n::t("dialogs", "Create", cx),
+            ),
+            DialogKind::Rename(_) => (
+                crate::i18n::t("dialogs", "Rename project", cx),
+                crate::i18n::t("dialogs", "Save", cx),
+            ),
+            DialogKind::RenameMedia { .. } => (
+                crate::i18n::t("dialogs", "Rename media", cx),
+                crate::i18n::t("dialogs", "Save", cx),
+            ),
+            DialogKind::Delete(_) => (
+                crate::i18n::t("dialogs", "Delete project", cx),
+                crate::i18n::t("dialogs", "Delete", cx),
+            ),
         };
         div()
             .occlude()
@@ -278,9 +290,9 @@ impl Desktop {
                                 .gap(px(8.0))
                                 .child(div().text_size(px(12.0)).text_color(rgb(MUTED)).child(
                                     if matches!(dialog.kind, DialogKind::RenameMedia { .. }) {
-                                        "素材名称"
+                                        crate::i18n::t("dialogs", "Media name", cx)
                                     } else {
-                                        "项目名称"
+                                        crate::i18n::t("dialogs", "Project name", cx)
                                     },
                                 ))
                                 .child(name),
@@ -296,7 +308,7 @@ impl Desktop {
                                     div()
                                         .text_size(px(12.0))
                                         .text_color(rgb(MUTED))
-                                        .child("项目目录"),
+                                        .child(crate::i18n::t("dialogs", "Project folder", cx)),
                                 )
                                 .child(
                                     div()
@@ -333,7 +345,14 @@ impl Desktop {
                                                         .directory
                                                         .as_ref()
                                                         .map(|p| display_path(p))
-                                                        .unwrap_or_else(|| "选择存放目录…".into()),
+                                                        .unwrap_or_else(|| {
+                                                            crate::i18n::t(
+                                                                "dialogs",
+                                                                "Choose project folder…",
+                                                                cx,
+                                                            )
+                                                            .into()
+                                                        }),
                                                 ),
                                         )
                                         .on_click(cx.listener(|this, _, window, cx| {
@@ -353,7 +372,12 @@ impl Desktop {
                                     .flex()
                                     .flex_col()
                                     .gap(px(12.0))
-                                    .child(format!("确定删除“{}”？", entry.name))
+                                    .child(crate::i18n::f(
+                                        "dialogs",
+                                        "Delete “{name}”?",
+                                        &[("name", entry.name.clone())],
+                                        cx,
+                                    ))
                                     .child(
                                         div()
                                             .id("delete-folder")
@@ -385,11 +409,11 @@ impl Desktop {
                                                         )
                                                     }),
                                             )
-                                            .child(
-                                                div()
-                                                    .text_size(px(13.0))
-                                                    .child("同时删除项目源文件夹（不可恢复）"),
-                                            )
+                                            .child(div().text_size(px(13.0)).child(crate::i18n::t(
+                                                "dialogs",
+                                                "Also delete the project source folder (permanent)",
+                                                cx,
+                                            )))
                                             .on_click(cx.listener(|this, _, _, cx| {
                                                 if !this.busy
                                                     && let Some(dialog) = &mut this.dialog
@@ -407,7 +431,7 @@ impl Desktop {
                         div()
                             .text_size(px(12.0))
                             .text_color(rgb(0xe0a7a7))
-                            .child(error)
+                            .child(crate::i18n::error(&error, cx))
                     }))
                     .child(
                         div()
@@ -416,17 +440,28 @@ impl Desktop {
                             .gap(px(12.0))
                             .mt(px(4.0))
                             .child(
-                                pill("dialog-cancel", "取消", 90.0, 34.0)
-                                    .track_focus(&dialog.cancel_focus)
-                                    .focus(|s| s.border_color(rgb(TEXT)))
-                                    .on_click(cx.listener(|this, _, window, cx| {
+                                pill(
+                                    "dialog-cancel",
+                                    crate::i18n::t("dialogs", "Cancel", cx),
+                                    90.0,
+                                    34.0,
+                                )
+                                .track_focus(&dialog.cancel_focus)
+                                .focus(|s| s.border_color(rgb(TEXT)))
+                                .on_click(
+                                    cx.listener(|this, _, window, cx| {
                                         this.cancel_dialog(window, cx)
-                                    })),
+                                    }),
+                                ),
                             )
                             .child(
                                 pill(
                                     "dialog-submit",
-                                    if self.busy { "处理中…" } else { submit },
+                                    if self.busy {
+                                        crate::i18n::t("dialogs", "Processing…", cx)
+                                    } else {
+                                        submit
+                                    },
                                     90.0,
                                     34.0,
                                 )

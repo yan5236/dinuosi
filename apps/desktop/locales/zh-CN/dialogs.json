@@ -1,0 +1,19 @@
+{
+  "Untitled project": "未命名项目",
+  "Choose project folder": "选择项目存放目录",
+  "New project": "新建项目",
+  "Create": "创建",
+  "Rename project": "重命名项目",
+  "Save": "保存",
+  "Rename media": "重命名素材",
+  "Delete project": "删除项目",
+  "Delete": "删除",
+  "Media name": "素材名称",
+  "Project name": "项目名称",
+  "Project folder": "项目目录",
+  "Choose project folder…": "选择存放目录…",
+  "Also delete the project source folder (permanent)": "同时删除项目源文件夹（不可恢复）",
+  "Cancel": "取消",
+  "Processing…": "处理中…",
+  "Delete “{name}”?": "确定删除“{name}”？"
+}

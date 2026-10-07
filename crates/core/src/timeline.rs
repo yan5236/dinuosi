@@ -158,6 +158,8 @@ pub fn volume_ratio(gain: f64) -> f64 {
 pub struct Track {
     pub kind: TrackKind,
     pub name: String,
+    /// 用户重命名后原样展示；默认名称由界面按轨道类型翻译。
+    pub custom_name: bool,
     pub locked: bool,
     pub visible: bool,
     pub muted: bool,
@@ -186,6 +188,7 @@ impl Default for Timeline {
             tracks: vec![Track {
                 kind: TrackKind::Main,
                 name: "主轨".into(),
+                custom_name: false,
                 locked: false,
                 visible: true,
                 muted: false,

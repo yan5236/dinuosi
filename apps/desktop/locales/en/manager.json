@@ -1,0 +1,17 @@
+{
+  "New project": "New project",
+  "Open project": "Open project",
+  "Settings": "Settings",
+  "No projects": "No projects",
+  "Rename": "Rename",
+  "Delete project": "Delete project",
+  "Just now": "Just now",
+  "Created: {time}": "Created: {time}",
+  "Modified: {time}": "Modified: {time}",
+  "{count} minute ago": "{count} minute ago",
+  "{count} minutes ago": "{count} minutes ago",
+  "{count} hour ago": "{count} hour ago",
+  "{count} hours ago": "{count} hours ago",
+  "{count} day ago": "{count} day ago",
+  "{count} days ago": "{count} days ago"
+}

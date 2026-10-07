@@ -22,7 +22,7 @@ pub(crate) fn check_sources(items: Vec<Media>) -> Vec<Media> {
 }
 
 /// 构造暗红色离线占位；缩略图与预览复用同一图标和文字，仅按空间调整大小。
-pub(crate) fn offline_view(compact: bool) -> Div {
+pub(crate) fn offline_view(compact: bool, cx: &gpui::App) -> Div {
     div()
         .size_full()
         .flex()
@@ -39,7 +39,7 @@ pub(crate) fn offline_view(compact: bool) -> Div {
                 .size(px(if compact { 22.0 } else { 48.0 }))
                 .text_color(rgb(0xe0c7c9)),
         )
-        .child("媒体离线")
+        .child(crate::i18n::t("library", "Media offline", cx))
 }
 
 impl Desktop {

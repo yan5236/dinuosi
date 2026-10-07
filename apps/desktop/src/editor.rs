@@ -99,7 +99,7 @@ impl Desktop {
                     .border_color(rgb(LINE))
                     .text_size(px(12.0))
                     .text_color(rgb(MUTED))
-                    .child("当前任务：无"),
+                    .child(crate::i18n::t("editor", "Current task: None", cx)),
             )
     }
 
@@ -143,9 +143,9 @@ impl Desktop {
                             *icon == Icon::Select
                                 || (*icon == Icon::Trash && !self.timeline.selected.is_empty()),
                             if *icon == Icon::Lock {
-                                "锁定片段"
+                                crate::i18n::t("editor", "Lock clip", cx)
                             } else {
-                                icon.label()
+                                crate::i18n::t("icons", icon.name(), cx)
                             },
                         )
                         .selected(*icon == Icon::Select)
@@ -161,13 +161,23 @@ impl Desktop {
             }))
             .child(div().flex_1())
             .child(
-                crate::tooltip::Tooltip::tool("zoom-out", Icon::ZoomOut, true, "缩小时间线")
-                    .on_click(cx.listener(|this, _, _, cx| this.change_zoom(-0.25, cx))),
+                crate::tooltip::Tooltip::tool(
+                    "zoom-out",
+                    Icon::ZoomOut,
+                    true,
+                    crate::i18n::t("editor", "Zoom out timeline", cx),
+                )
+                .on_click(cx.listener(|this, _, _, cx| this.change_zoom(-0.25, cx))),
             )
             .child(self.slider(crate::sliders::Pointer::Zoom, 110.0, cx))
             .child(
-                crate::tooltip::Tooltip::tool("zoom-in", Icon::ZoomIn, true, "放大时间线")
-                    .on_click(cx.listener(|this, _, _, cx| this.change_zoom(0.25, cx))),
+                crate::tooltip::Tooltip::tool(
+                    "zoom-in",
+                    Icon::ZoomIn,
+                    true,
+                    crate::i18n::t("editor", "Zoom in timeline", cx),
+                )
+                .on_click(cx.listener(|this, _, _, cx| this.change_zoom(0.25, cx))),
             )
     }
 

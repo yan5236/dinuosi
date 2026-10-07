@@ -23,7 +23,12 @@ impl Desktop {
                     .cursor_pointer()
                     .mr(px(22.0))
                     .child(brand(42.0))
-                    .tooltip(|_, cx| cx.new(|_| ui::Hint("项目管理".into())).into())
+                    .tooltip(|_, cx| {
+                        cx.new(|cx| {
+                            ui::Hint(crate::i18n::t("editor", "Project manager", cx).into())
+                        })
+                        .into()
+                    })
                     .on_click(cx.listener(|this, _, window, cx| this.show_manager(window, cx))),
             )
             .child(
@@ -34,7 +39,7 @@ impl Desktop {
                     .py(px(8.0))
                     .cursor_pointer()
                     .hover(|s| s.bg(rgb(crate::ui::PANEL)))
-                    .child("文件")
+                    .child(crate::i18n::t("editor", "File", cx))
                     .on_click(cx.listener(|this, _, _, cx| {
                         if !this.busy {
                             this.menu_open = !this.menu_open;
@@ -51,8 +56,10 @@ impl Desktop {
                     .py(px(8.0))
                     .cursor_pointer()
                     .hover(|s| s.bg(rgb(crate::ui::PANEL)))
-                    .child("编辑")
-                    .on_click(cx.listener(|this, _, _, cx| this.inform("暂无可编辑的片段", cx))),
+                    .child(crate::i18n::t("editor", "Edit", cx))
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.inform(crate::i18n::t("editor", "No clips to edit", cx), cx)
+                    })),
             )
             .child(
                 div()
@@ -61,7 +68,7 @@ impl Desktop {
                     .py(px(8.0))
                     .cursor_pointer()
                     .hover(|s| s.bg(rgb(crate::ui::PANEL)))
-                    .child("帮助")
+                    .child(crate::i18n::t("editor", "Help", cx))
                     .on_click(cx.listener(|this, _, _, cx| {
                         this.help_open = !this.help_open;
                         this.menu_open = false;
@@ -70,9 +77,19 @@ impl Desktop {
             )
             .child(ui::title_drag())
             .child(
-                pill("export", "导出", 110.0, 26.0)
-                    .mr(px(18.0))
-                    .on_click(cx.listener(|this, _, _, cx| this.inform("导出尚未开放", cx))),
+                pill(
+                    "export",
+                    crate::i18n::t("editor", "Export", cx),
+                    110.0,
+                    26.0,
+                )
+                .mr(px(18.0))
+                .on_click(cx.listener(|this, _, _, cx| {
+                    this.inform(
+                        crate::i18n::t("editor", "Export is not available yet", cx),
+                        cx,
+                    )
+                })),
             )
             .child(ui::window_controls(window, true))
     }
@@ -96,7 +113,7 @@ impl Desktop {
                     .p(px(10.0))
                     .cursor_pointer()
                     .hover(|s| s.bg(rgb(LINE)))
-                    .child("新建项目")
+                    .child(crate::i18n::t("editor", "New project", cx))
                     .on_click(cx.listener(|this, _, window, cx| {
                         this.show_dialog(DialogKind::Create, window, cx)
                     })),
@@ -108,7 +125,7 @@ impl Desktop {
                     .p(px(10.0))
                     .cursor_pointer()
                     .hover(|s| s.bg(rgb(LINE)))
-                    .child("导入素材")
+                    .child(crate::i18n::t("editor", "Import media", cx))
                     .on_click(cx.listener(|this, event, window, cx| {
                         this.menu_open = false;
                         this.choose_media(event, window, cx);
@@ -121,7 +138,7 @@ impl Desktop {
                     .p(px(10.0))
                     .cursor_pointer()
                     .hover(|s| s.bg(rgb(LINE)))
-                    .child("项目管理")
+                    .child(crate::i18n::t("editor", "Project manager", cx))
                     .on_click(cx.listener(|this, _, window, cx| this.show_manager(window, cx))),
             )
             .child(
@@ -131,7 +148,7 @@ impl Desktop {
                     .p(px(10.0))
                     .cursor_pointer()
                     .hover(|s| s.bg(rgb(LINE)))
-                    .child("设置")
+                    .child(crate::i18n::t("editor", "Settings", cx))
                     .on_click(cx.listener(|this, _, _, cx| {
                         this.open_settings(crate::settings::Tab::General, cx)
                     })),
@@ -142,7 +159,7 @@ impl Desktop {
                     .p(px(10.0))
                     .cursor_pointer()
                     .hover(|s| s.bg(rgb(LINE)))
-                    .child("关闭窗口")
+                    .child(crate::i18n::t("editor", "Close window", cx))
                     .on_click(cx.listener(|this, _, window, _| {
                         if !this.busy {
                             window.remove_window();

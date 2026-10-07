@@ -144,7 +144,7 @@ fn settings_switch_toggles_draft_without_applying(cx: &mut TestAppContext) {
 }
 
 /// 点击全部语言行验证三列对齐、单选草稿隔离及应用/重开持久化；键盘选择不冒泡应用。
-/// 系统语言固定为中文以消除测试机器差异，所有磁盘写入限制在独占临时目录。
+/// 界面初始语言固定为中文以消除测试机器差异，所有磁盘写入限制在独占临时目录。
 #[gpui::test]
 fn language_rows_select_and_persist(cx: &mut TestAppContext) {
     let root = std::env::temp_dir().join(format!("dinuosi-language-ui-{}", std::process::id()));
@@ -154,7 +154,7 @@ fn language_rows_select_and_persist(cx: &mut TestAppContext) {
         cx.add_window_view(|window, cx| Desktop::new(store.clone(), None, window, cx));
     editor.run_until_parked();
     let (settings, visual) = cx.add_window_view(|window, cx| {
-        let mut view = Settings::new(
+        let view = Settings::new(
             desktop.downgrade(),
             store.clone(),
             None,
@@ -162,7 +162,7 @@ fn language_rows_select_and_persist(cx: &mut TestAppContext) {
             window,
             cx,
         );
-        view.system_locale = Some("zh-CN".into());
+        crate::i18n::apply("zh-CN", cx);
         view
     });
     visual.simulate_resize(size(px(860.0), px(600.0)));
@@ -183,32 +183,11 @@ fn language_rows_select_and_persist(cx: &mut TestAppContext) {
             "language-check-zh-CN",
         ),
         (
-            "zh-TW",
-            "language-zh-TW",
-            "language-native-zh-TW",
-            "language-name-zh-TW",
-            "language-check-zh-TW",
-        ),
-        (
             "en",
             "language-en",
             "language-native-en",
             "language-name-en",
             "language-check-en",
-        ),
-        (
-            "es",
-            "language-es",
-            "language-native-es",
-            "language-name-es",
-            "language-check-es",
-        ),
-        (
-            "ru",
-            "language-ru",
-            "language-native-ru",
-            "language-name-ru",
-            "language-check-ru",
         ),
     ];
     let native_x = visual.debug_bounds("language-native-en").unwrap().origin.x;
@@ -248,14 +227,15 @@ fn language_rows_select_and_persist(cx: &mut TestAppContext) {
     click(visual, "language-en");
     visual.simulate_keystrokes("enter");
     visual.run_until_parked();
-    assert_eq!(store.load_preferences().unwrap().language, "ru");
-    visual.simulate_keystrokes("tab space");
+    assert_eq!(store.load_preferences().unwrap().language, "en");
+    click(visual, "language-auto");
+    visual.simulate_keystrokes("space");
     visual.run_until_parked();
     assert_eq!(
         settings.read_with(visual, |s, _| s.draft.language.clone()),
-        "es"
+        "auto"
     );
-    assert_eq!(store.load_preferences().unwrap().language, "ru");
+    assert_eq!(store.load_preferences().unwrap().language, "en");
     click(visual, "settings-search");
     visual.simulate_input("English");
     visual.run_until_parked();
@@ -266,7 +246,7 @@ fn language_rows_select_and_persist(cx: &mut TestAppContext) {
     });
     assert_eq!(
         reopened.read_with(other, |s, _| s.draft.language.clone()),
-        "ru"
+        "en"
     );
     std::fs::remove_dir_all(root).unwrap();
 }

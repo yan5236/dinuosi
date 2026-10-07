@@ -26,6 +26,7 @@ impl Timeline {
                     _ => "媒体轨道",
                 }
                 .into(),
+                custom_name: false,
                 locked: false,
                 visible: true,
                 muted: false,

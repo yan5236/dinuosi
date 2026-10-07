@@ -1,0 +1,17 @@
+{
+  "New project": "新建项目",
+  "Open project": "打开项目",
+  "Settings": "设置",
+  "No projects": "暂无项目",
+  "Rename": "重命名",
+  "Delete project": "删除项目",
+  "Just now": "刚刚",
+  "Created: {time}": "创建：{time}",
+  "Modified: {time}": "修改：{time}",
+  "{count} minute ago": "{count} 分钟前",
+  "{count} minutes ago": "{count} 分钟前",
+  "{count} hour ago": "{count} 小时前",
+  "{count} hours ago": "{count} 小时前",
+  "{count} day ago": "{count} 天前",
+  "{count} days ago": "{count} 天前"
+}

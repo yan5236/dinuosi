@@ -5,7 +5,7 @@ use crate::{
     switch::Switch,
     ui::{self, BACKGROUND, LINE, MUTED, PANEL, TEXT},
 };
-use dinuosi_core::language::{self, LANGUAGES};
+use dinuosi_core::language::LANGUAGES;
 use dinuosi_icons::Icon;
 use gpui::{Context, Div, Render, Stateful, Window, div, prelude::*, px, rgb};
 
@@ -46,7 +46,7 @@ impl Settings {
         let content = div().flex().flex_col().gap(px(8.0));
         match self.tab {
             Tab::General => content.child(row(
-                "拖动时实时预览",
+                crate::i18n::t("settings", "Live preview while dragging", cx),
                 Switch::new(
                     "live-scrub",
                     self.draft.live_scrub,
@@ -57,12 +57,15 @@ impl Settings {
                 ),
             )),
             Tab::Language => self.language_list(cx),
-            Tab::Plugins => {
-                content.child(div().py(px(20.0)).text_color(rgb(MUTED)).child("暂无插件"))
-            }
+            Tab::Plugins => content.child(
+                div()
+                    .py(px(20.0))
+                    .text_color(rgb(MUTED))
+                    .child(crate::i18n::t("settings", "No plugins", cx)),
+            ),
             Tab::Project => content
                 .child(row(
-                    "主轨分辨率",
+                    crate::i18n::t("settings", "Main track resolution", cx),
                     div()
                         .w(px(278.0))
                         .flex()
@@ -73,11 +76,11 @@ impl Settings {
                         .child(self.fields[1].clone()),
                 ))
                 .child(row(
-                    "帧率（fps）",
+                    crate::i18n::t("settings", "Frame rate (fps)", cx),
                     div().w(px(160.0)).child(self.fields[2].clone()),
                 ))
                 .child(row(
-                    "码率（kbps）",
+                    crate::i18n::t("settings", "Bitrate (kbps)", cx),
                     div().w(px(160.0)).child(self.fields[3].clone()),
                 )),
             Tab::Shortcuts => {
@@ -89,8 +92,12 @@ impl Settings {
                             .enumerate()
                             .filter(|(_, item)| {
                                 query.is_empty()
-                                    || Tab::Shortcuts.label().contains(&query)
-                                    || item.label.contains(&query)
+                                    || crate::i18n::t("settings", Tab::Shortcuts.label(), cx)
+                                        .to_lowercase()
+                                        .contains(&query)
+                                    || crate::i18n::t("settings", item.label, cx)
+                                        .to_lowercase()
+                                        .contains(&query)
                                     || shortcuts::label(&shortcuts::bindings(item, &self.draft))
                                         .to_lowercase()
                                         .contains(&query)
@@ -98,12 +105,17 @@ impl Settings {
                             .map(|(index, item)| {
                                 let keys = shortcuts::bindings(item, &self.draft);
                                 let text = if self.recording == Some(index) {
-                                    "按下快捷键…".into()
+                                    crate::i18n::t("settings", "Press a shortcut…", cx).into()
                                 } else {
-                                    shortcuts::label(&keys)
+                                    crate::i18n::lookup(
+                                        crate::i18n::locale(cx),
+                                        "settings",
+                                        &shortcuts::label(&keys),
+                                    )
+                                    .to_owned()
                                 };
                                 row(
-                                    item.label,
+                                    crate::i18n::t("settings", item.label, cx),
                                     div()
                                         .flex()
                                         .gap(px(6.0))
@@ -120,49 +132,52 @@ impl Settings {
                                                     },
                                                 )),
                                         )
-                                        .child(button(("clear", index), "清除").on_click(
-                                            cx.listener(move |this, _, _, cx| {
-                                                this.draft
-                                                    .shortcuts
-                                                    .insert(item.id.into(), Vec::new());
-                                                this.recording = None;
-                                                this.error = None;
-                                                cx.notify();
-                                            }),
-                                        )),
+                                        .child(
+                                            button(
+                                                ("clear", index),
+                                                crate::i18n::t("settings", "Clear", cx),
+                                            )
+                                            .on_click(
+                                                cx.listener(move |this, _, _, cx| {
+                                                    this.draft
+                                                        .shortcuts
+                                                        .insert(item.id.into(), Vec::new());
+                                                    this.recording = None;
+                                                    this.error = None;
+                                                    cx.notify();
+                                                }),
+                                            ),
+                                        ),
                                 )
                             }),
                     )
                     .child(
-                        button("reset-shortcuts", "恢复默认快捷键")
-                            .debug_selector(|| "reset-shortcuts".into())
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.draft.shortcuts.clear();
-                                this.recording = None;
-                                this.error = None;
-                                cx.notify();
-                            })),
+                        button(
+                            "reset-shortcuts",
+                            crate::i18n::t("settings", "Restore default shortcuts", cx),
+                        )
+                        .debug_selector(|| "reset-shortcuts".into())
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.draft.shortcuts.clear();
+                            this.recording = None;
+                            this.error = None;
+                            cx.notify();
+                        })),
                     )
             }
         }
     }
 
-    /// 绘制索引中的六个语言行，三列固定为 28px 勾选区、160px 自称及弹性译名区。
-    /// 点击或空格/Enter 仅更新单选草稿；译名使用已应用偏好，auto 按系统语言解析。
+    /// 绘制三个有效语言行，三列为勾选、自称及已应用界面语言的译名。
+    /// 点击或空格/Enter 仅更新单选草稿，应用成功后所有窗口刷新。
     fn language_list(&self, cx: &mut Context<Self>) -> Div {
-        let locale = language::resolve(
-            &cx.global::<crate::preferences::UserPreferences>()
-                .0
-                .language,
-            self.system_locale.as_deref(),
-        );
         div()
             .flex()
             .flex_col()
             .children(LANGUAGES.iter().map(|item| {
                 let id = item.id;
                 let checked = self.draft.language == id;
-                let name = item.name(locale);
+                let name = crate::i18n::t("settings", item.id, cx);
                 div()
                     .id(id)
                     .debug_selector(move || format!("language-{id}"))
@@ -230,6 +245,10 @@ impl Settings {
 impl Render for Settings {
     /// 渲染独立窗口与搜索结果；底部取消/应用复用导出胶囊按钮，错误只展示实际操作失败。
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        window.set_window_title(&format!(
+            "Dinuosi - {}",
+            crate::i18n::t("settings", "Settings", cx)
+        ));
         let tabs: Vec<_> = TABS
             .into_iter()
             .filter(|t| (*t != Tab::Project || self.project) && self.matches(*t, cx))
@@ -256,7 +275,7 @@ impl Render for Settings {
                     .px(px(16.0))
                     .flex()
                     .items_center()
-                    .child("设置")
+                    .child(crate::i18n::t("settings", "Settings", cx))
                     .child(ui::title_drag())
                     .child(ui::window_controls(window, false)),
             )
@@ -285,7 +304,11 @@ impl Render for Settings {
                                                 .pb(px(8.0))
                                                 .px(px(12.0))
                                                 .text_color(rgb(MUTED))
-                                                .child("项目设置"),
+                                                .child(crate::i18n::t(
+                                                    "settings",
+                                                    "Project settings",
+                                                    cx,
+                                                )),
                                         )
                                     })
                                     .child(
@@ -301,7 +324,7 @@ impl Render for Settings {
                                             .cursor_pointer()
                                             .when(tab == self.tab, |s| s.bg(rgb(LINE)))
                                             .hover(|s| s.bg(rgb(PANEL)))
-                                            .child(tab.label())
+                                            .child(crate::i18n::t("settings", tab.label(), cx))
                                             .on_click(cx.listener(move |this, _, window, cx| {
                                                 this.tab = tab;
                                                 this.recording = None;
@@ -321,15 +344,20 @@ impl Render for Settings {
                             .p(px(24.0))
                             .when(!tabs.is_empty(), |s| {
                                 s.child(
-                                    div()
-                                        .text_size(px(18.0))
-                                        .mb(px(18.0))
-                                        .child(self.tab.label()),
+                                    div().text_size(px(18.0)).mb(px(18.0)).child(crate::i18n::t(
+                                        "settings",
+                                        self.tab.label(),
+                                        cx,
+                                    )),
                                 )
                                 .child(self.body(cx))
                             })
                             .when(tabs.is_empty(), |s| {
-                                s.child(div().text_color(rgb(MUTED)).child("无匹配设置"))
+                                s.child(div().text_color(rgb(MUTED)).child(crate::i18n::t(
+                                    "settings",
+                                    "No matching settings",
+                                    cx,
+                                )))
                             }),
                     ),
             )
@@ -346,17 +374,27 @@ impl Render for Settings {
                         div()
                             .flex_1()
                             .text_color(rgb(0xe6a39c))
-                            .children(self.error.clone()),
+                            .children(self.error.as_ref().map(|e| crate::i18n::error(e, cx))),
                     )
                     .child(
-                        ui::pill("settings-close", "取消", 110.0, 26.0)
-                            .on_click(|_, window, _| window.remove_window()),
+                        ui::pill(
+                            "settings-close",
+                            crate::i18n::t("settings", "Cancel", cx),
+                            110.0,
+                            26.0,
+                        )
+                        .on_click(|_, window, _| window.remove_window()),
                     )
                     .when(!tabs.is_empty() && self.tab != Tab::Plugins, |s| {
                         s.child(
-                            ui::pill("settings-apply", "应用", 110.0, 26.0)
-                                .debug_selector(|| "settings-apply".into())
-                                .on_click(cx.listener(|this, _, _, cx| this.apply(cx))),
+                            ui::pill(
+                                "settings-apply",
+                                crate::i18n::t("settings", "Apply", cx),
+                                110.0,
+                                26.0,
+                            )
+                            .debug_selector(|| "settings-apply".into())
+                            .on_click(cx.listener(|this, _, _, cx| this.apply(cx))),
                         )
                     }),
             )

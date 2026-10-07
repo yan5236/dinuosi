@@ -25,49 +25,49 @@ pub const SHORTCUTS: &[Shortcut] = &[
     Shortcut {
         command: Command::New,
         id: "new",
-        label: "新建项目",
+        label: "New project",
         defaults: &["ctrl-n"],
     },
     Shortcut {
         command: Command::Open,
         id: "open",
-        label: "打开项目",
+        label: "Open project",
         defaults: &["ctrl-o"],
     },
     Shortcut {
         command: Command::Home,
         id: "home",
-        label: "项目管理",
+        label: "Project manager",
         defaults: &["ctrl-h"],
     },
     Shortcut {
         command: Command::Delete,
         id: "delete",
-        label: "删除片段",
+        label: "Delete clip",
         defaults: &["delete", "backspace"],
     },
     Shortcut {
         command: Command::Undo,
         id: "undo",
-        label: "撤销",
+        label: "Undo",
         defaults: &["ctrl-z"],
     },
     Shortcut {
         command: Command::Redo,
         id: "redo",
-        label: "重做",
+        label: "Redo",
         defaults: &["ctrl-y", "ctrl-shift-z"],
     },
     Shortcut {
         command: Command::Play,
         id: "play",
-        label: "播放 / 暂停",
+        label: "Play / Pause",
         defaults: &["space"],
     },
     Shortcut {
         command: Command::Settings,
         id: "settings",
-        label: "设置",
+        label: "Settings",
         defaults: &["ctrl-,"],
     },
 ];
@@ -125,7 +125,7 @@ pub fn resolve(stroke: &Keystroke, preferences: &Preferences) -> Option<Command>
 /// 把存储键名转换成易读显示；多默认键保留各自完整组合。
 pub fn label(keys: &[String]) -> String {
     if keys.is_empty() {
-        return "未绑定".into();
+        return "Unassigned".into();
     }
     keys.iter()
         .map(|s| {

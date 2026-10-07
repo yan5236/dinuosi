@@ -49,7 +49,7 @@ impl Desktop {
                             .debug_selector(|| "inspector-volume-label".into())
                             .w(px(63.0))
                             .flex_none()
-                            .child("音量"),
+                            .child(crate::i18n::t("inspector", "Volume", cx)),
                     )
                     .child(self.inspector_slider(
                         None,

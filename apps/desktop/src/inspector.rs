@@ -11,7 +11,7 @@ use gpui::{Context, Div, MouseButton, Window, canvas, div, prelude::*, px, rgb, 
 
 impl Desktop {
     /// 保持草图的“基本”页签、图片、视频的变换布局；选中音频仅显示音量滑块及右侧 dB 值。
-    /// 没有选择时保留原变换控件并禁用，锁定片段不可修改。
+    /// 没有选择时保留原变换控件并禁用，锁定片段不可修改；英文页签扩宽，避免文字换行。
     pub(crate) fn inspector(&self, width: f32, cx: &mut Context<Self>) -> Div {
         let audio = self
             .timeline
@@ -39,13 +39,18 @@ impl Desktop {
                     .pl(px(20.0))
                     .child(
                         div()
-                            .w(px(28.0))
+                            .w(px(if crate::i18n::locale(cx) == "en" {
+                                38.0
+                            } else {
+                                28.0
+                            }))
+                            .whitespace_nowrap()
                             .pt(px(7.0))
                             .pb(px(8.0))
                             .border_b_1()
                             .border_color(rgb(TEXT))
                             .text_size(px(12.0))
-                            .child("基本"),
+                            .child(crate::i18n::t("inspector", "Basic", cx)),
                     ),
             )
             .child(if audio {
@@ -55,8 +60,18 @@ impl Desktop {
                     .pt(px(38.0))
                     .px(px(20.0))
                     .opacity(if enabled { 1.0 } else { 0.4 })
-                    .child(self.inspector_row("不透明度", Property::Opacity, enabled, cx))
-                    .child(self.inspector_row("缩放", Property::Scale, enabled, cx))
+                    .child(self.inspector_row(
+                        crate::i18n::t("inspector", "Opacity", cx),
+                        Property::Opacity,
+                        enabled,
+                        cx,
+                    ))
+                    .child(self.inspector_row(
+                        crate::i18n::t("inspector", "Scale", cx),
+                        Property::Scale,
+                        enabled,
+                        cx,
+                    ))
                     .child(
                         div()
                             .h(px(36.0))
@@ -64,7 +79,7 @@ impl Desktop {
                             .items_center()
                             .text_size(px(12.0))
                             .gap(px(7.0))
-                            .child("坐标")
+                            .child(crate::i18n::t("inspector", "Position", cx))
                             .child("X")
                             .child(self.property_number(Property::X, enabled, cx))
                             .child(div().w(px(9.0)))
@@ -72,7 +87,12 @@ impl Desktop {
                             .child(self.property_number(Property::Y, enabled, cx)),
                     )
                     .child(div().h(px(16.0)))
-                    .child(self.inspector_row("旋转", Property::Rotation, enabled, cx))
+                    .child(self.inspector_row(
+                        crate::i18n::t("inspector", "Rotation", cx),
+                        Property::Rotation,
+                        enabled,
+                        cx,
+                    ))
             })
     }
     /// 读取首个选中的画面片段用于变换检查器显示；多选写入仅应用于未锁定的图片、视频。
@@ -344,6 +364,7 @@ impl Desktop {
             if !name.is_empty() && name.chars().count() <= 32 {
                 let before = self.timeline.model.clone();
                 self.timeline.model.tracks[index].name = name;
+                self.timeline.model.tracks[index].custom_name = true;
                 self.commit_timeline(before, cx);
             } else {
                 self.notice = Some("轨道名称应为 1–32 个字符".into());
@@ -351,7 +372,7 @@ impl Desktop {
         }
         cx.notify();
     }
-    /// 激活轨道名称输入，不改变轨道身份、顺序及素材关系。
+    /// 用当前语言显示的轨道名激活输入，不改变轨道身份；提交后将名称标为用户原文。
     pub(crate) fn begin_track_name(
         &mut self,
         index: usize,
@@ -359,7 +380,7 @@ impl Desktop {
         cx: &mut Context<Self>,
     ) {
         self.commit_inspector_input(cx);
-        let text = self.timeline.model.tracks[index].name.clone();
+        let text = crate::timeline_tracks::track_name(&self.timeline.model.tracks[index], cx);
         let input = cx.new(|cx| {
             let mut input = TextInput::new(text, cx);
             input.compact = true;

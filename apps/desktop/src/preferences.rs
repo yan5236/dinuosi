@@ -12,8 +12,10 @@ pub fn initialize(store: &ProjectStore, cx: &mut App) -> Result<(), String> {
         return Ok(());
     }
     cx.set_global(UserPreferences::default());
+    crate::i18n::apply("auto", cx);
     let data = store.load_preferences()?;
     crate::shortcuts::validate(&data)?;
+    crate::i18n::apply(&data.language, cx);
     cx.set_global(UserPreferences(data));
     Ok(())
 }
@@ -22,6 +24,7 @@ pub fn initialize(store: &ProjectStore, cx: &mut App) -> Result<(), String> {
 pub fn save(store: &ProjectStore, data: Preferences, cx: &mut App) -> Result<(), String> {
     crate::shortcuts::validate(&data)?;
     store.save_preferences(&data)?;
+    crate::i18n::apply(&data.language, cx);
     cx.set_global(UserPreferences(data));
     Ok(())
 }

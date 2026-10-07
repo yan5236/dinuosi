@@ -18,6 +18,8 @@ struct TrackV1 {
     #[serde(default)]
     kind: Option<String>,
     name: String,
+    #[serde(default)]
+    custom_name: Option<bool>,
     locked: bool,
     visible: bool,
     muted: bool,
@@ -67,6 +69,7 @@ impl TimelineV1 {
                         .into(),
                     ),
                     name: v.name.clone(),
+                    custom_name: Some(v.custom_name),
                     locked: v.locked,
                     visible: v.visible,
                     muted: v.muted,
@@ -106,6 +109,7 @@ impl TimelineV1 {
     }
     /// 校验外部字段及码率并迁移无类型的旧三轨格式；载入后移除所有空非主轨，主轨始终保留。
     /// 旧音频片段迁移至独立音频轨道且音量默认 0dB；源选区、时间、轨道开关保持不变。
+    /// 缺失自定义名称标记时仅将与旧默认名一致的轨道判为默认，其余名称保留用户原文。
     /// 旧重叠片段分配到上方新轨道；损坏类型或增益返回错误，不进入编辑器。
     pub fn into_timeline(self) -> Result<Timeline, String> {
         let legacy = self.tracks.iter().all(|t| t.kind.is_none());
@@ -137,6 +141,15 @@ impl TimelineV1 {
                 .zip(kinds)
                 .map(|(v, kind)| Track {
                     kind,
+                    custom_name: v.custom_name.unwrap_or(
+                        v.name
+                            != match kind {
+                                TrackKind::Main => "主轨",
+                                TrackKind::Media => "媒体轨道",
+                                TrackKind::Audio => "音频轨道",
+                                TrackKind::Subtitle => "字幕轨道",
+                            },
+                    ),
                     name: v.name,
                     locked: v.locked,
                     visible: v.visible,

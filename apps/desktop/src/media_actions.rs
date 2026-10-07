@@ -32,8 +32,18 @@ impl Desktop {
             .rounded(px(6.0))
             .children(
                 [
-                    (true, "media-rename", "重命名", Icon::Edit),
-                    (false, "media-remove", "移除素材", Icon::Trash),
+                    (
+                        true,
+                        "media-rename",
+                        crate::i18n::t("library", "Rename", cx),
+                        Icon::Edit,
+                    ),
+                    (
+                        false,
+                        "media-remove",
+                        crate::i18n::t("library", "Remove media", cx),
+                        Icon::Trash,
+                    ),
                 ]
                 .into_iter()
                 .map(|(rename, id, label, icon)| {

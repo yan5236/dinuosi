@@ -222,7 +222,7 @@ impl Desktop {
             files: true,
             directories: false,
             multiple: false,
-            prompt: Some("打开 Dinuosi 项目".into()),
+            prompt: Some(crate::i18n::t("editor", "Open Dinuosi project", cx).into()),
         });
         cx.spawn_in(window, async move |this, cx| {
             let result = receiver.await;
@@ -392,7 +392,7 @@ impl Render for Desktop {
                             .size(px(18.0))
                             .text_color(rgb(TEXT)),
                     )
-                    .child(notice)
+                    .child(crate::i18n::error(&notice, cx))
                     .child(
                         tool("dismiss-notice", Icon::Close, true).on_click(cx.listener(
                             |this, _, _, cx| {

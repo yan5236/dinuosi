@@ -15,6 +15,7 @@ dinuosi-icons.workspace = true
 gpui.workspace = true
 unicode-segmentation = "1.13"
 sys-locale = "=0.3.2"
+serde_json.workspace = true
 image = { version = "0.25", default-features = false }
 rodio = { version = "=0.21.1", default-features = false, features = ["playback"] }
 

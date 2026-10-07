@@ -51,7 +51,7 @@ impl Desktop {
                     .p(px(10.0))
                     .cursor_pointer()
                     .hover(|s| s.bg(rgb(LINE)))
-                    .child("键盘快捷键")
+                    .child(crate::i18n::t("help", "Keyboard shortcuts", cx))
                     .on_click(cx.listener(|this, _, _, cx| this.open_settings(Tab::Shortcuts, cx))),
             )
             .child(
@@ -61,7 +61,7 @@ impl Desktop {
                     .p(px(10.0))
                     .cursor_pointer()
                     .hover(|s| s.bg(rgb(LINE)))
-                    .child("关于")
+                    .child(crate::i18n::t("help", "About", cx))
                     .on_click(cx.listener(|this, _, _, cx| this.open_about(cx))),
             )
     }
@@ -75,9 +75,11 @@ impl Desktop {
             cx.notify();
             return;
         }
-        let options = auxiliary_options("关于", 520.0, 340.0, cx);
+        let options = auxiliary_options(crate::i18n::t("help", "About", cx), 520.0, 340.0, cx);
         match cx.open_window(options, |window, cx| {
             cx.new(|cx| {
+                cx.observe_global::<crate::i18n::Locale>(|_, cx| cx.notify())
+                    .detach();
                 let focus = cx.focus_handle();
                 focus.focus(window);
                 About { focus }
@@ -98,7 +100,11 @@ pub struct About {
 }
 impl Render for About {
     /// 显示编译版本与品牌，官网显示暂无；独立零尺寸焦点保留系统标题栏命中，链接交给浏览器。
-    fn render(&mut self, window: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        window.set_window_title(&format!(
+            "Dinuosi - {}",
+            crate::i18n::t("help", "About", cx)
+        ));
         div()
             .size_full()
             .flex()
@@ -121,7 +127,7 @@ impl Render for About {
                     .px(px(16.0))
                     .flex()
                     .items_center()
-                    .child("关于")
+                    .child(crate::i18n::t("help", "About", cx))
                     .child(ui::title_drag())
                     .child(ui::window_controls(window, false)),
             )
@@ -132,24 +138,37 @@ impl Render for About {
                     .flex_col()
                     .gap(px(22.0))
                     .child(ui::brand(72.0))
-                    .child(format!("版本 {}", env!("CARGO_PKG_VERSION")))
+                    .child(crate::i18n::f(
+                        "help",
+                        "Version {version}",
+                        &[("version", env!("CARGO_PKG_VERSION").into())],
+                        cx,
+                    ))
                     .child(
                         div()
                             .flex()
                             .gap(px(28.0))
-                            .child("官网")
-                            .child(div().text_color(rgb(MUTED)).child("暂无")),
+                            .child(crate::i18n::t("help", "Website", cx))
+                            .child(div().text_color(rgb(MUTED)).child(crate::i18n::t(
+                                "help",
+                                "Unavailable",
+                                cx,
+                            ))),
                     )
                     .child(
-                        div().flex().gap(px(28.0)).child("开源地址").child(
-                            div()
-                                .id("source-link")
-                                .focusable()
-                                .cursor_pointer()
-                                .underline()
-                                .child(SOURCE_URL)
-                                .on_click(|_, _, cx| cx.open_url(SOURCE_URL)),
-                        ),
+                        div()
+                            .flex()
+                            .gap(px(28.0))
+                            .child(crate::i18n::t("help", "Source code", cx))
+                            .child(
+                                div()
+                                    .id("source-link")
+                                    .focusable()
+                                    .cursor_pointer()
+                                    .underline()
+                                    .child(SOURCE_URL)
+                                    .on_click(|_, _, cx| cx.open_url(SOURCE_URL)),
+                            ),
                     ),
             )
     }

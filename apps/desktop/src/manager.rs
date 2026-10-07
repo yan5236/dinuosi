@@ -40,16 +40,38 @@ impl Desktop {
                     .border_b_1()
                     .border_color(rgb(LINE))
                     .child(
-                        pill("new-project", "新建项目", 142.0, 32.0).on_click(cx.listener(
-                            |this, _, window, cx| this.show_dialog(DialogKind::Create, window, cx),
-                        )),
+                        pill(
+                            "new-project",
+                            crate::i18n::t("manager", "New project", cx),
+                            142.0,
+                            32.0,
+                        )
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            this.show_dialog(DialogKind::Create, window, cx)
+                        })),
                     )
-                    .child(pill("import-project", "打开项目", 142.0, 32.0).on_click(
-                        cx.listener(|this, _, window, cx| this.import_project(window, cx)),
-                    ))
-                    .child(pill("settings", "设置", 142.0, 32.0).on_click(cx.listener(
-                        |this, _, _, cx| this.open_settings(crate::settings::Tab::General, cx),
-                    ))),
+                    .child(
+                        pill(
+                            "import-project",
+                            crate::i18n::t("manager", "Open project", cx),
+                            142.0,
+                            32.0,
+                        )
+                        .on_click(
+                            cx.listener(|this, _, window, cx| this.import_project(window, cx)),
+                        ),
+                    )
+                    .child(
+                        pill(
+                            "settings",
+                            crate::i18n::t("manager", "Settings", cx),
+                            142.0,
+                            32.0,
+                        )
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.open_settings(crate::settings::Tab::General, cx)
+                        })),
+                    ),
             )
             .child(
                 div()
@@ -65,7 +87,7 @@ impl Desktop {
                                 .items_center()
                                 .justify_center()
                                 .text_color(rgb(MUTED))
-                                .child("暂无项目"),
+                                .child(crate::i18n::t("manager", "No projects", cx)),
                         )
                     })
                     .children(self.projects.iter().enumerate().map(|(index, entry)| {
@@ -133,13 +155,17 @@ impl Desktop {
                                             .gap(px(22.0))
                                             .text_size(px(12.0))
                                             .text_color(rgb(MUTED))
-                                            .child(format!(
-                                                "创建：{}",
-                                                relative_time(entry.created_at)
+                                            .child(crate::i18n::f(
+                                                "manager",
+                                                "Created: {time}",
+                                                &[("time", relative_time(entry.created_at, cx))],
+                                                cx,
                                             ))
-                                            .child(format!(
-                                                "修改：{}",
-                                                relative_time(entry.modified_at)
+                                            .child(crate::i18n::f(
+                                                "manager",
+                                                "Modified: {time}",
+                                                &[("time", relative_time(entry.modified_at, cx))],
+                                                cx,
                                             )),
                                     ),
                             )
@@ -191,7 +217,7 @@ impl Desktop {
                             .size(px(16.0))
                             .text_color(rgb(TEXT)),
                     )
-                    .child("重命名")
+                    .child(crate::i18n::t("manager", "Rename", cx))
                     .on_click(cx.listener(move |this, _, window, cx| {
                         this.show_dialog(DialogKind::Rename(rename.clone()), window, cx)
                     })),
@@ -213,7 +239,7 @@ impl Desktop {
                             .size(px(16.0))
                             .text_color(rgb(TEXT)),
                     )
-                    .child("删除项目")
+                    .child(crate::i18n::t("manager", "Delete project", cx))
                     .on_click(cx.listener(move |this, _, window, cx| {
                         this.show_dialog(DialogKind::Delete(entry.clone()), window, cx)
                     })),
@@ -232,19 +258,46 @@ pub(crate) fn display_path(path: &std::path::Path) -> String {
 }
 
 /// 显示真实持久化时间距当前时刻的间隔；系统时钟倒退时不显示负数，不依赖新日期库。
-fn relative_time(timestamp: u64) -> String {
+fn relative_time(timestamp: u64, cx: &gpui::App) -> String {
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
         .as_secs();
     let seconds = now.saturating_sub(timestamp);
     if seconds < 60 {
-        "刚刚".into()
+        crate::i18n::t("manager", "Just now", cx).into()
     } else if seconds < 3600 {
-        format!("{} 分钟前", seconds / 60)
+        crate::i18n::f(
+            "manager",
+            if seconds / 60 == 1 {
+                "{count} minute ago"
+            } else {
+                "{count} minutes ago"
+            },
+            &[("count", (seconds / 60).to_string())],
+            cx,
+        )
     } else if seconds < 86400 {
-        format!("{} 小时前", seconds / 3600)
+        crate::i18n::f(
+            "manager",
+            if seconds / 3600 == 1 {
+                "{count} hour ago"
+            } else {
+                "{count} hours ago"
+            },
+            &[("count", (seconds / 3600).to_string())],
+            cx,
+        )
     } else {
-        format!("{} 天前", seconds / 86400)
+        crate::i18n::f(
+            "manager",
+            if seconds / 86400 == 1 {
+                "{count} day ago"
+            } else {
+                "{count} days ago"
+            },
+            &[("count", (seconds / 86400).to_string())],
+            cx,
+        )
     }
 }

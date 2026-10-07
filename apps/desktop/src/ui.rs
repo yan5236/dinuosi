@@ -32,7 +32,7 @@ pub fn brand(height: f32) -> Div {
 }
 
 /// 创建补充参考图中的空心胶囊按钮；宽高为逻辑像素，圆角为高度的一半。
-/// 调用方负责绑定操作，默认提供悬停和按压样式。
+/// 调用方传入已翻译标签并绑定操作；文字标记供交互测试确认实际显示语言，不增加可见内容。
 pub fn pill(id: &'static str, label: &'static str, width: f32, height: f32) -> Stateful<Div> {
     div()
         .debug_selector(|| id.to_owned())
@@ -50,7 +50,11 @@ pub fn pill(id: &'static str, label: &'static str, width: f32, height: f32) -> S
         .cursor_pointer()
         .hover(|s| s.bg(rgb(0x303033)).border_color(rgb(0x64646a)))
         .active(|s| s.bg(rgb(0x39393d)))
-        .child(label)
+        .child(
+            div()
+                .debug_selector(move || format!("text-{id}-{label}"))
+                .child(label),
+        )
 }
 
 /// 创建紧凑图标控件；不可用项保持位置，通过悬停提示说明状态。
@@ -58,9 +62,14 @@ pub fn pill(id: &'static str, label: &'static str, width: f32, height: f32) -> S
 pub fn tool(id: impl Into<SharedString>, icon: Icon, enabled: bool) -> Stateful<Div> {
     tool_button(id, icon, enabled).tooltip(move |_, cx| {
         let text = if enabled {
-            icon.label().to_string()
+            crate::i18n::t("icons", icon.name(), cx).to_owned()
         } else {
-            format!("{}（暂无可操作内容）", icon.label())
+            crate::i18n::f(
+                "common",
+                "{name} (nothing available)",
+                &[("name", crate::i18n::t("icons", icon.name(), cx).into())],
+                cx,
+            )
         };
         cx.new(|_| Hint(text)).into()
     })
