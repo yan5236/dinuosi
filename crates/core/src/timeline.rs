@@ -214,6 +214,7 @@ impl Timeline {
             .unwrap_or(0)
     }
     /// 校验载入/提交数据的画布、码率、轨道、时长、唯一身份和参数；错误不修改状态。
+    /// 图片时长独立于默认源帧数，但仍限于一天；视频和音频不得超过源入点后的可用帧数。
     pub fn validate(&self) -> Result<(), String> {
         if !(1..=240).contains(&self.fps)
             || self.width == 0
@@ -244,7 +245,9 @@ impl Timeline {
                 || clip.source_frames < 1
                 || clip.source_in > clip.source_frames
                 || clip.source_frames > 86400 * self.fps as i64
-                || clip.duration > clip.source_frames - clip.source_in
+                || (clip.kind == MediaKind::Image && clip.duration > 86400 * self.fps as i64)
+                || (clip.kind != MediaKind::Image
+                    && clip.duration > clip.source_frames - clip.source_in)
             {
                 return Err("片段身份或时间范围无效".into());
             }

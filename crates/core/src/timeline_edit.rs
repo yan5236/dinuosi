@@ -147,7 +147,8 @@ impl Timeline {
         Ok(())
     }
 
-    /// 拖动片段左右边缘，最短一帧且不超出源时长；左边缘同步调整源入点。
+    /// 按帧增量拖动片段左右边缘，最短一帧；视频和音频受源时长限制，左边缘同步调整源入点。
+    /// 图片左右均可延长，不改变源入点；起点保持在零至一天内，时长遵守项目的一天范围。
     /// 延长后若与同轨片段相交，裁剪片段优先复用上方空轨道，否则新建；锁轨或不存在返回错误。
     pub fn trim(&mut self, id: &str, left: bool, delta: i64) -> Result<(), String> {
         let c = self
@@ -159,15 +160,28 @@ impl Timeline {
             return Err("轨道已锁定".into());
         }
         if left {
-            let delta = delta.clamp(-c.source_in.min(c.start), c.duration - 1);
+            let (min, max) = if c.kind == MediaKind::Image {
+                let limit = 86400 * self.fps as i64;
+                (
+                    (-c.start).max(c.duration - limit),
+                    (c.duration - 1).min(limit - c.start),
+                )
+            } else {
+                (-c.source_in.min(c.start), c.duration - 1)
+            };
+            let delta = delta.clamp(min, max);
             c.start += delta;
-            c.source_in += delta;
+            if c.kind != MediaKind::Image {
+                c.source_in += delta;
+            }
             c.duration -= delta;
         } else {
-            c.duration = c
-                .duration
-                .saturating_add(delta)
-                .clamp(1, c.source_frames - c.source_in);
+            let max = if c.kind == MediaKind::Image {
+                86400 * self.fps as i64
+            } else {
+                c.source_frames - c.source_in
+            };
+            c.duration = c.duration.saturating_add(delta).clamp(1, max);
         }
         self.resolve_overlap(id);
         Ok(())

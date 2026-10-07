@@ -155,6 +155,7 @@ fn dynamic_timeline_dragging_and_scroll_follow_actual_tracks(cx: &mut TestAppCon
 
 /// 从素材卡拖到轨道，再框选、移动、裁边、输入参数、删除和撤销，并验证重开磁盘结果。
 /// 检查两侧把手与素材外边框的上下沿完全一致，随后用真实指针事件验证裁剪命中与时长变化。
+/// 图片右把手可越过默认源时长，释放后保存、撤销和重做均保留正确的独立时长。
 #[gpui::test]
 fn timeline_pointer_editing_persists_real_results(cx: &mut TestAppContext) {
     let root = std::env::temp_dir().join(format!("dinuosi-timeline-ui-{}", std::process::id()));
@@ -289,6 +290,29 @@ fn timeline_pointer_editing_persists_real_results(cx: &mut TestAppContext) {
         desktop.read_with(cx, |v, _| v.timeline.model.clips[0].start),
         0
     );
+    let shortened = store.load_timeline(&entry).unwrap();
+    let right = cx
+        .debug_bounds(Box::leak(format!("trim-{id}-false").into_boxed_str()))
+        .unwrap();
+    drag(
+        cx,
+        right.center(),
+        right.center() + point(px(120.0), px(0.0)),
+    );
+    let extended = store.load_timeline(&entry).unwrap();
+    assert!(extended.clips[0].duration > extended.clips[0].source_frames);
+    assert_eq!(extended.clips[0].source_frames, 150);
+    assert_eq!(extended.clips[0].source_in, 0);
+    assert_eq!(
+        desktop.read_with(cx, |v, _| v.timeline.model.clone()),
+        extended
+    );
+    cx.simulate_keystrokes("ctrl-z");
+    cx.run_until_parked();
+    assert_eq!(store.load_timeline(&entry).unwrap(), shortened);
+    cx.simulate_keystrokes("ctrl-y");
+    cx.run_until_parked();
+    assert_eq!(store.load_timeline(&entry).unwrap(), extended);
     desktop.update_in(cx, |v, _, cx| {
         v.change_zoom(4.0, cx);
         v.timeline.scroll_x = v.pixels_per_second() * 5.0;
