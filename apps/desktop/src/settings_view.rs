@@ -41,12 +41,23 @@ fn row(label: &'static str, control: impl IntoElement) -> Div {
 }
 
 impl Settings {
-    /// 渲染当前分类的实际控件；通用页通过 Switch、刀片与素材拖动模式下拉修改草稿，应用前不保存偏好。
+    /// 渲染当前分类；通用页通过 Switch 修改自动关键帧/实时预览及模式下拉草稿，应用前不保存偏好。
     /// 语言页读取统一索引并显示单选勾选、自称和当前已应用语言译名；插件显示空列表。
     fn body(&self, cx: &mut Context<Self>) -> Div {
         let content = div().flex().flex_col().gap(px(8.0));
         match self.tab {
             Tab::General => content
+                .child(row(
+                    crate::i18n::t("settings", "Automatically add keyframes", cx),
+                    Switch::new(
+                        "auto-keyframe",
+                        self.draft.auto_keyframe,
+                        cx.listener(|this, checked: &bool, _, cx| {
+                            this.draft.auto_keyframe = *checked;
+                            cx.notify();
+                        }),
+                    ),
+                ))
                 .child(row(
                     crate::i18n::t("settings", "Live preview while dragging", cx),
                     Switch::new(

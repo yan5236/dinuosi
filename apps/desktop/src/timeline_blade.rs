@@ -47,6 +47,7 @@ impl Desktop {
             && !self.help_open
             && self.project_menu.is_none()
             && self.session.media_menu.is_none()
+            && self.timeline.keyframe_menu.is_none()
             && self.timeline.gesture.is_none()
             && self.session.drag.is_none()
             && point.x >= b.left() + px(self.timeline.header)

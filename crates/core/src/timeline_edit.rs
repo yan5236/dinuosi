@@ -107,6 +107,7 @@ impl Timeline {
             transform: Transform::default(),
             kind,
             gain: 1.0,
+            keyframes: Vec::new(),
         });
         self.resolve_overlap(&id);
         Ok(id)
@@ -149,6 +150,7 @@ impl Timeline {
 
     /// 按帧增量拖动片段左右边缘，最短一帧；视频和音频受源时长限制，左边缘同步调整源入点。
     /// 图片左右均可延长，不改变源入点；起点保持在零至一天内，时长遵守项目的一天范围。
+    /// 左裁边同步平移关键帧局部位置，保留范围外锚点，使保留画面的动画连续。
     /// 延长后若与同轨片段相交，裁剪片段优先复用上方空轨道，否则新建；锁轨或不存在返回错误。
     pub fn trim(&mut self, id: &str, left: bool, delta: i64) -> Result<(), String> {
         let c = self
@@ -171,6 +173,9 @@ impl Timeline {
             };
             let delta = delta.clamp(min, max);
             c.start += delta;
+            for key in &mut c.keyframes {
+                key.frame -= delta;
+            }
             if c.kind != MediaKind::Image {
                 c.source_in += delta;
             }

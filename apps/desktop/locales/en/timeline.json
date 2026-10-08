@@ -9,5 +9,6 @@
   "Main track": "Main",
   "Media track": "Media",
   "Audio track": "Audio",
-  "Subtitle track": "Subtitles"
+  "Subtitle track": "Subtitles",
+  "Delete keyframes": "Delete keyframes"
 }

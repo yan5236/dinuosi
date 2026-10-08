@@ -98,6 +98,7 @@ pub struct Clip {
     pub kind: MediaKind,
     /// 线性音频增益：1 为 0dB，0 为负无穷，10 为 20dB；避免 JSON 保存无穷数值。
     pub gain: f64,
+    pub keyframes: Vec<crate::keyframes::Keyframe>,
 }
 
 /// 轨道职责与显示名分离；字幕类型保留，但新项目仅创建主轨。
@@ -257,6 +258,7 @@ impl Timeline {
             if !clip.gain.is_finite() || !(0.0..=10.0).contains(&clip.gain) {
                 return Err("音量参数无效".into());
             }
+            clip.validate_keyframes(self.fps)?;
             for property in [
                 Property::Opacity,
                 Property::Scale,

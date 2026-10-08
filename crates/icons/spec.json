@@ -1,9 +1,9 @@
 {
-  "name": "轻线 · 完整界面图标集（102 枚完整版）",
-  "version": "1.7",
-  "count": 102,
-  "previousCount": 95,
-  "additionCount": 7,
+  "name": "轻线 · 完整界面图标集（103 枚完整版）",
+  "version": "1.8",
+  "count": 103,
+  "previousCount": 102,
+  "additionCount": 1,
   "viewBox": "0 0 24 24",
   "strokeWidth": 1.8,
   "stroke": "currentColor",
@@ -707,6 +707,13 @@
       "label": "低音量",
       "file": "svg/volume-low.svg",
       "addedIn": "1.7"
+    },
+    {
+      "name": "keyframe-filled",
+      "label": "实心关键帧",
+      "file": "svg/keyframe-filled.svg",
+      "symbolId": "icon-keyframe-filled",
+      "addedIn": "1.8"
     }
   ]
 }

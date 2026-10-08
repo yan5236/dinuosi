@@ -142,6 +142,7 @@ impl Desktop {
         self.dialog = Some(dialog);
         self.project_menu = None;
         self.session.media_menu = None;
+        self.timeline.keyframe_menu = None;
         self.menu_open = false;
         self.help_open = false;
         self.notice = None;
@@ -340,7 +341,8 @@ impl Render for Desktop {
                 self.menu_open
                     || self.help_open
                     || self.project_menu.is_some()
-                    || self.session.media_menu.is_some(),
+                    || self.session.media_menu.is_some()
+                    || self.timeline.keyframe_menu.is_some(),
                 |s| {
                     s.child(
                         div()
@@ -348,11 +350,15 @@ impl Render for Desktop {
                             .inset_0()
                             .occlude()
                             .id("menu-dismiss")
-                            .on_click(cx.listener(|this, _, _, cx| {
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                if this.timeline.keyframe_menu.is_some() {
+                                    this.focus_handle.focus(window);
+                                }
                                 this.menu_open = false;
                                 this.help_open = false;
                                 this.project_menu = None;
                                 this.session.media_menu = None;
+                                this.timeline.keyframe_menu = None;
                                 cx.notify();
                             })),
                     )
@@ -361,6 +367,9 @@ impl Render for Desktop {
                     })
                     .when(self.help_open, |s| {
                         s.child(self.help_menu(layout.title, cx))
+                    })
+                    .when(self.timeline.keyframe_menu.is_some(), |s| {
+                        s.child(self.timeline_keyframe_menu(window, cx))
                     })
                     .when(self.session.media_menu.is_some(), |s| {
                         s.child(self.media_actions(window, cx))

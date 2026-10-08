@@ -4,8 +4,10 @@ use gpui::{AppContext, Context, Window};
 use std::time::{Duration, Instant};
 
 impl Desktop {
-    /// 标记合成请求版本并请求最新画面；当前解码期间合并后续请求，避免无界任务队列。
+    /// 标记合成请求版本并请求最新画面；关闭旧关键帧菜单，防止模型/帧率更新后使用过期目标。
+    /// 当前解码期间合并后续请求，避免无界任务队列。
     pub(crate) fn refresh_timeline(&mut self, cx: &mut Context<Self>) {
+        self.timeline.keyframe_menu = None;
         self.timeline.revision += 1;
         self.request_timeline_frame(cx);
         cx.notify();

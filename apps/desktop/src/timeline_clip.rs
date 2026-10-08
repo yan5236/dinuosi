@@ -162,7 +162,10 @@ impl Desktop {
                                     ),
                                 )
                         }),
-                ),
+                )
+                .when(selected, |s| {
+                    s.children(self.timeline_keyframe_marks(clip, x, width, cx))
+                }),
         ))
     }
 }

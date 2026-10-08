@@ -213,6 +213,11 @@ impl Settings {
             Tab::Shortcuts => "",
         };
         query.is_empty()
+            || (tab == Tab::General
+                && (crate::i18n::t("settings", "Automatically add keyframes", cx)
+                    .to_lowercase()
+                    .contains(&query)
+                    || "自动添加关键帧 automatically add keyframes".contains(&query)))
             || crate::i18n::t("settings", tab.label(), cx)
                 .to_lowercase()
                 .contains(&query)

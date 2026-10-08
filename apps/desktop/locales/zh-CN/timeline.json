@@ -9,5 +9,6 @@
   "Main track": "主轨",
   "Media track": "媒体轨道",
   "Audio track": "音频轨道",
-  "Subtitle track": "字幕轨道"
+  "Subtitle track": "字幕轨道",
+  "Delete keyframes": "删除关键帧"
 }

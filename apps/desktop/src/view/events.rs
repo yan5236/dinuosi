@@ -34,6 +34,15 @@ impl Desktop {
             }
             return;
         }
+        if self.timeline.keyframe_menu.is_some() {
+            if key == "escape" {
+                self.timeline.keyframe_menu = None;
+                self.focus_handle.focus(window);
+                cx.notify();
+            }
+            cx.stop_propagation();
+            return;
+        }
         if key == "tab" {
             if event.keystroke.modifiers.shift {
                 window.focus_prev();

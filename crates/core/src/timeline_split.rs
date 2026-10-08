@@ -4,7 +4,8 @@ use std::collections::BTreeSet;
 
 impl Timeline {
     /// 在项目绝对帧 frame 切割 ids 中跨越该帧的未锁定片段，返回所有新右段的身份。
-    /// 左段保留原身份；右段复制轨道、源引用、变换和增益，视频/音频源入点按左段时长推进，图片入点不变。
+    /// 左段保留原身份；右段复制轨道、源引用、变换、增益和动画，关键帧局部时间减去左段时长。
+    /// 两侧保留范围外插值锚点，视频/音频源入点按左段时长推进，图片入点不变。
     /// 锁轨、未知身份、片段外及首尾边界忽略，至少保留两侧各一帧；校验失败原子回滚，不产生部分切割。
     pub fn split(
         &mut self,
@@ -25,6 +26,9 @@ impl Timeline {
             let mut right = clip.clone();
             right.id = uuid::Uuid::new_v4().to_string();
             right.start = frame;
+            for key in &mut right.keyframes {
+                key.frame -= left_duration;
+            }
             right.duration -= left_duration;
             if right.kind != MediaKind::Image {
                 right.source_in += left_duration;

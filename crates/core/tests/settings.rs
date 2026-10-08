@@ -86,6 +86,7 @@ fn project_settings_round_trip_and_frame_conversion() {
 }
 
 /// 验证偏好独立保存、拖动显示模式、三种有效语言与快捷键覆盖重开保留，未知语言、损坏及未来版本不会覆盖旧值。
+/// 自动关键帧偏好可关闭并保存，旧文件缺字段默认开启。
 /// 旧文件缺少拖动显示字段时默认跟随鼠标，不改写磁盘中的已有设置。
 #[test]
 fn preferences_persist_and_reject_corrupt_data() {
@@ -95,6 +96,7 @@ fn preferences_persist_and_reject_corrupt_data() {
     let mut data = Preferences {
         live_scrub: false,
         keep_dragged_clip: true,
+        auto_keyframe: false,
         language: "zh-CN".into(),
         ..Default::default()
     };
@@ -111,8 +113,10 @@ fn preferences_persist_and_reject_corrupt_data() {
     let path = root.join("preferences.json");
     let mut old = serde_json::to_value(&data).unwrap();
     old.as_object_mut().unwrap().remove("keep_dragged_clip");
+    old.as_object_mut().unwrap().remove("auto_keyframe");
     std::fs::write(&path, serde_json::to_vec(&old).unwrap()).unwrap();
     assert!(!store.load_preferences().unwrap().keep_dragged_clip);
+    assert!(store.load_preferences().unwrap().auto_keyframe);
     assert!(
         serde_json::from_slice::<serde_json::Value>(&std::fs::read(&path).unwrap())
             .unwrap()

@@ -55,6 +55,7 @@ pub struct TimelineSession {
     pub model: Timeline,
     pub history: History,
     pub selected: BTreeSet<String>,
+    pub keyframe_menu: Option<crate::timeline_keyframes::KeyframeMenu>,
     pub blade: bool,
     pub blade_pointer: Option<Point<Pixels>>,
     pub gesture: Option<Gesture>,

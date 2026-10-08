@@ -9,12 +9,13 @@ pub struct Preferences {
     pub live_scrub: bool,
     pub blade_requires_selection: bool,
     pub keep_dragged_clip: bool,
+    pub auto_keyframe: bool,
     pub language: String,
     pub shortcuts: BTreeMap<String, Vec<String>>,
 }
 
 impl Default for Preferences {
-    /// 初始偏好使用实时预览、直接刀片切割及素材跟随鼠标（拖动时隐藏原块）。
+    /// 初始偏好开启实时预览及同类自动关键帧，使用直接刀片切割及素材跟随鼠标（隐藏原块）。
     /// 语言跟随系统并回退英文；旧文件缺少新字段时同样使用这些默认值，快捷键覆盖为空。
     fn default() -> Self {
         Self {
@@ -22,6 +23,7 @@ impl Default for Preferences {
             live_scrub: true,
             blade_requires_selection: false,
             keep_dragged_clip: false,
+            auto_keyframe: true,
             language: "auto".into(),
             shortcuts: BTreeMap::new(),
         }

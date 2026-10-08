@@ -181,7 +181,7 @@ impl FrameCache {
                 blend_mapped(
                     &mut out,
                     &bytes,
-                    &clip.transform,
+                    &clip.transform_at(frame as f64),
                     (timeline.width, timeline.height),
                     (
                         fitted.0 * FRAME_WIDTH as f64 / m.preview_size.0.max(1) as f64,

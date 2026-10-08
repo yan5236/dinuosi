@@ -39,6 +39,14 @@ struct ClipV1 {
     kind: Option<String>,
     #[serde(default = "default_gain")]
     gain: f64,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    keyframes: Vec<KeyframeV1>,
+}
+#[derive(Serialize, Deserialize)]
+struct KeyframeV1 {
+    frame: i64,
+    kind: String,
+    values: [f64; 2],
 }
 /// 旧项目未保存音量时使用单位增益，即 0.0dB，不改变原有声音大小。
 fn default_gain() -> f64 {
@@ -49,7 +57,7 @@ fn default_bitrate() -> u32 {
     12000
 }
 impl TimelineV1 {
-    /// 显式复制领域数据及项目码率到版本化字段，不保存选择、拖动和历史会话。
+    /// 显式复制领域数据、码率及关键帧类型/局部帧/值到版本化字段，不保存选择、拖动和历史。
     pub fn from_timeline(t: &Timeline) -> Self {
         Self {
             fps: t.fps,
@@ -103,6 +111,15 @@ impl TimelineV1 {
                         .into(),
                     ),
                     gain: c.gain,
+                    keyframes: c
+                        .keyframes
+                        .iter()
+                        .map(|k| KeyframeV1 {
+                            frame: k.frame,
+                            kind: k.kind.name().into(),
+                            values: k.values,
+                        })
+                        .collect(),
                 })
                 .collect(),
         }
@@ -110,7 +127,8 @@ impl TimelineV1 {
     /// 校验外部字段及码率并迁移无类型的旧三轨格式；载入后移除所有空非主轨，主轨始终保留。
     /// 旧音频片段迁移至独立音频轨道且音量默认 0dB；源选区、时间、轨道开关保持不变。
     /// 缺失自定义名称标记时仅将与旧默认名一致的轨道判为默认，其余名称保留用户原文。
-    /// 旧重叠片段分配到上方新轨道；损坏类型或增益返回错误，不进入编辑器。
+    /// 旧重叠片段分配到上方新轨道；缺失关键帧字段使用空动画。
+    /// 损坏类型、增益、重复关键帧或非法动画值返回错误，不进入编辑器。
     pub fn into_timeline(self) -> Result<Timeline, String> {
         let legacy = self.tracks.iter().all(|t| t.kind.is_none());
         let migrate_audio = self.clips.iter().any(|c| c.kind.is_none());
@@ -189,6 +207,17 @@ impl TimelineV1 {
                         },
                         kind,
                         gain: c.gain,
+                        keyframes: c
+                            .keyframes
+                            .into_iter()
+                            .map(|k| {
+                                Ok(crate::keyframes::Keyframe {
+                                    frame: k.frame,
+                                    kind: crate::keyframes::KeyframeKind::parse(&k.kind)?,
+                                    values: k.values,
+                                })
+                            })
+                            .collect::<Result<Vec<_>, String>>()?,
                     })
                 })
                 .collect::<Result<Vec<_>, _>>()?,

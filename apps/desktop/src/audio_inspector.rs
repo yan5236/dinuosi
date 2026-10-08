@@ -9,14 +9,14 @@ use dinuosi_icons::Icon;
 use gpui::{Context, Div, Window, div, prelude::*, px, rgb, svg};
 
 impl Desktop {
-    /// 读取首个选中的音频片段增益，返回单位增益作为无选择时的默认值，不修改模型。
+    /// 按播放头帧读取首个选中音频片段的插值增益；无选择时返回单位增益，不修改模型。
     fn audio_gain(&self) -> f64 {
         self.timeline
             .model
             .clips
             .iter()
             .find(|c| c.kind == MediaKind::Audio && self.timeline.selected.contains(&c.id))
-            .map_or(1.0, |c| c.gain)
+            .map_or(1.0, |c| c.gain_at(self.keyframe_frame() as f64))
     }
     /// 格式化音量为一位小数 dB；零增益显示负无穷，小于显示精度的零值消除负号。
     fn audio_volume_text(&self) -> String {
@@ -41,7 +41,7 @@ impl Desktop {
                     .h(px(37.0))
                     .flex()
                     .items_center()
-                    .gap(px(14.0))
+                    .gap(px(6.0))
                     .text_size(px(12.0))
                     .text_color(rgb(TEXT))
                     .child(
@@ -57,7 +57,10 @@ impl Desktop {
                         enabled,
                         cx,
                     ))
-                    .child(self.audio_volume_number(enabled, cx)),
+                    .child(self.audio_volume_number(enabled, cx))
+                    .child(
+                        self.keyframe_controls(dinuosi_core::keyframes::KeyframeKind::Volume, cx),
+                    ),
             )
     }
     /// 绘制与现有画面参数相同的 59px 深色数值框及 17px 上下箭头，数值居中并保留 dB 单位。
@@ -192,11 +195,12 @@ impl Desktop {
         };
         self.stop_timeline();
         let before = self.timeline.model.clone();
-        if let Err(error) = self
-            .timeline
-            .model
-            .set_volume(&self.timeline.selected, gain)
-        {
+        if let Err(error) = self.timeline.model.set_volume_at(
+            &self.timeline.selected,
+            gain,
+            self.keyframe_frame(),
+            self.auto_keyframe(cx),
+        ) {
             self.notice = Some(error);
         } else {
             self.commit_timeline(before, cx);

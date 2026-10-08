@@ -65,7 +65,7 @@ impl Desktop {
                     id: clip.id.clone(),
                     geometry: Geometry::new(
                         self.timeline.preview_bounds,
-                        &clip.transform,
+                        &clip.transform_at(frame as f64),
                         (
                             (fitted.0 / model.width as f64 * 640.0).round() as u32,
                             (fitted.1 / model.height as f64 * 360.0).round() as u32,
@@ -153,8 +153,7 @@ impl Desktop {
             .iter()
             .find(|c| c.id == shape.id)
             .unwrap()
-            .transform
-            .clone();
+            .transform_at(self.keyframe_frame() as f64);
         self.timeline.selected = [shape.id.clone()].into();
         self.stop_timeline();
         self.stop_preview();
@@ -218,14 +217,23 @@ impl Desktop {
                 );
             }
         }
-        if let Some(clip) = self
-            .timeline
-            .model
-            .clips
-            .iter_mut()
-            .find(|c| c.id == drag.id)
-        {
-            clip.transform = t;
+        let properties: &[Property] = match drag.handle {
+            Handle::Move => &[Property::X, Property::Y],
+            Handle::Scale => &[Property::Scale],
+            Handle::Rotate => &[Property::Rotation],
+        };
+        let ids = [drag.id.clone()].into();
+        if let Some(before) = &self.timeline.before {
+            self.timeline.model = before.clone();
+        }
+        for property in properties {
+            let _ = self.timeline.model.set_property_at(
+                &ids,
+                *property,
+                t.get(*property),
+                self.keyframe_frame(),
+                self.auto_keyframe(cx),
+            );
         }
         self.refresh_timeline(cx);
     }

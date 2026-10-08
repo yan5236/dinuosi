@@ -180,9 +180,14 @@ impl Desktop {
                 let ratio = (f32::from(point.x - bounds.left())
                     / f32::from(bounds.size.width).max(1.0))
                 .clamp(0.0, 1.0);
-                let _ = self.timeline.model.set_volume(
+                if let Some(before) = &self.timeline.before {
+                    self.timeline.model = before.clone();
+                }
+                let _ = self.timeline.model.set_volume_at(
                     &self.timeline.selected,
                     dinuosi_core::timeline::volume_gain(ratio as f64),
+                    self.keyframe_frame(),
+                    self.auto_keyframe(cx),
                 );
                 self.stop_timeline();
             }
@@ -191,10 +196,16 @@ impl Desktop {
                     / f32::from(bounds.size.width).max(1.0))
                 .clamp(0.0, 1.0);
                 let (min, max) = property.range();
-                let _ = self.timeline.model.set_property(
+                // 每次拖动从快照计算，防止关闭自动添加时整条动画累计偏移。
+                if let Some(before) = &self.timeline.before {
+                    self.timeline.model = before.clone();
+                }
+                let _ = self.timeline.model.set_property_at(
                     &self.timeline.selected,
                     *property,
                     (min + ratio as f64 * (max - min)).round(),
+                    self.keyframe_frame(),
+                    self.auto_keyframe(cx),
                 );
                 self.refresh_timeline(cx);
             }
@@ -397,19 +408,23 @@ impl Desktop {
             self.refresh_timeline(cx);
         }
     }
-    /// 修改检查器参数，范围与合法性全部由核心校验，成功写入实时预览和项目。
+    /// 停止播放并按当前项目帧修改检查器参数；核心处理类型隔离、自动关键帧及范围校验。
+    /// 成功沿用保存与单次历史，失败显示真实错误并保持原参数。
     pub(crate) fn change_property(
         &mut self,
         property: Property,
         value: f64,
         cx: &mut Context<Self>,
     ) {
+        self.stop_timeline();
         let before = self.timeline.model.clone();
-        if let Err(error) =
-            self.timeline
-                .model
-                .set_property(&self.timeline.selected, property, value)
-        {
+        if let Err(error) = self.timeline.model.set_property_at(
+            &self.timeline.selected,
+            property,
+            value,
+            self.keyframe_frame(),
+            self.auto_keyframe(cx),
+        ) {
             self.notice = Some(error);
         } else {
             self.commit_timeline(before, cx);

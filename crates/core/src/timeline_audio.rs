@@ -11,6 +11,10 @@ struct Layer {
     pcm: Pcm,
     decoder: Decoder,
     gain: f32,
+    keys: Vec<(f64, f64)>,
+    key_index: usize,
+    fps: f64,
+    offset: f64,
 }
 pub struct TimelineAudio {
     layers: Vec<Layer>,
@@ -20,14 +24,17 @@ pub struct TimelineAudio {
 
 impl TimelineAudio {
     /// 在后台为时间线剩余音频建立流式解码；所有时间转为交错立体声 48kHz 样本。
-    /// 静音轨道、零增益和离线素材跳过；各片段增益进入 PCM 混合，失败清理解码器。
+    /// 静音轨道、始终静音和离线素材跳过；音量动画排序后以游标消费，失败清理解码器。
     pub fn start(t: &Timeline, offset: f64, sources: &[Media]) -> Result<Self, String> {
         let fps = t.fps as f64;
         let sample = |seconds: f64| (seconds.max(0.0) * 96000.0).round() as u64;
         let mut layers = Vec::new();
         for c in &t.clips {
             if t.tracks[c.track].muted
-                || c.gain == 0.0
+                || (c.gain == 0.0
+                    && !c.keyframes.iter().any(|k| {
+                        k.kind == crate::keyframes::KeyframeKind::Volume && k.values[0] > 0.0
+                    }))
                 || (c.start + c.duration) as f64 / fps <= offset
             {
                 continue;
@@ -50,12 +57,23 @@ impl TimelineAudio {
             audio.kind = MediaKind::Audio;
             let mut decoder = Decoder::start(&audio, source_in, source_end)?;
             if let Some(pcm) = decoder.take_audio() {
+                let mut keys: Vec<_> = c
+                    .keyframes
+                    .iter()
+                    .filter(|k| k.kind == crate::keyframes::KeyframeKind::Volume)
+                    .map(|k| ((c.start + k.frame) as f64, k.values[0]))
+                    .collect();
+                keys.sort_by(|a, b| a.0.total_cmp(&b.0));
                 layers.push(Layer {
                     start: sample(c.start as f64 / fps - offset),
                     end: sample((c.start + c.duration) as f64 / fps - offset),
                     pcm,
                     decoder,
                     gain: c.gain as f32,
+                    keys,
+                    key_index: 0,
+                    fps,
+                    offset,
                 });
             }
         }
@@ -74,7 +92,8 @@ impl TimelineAudio {
 }
 impl Iterator for TimelineAudio {
     type Item = f32;
-    /// 按片段增益乘以 PCM 后求和并限制输出振幅；非活动片段不消费样本，末尾结束迭代。
+    /// 在立体声采样对的同一时刻线性插值增益，再混合并限制振幅；跳转从 offset 开始求值。
+    /// 非活动片段不消费样本，音量游标仅前进，末尾结束迭代。
     fn next(&mut self) -> Option<f32> {
         if self.position >= self.end {
             return None;
@@ -82,6 +101,21 @@ impl Iterator for TimelineAudio {
         let mut value = 0.0;
         for layer in &mut self.layers {
             if self.position >= layer.start && self.position < layer.end {
+                let frame = (layer.offset + (self.position / 2) as f64 / 48000.0) * layer.fps;
+                // 关键帧游标只前进，音频回调不分配内存，也不为每个采样遍历整条动画。
+                while layer.key_index + 1 < layer.keys.len()
+                    && layer.keys[layer.key_index + 1].0 <= frame
+                {
+                    layer.key_index += 1;
+                }
+                if let Some(&(a, gain)) = layer.keys.get(layer.key_index) {
+                    layer.gain = match layer.keys.get(layer.key_index + 1) {
+                        Some(&(b, next)) if frame > a => {
+                            (gain + (next - gain) * ((frame - a) / (b - a))) as f32
+                        }
+                        _ => gain as f32,
+                    };
+                }
                 value += layer.pcm.next().unwrap_or(0.0) * layer.gain;
             }
         }

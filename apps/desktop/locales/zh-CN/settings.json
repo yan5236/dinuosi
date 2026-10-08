@@ -39,5 +39,6 @@
   "No clip selection required": "无需选中素材",
   "Clip appearance while dragging": "拖动素材时",
   "Follow mouse": "跟随鼠标",
-  "Keep in timeline": "保留在时间线"
+  "Keep in timeline": "保留在时间线",
+  "Automatically add keyframes": "自动添加关键帧"
 }

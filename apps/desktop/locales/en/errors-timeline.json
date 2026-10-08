@@ -25,5 +25,8 @@
   "请输入有效音量": "Enter a valid volume",
   "请输入有效数值": "Enter a valid number",
   "轨道名称应为 1–32 个字符": "Track names must contain 1–32 characters",
-  "没有打开项目": "No project is open"
+  "没有打开项目": "No project is open",
+  "关键帧类型无效": "Invalid keyframe type",
+  "关键帧类型或时间无效": "Invalid keyframe type or time",
+  "关键帧参数无效": "Invalid keyframe value"
 }

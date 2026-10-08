@@ -72,20 +72,7 @@ impl Desktop {
                         enabled,
                         cx,
                     ))
-                    .child(
-                        div()
-                            .h(px(36.0))
-                            .flex()
-                            .items_center()
-                            .text_size(px(12.0))
-                            .gap(px(7.0))
-                            .child(crate::i18n::t("inspector", "Position", cx))
-                            .child("X")
-                            .child(self.property_number(Property::X, enabled, cx))
-                            .child(div().w(px(9.0)))
-                            .child("Y")
-                            .child(self.property_number(Property::Y, enabled, cx)),
-                    )
+                    .child(self.position_row(width, enabled, cx))
                     .child(div().h(px(16.0)))
                     .child(self.inspector_row(
                         crate::i18n::t("inspector", "Rotation", cx),
@@ -95,7 +82,54 @@ impl Desktop {
                     ))
             })
     }
-    /// 读取首个选中的画面片段用于变换检查器显示；多选写入仅应用于未锁定的图片、视频。
+    /// 为坐标标签及 X/Y 分别保留独立布局和完整数值框，避免相邻文字被合并、挤压。
+    /// 宽检查器横向排列，窄于 360px 时仅将 X/Y 成组竖排；坐标共用一个右侧关键帧控件。
+    fn position_row(&self, width: f32, enabled: bool, cx: &mut Context<Self>) -> Div {
+        let narrow = width < 360.0;
+        div()
+            .debug_selector(|| "inspector-position-row".into())
+            .h(px(if narrow { 60.0 } else { 37.0 }))
+            .flex()
+            .items_center()
+            .gap(px(6.0))
+            .text_size(px(12.0))
+            .child(
+                div()
+                    .debug_selector(|| "inspector-position-label".into())
+                    .w(px(63.0))
+                    .flex_none()
+                    .child(crate::i18n::t("inspector", "Position", cx)),
+            )
+            .child(
+                div()
+                    .flex()
+                    .flex_1()
+                    .min_w_0()
+                    .gap(px(6.0))
+                    .when(narrow, |s| s.flex_col())
+                    .children([(Property::X, "X"), (Property::Y, "Y")].into_iter().map(
+                        |(property, label)| {
+                            div()
+                                .flex()
+                                .flex_none()
+                                .items_center()
+                                .gap(px(6.0))
+                                .child(
+                                    div()
+                                        .debug_selector(move || {
+                                            format!("inspector-coordinate-{label}-label")
+                                        })
+                                        .w(px(10.0))
+                                        .flex_none()
+                                        .child(label),
+                                )
+                                .child(self.property_number(property, enabled, cx))
+                        },
+                    )),
+            )
+            .child(self.keyframe_controls(dinuosi_core::keyframes::KeyframeKind::Position, cx))
+    }
+    /// 按播放头帧读取首个选中画面片段的插值参数；多选写入仅应用于未锁定图片、视频。
     pub(crate) fn property_value(&self, property: Property) -> f64 {
         self.timeline
             .model
@@ -107,7 +141,7 @@ impl Desktop {
             })
             .map_or_else(
                 || dinuosi_core::timeline::Transform::default().get(property),
-                |c| c.transform.get(property),
+                |c| c.transform_at(self.keyframe_frame() as f64).get(property),
             )
     }
     /// 绘制标签、滑块及数值微调控件；每个连续拖动只提交一次核心历史。
@@ -126,11 +160,15 @@ impl Desktop {
             .h(px(37.0))
             .flex()
             .items_center()
-            .gap(px(14.0))
+            .gap(px(6.0))
             .text_size(px(12.0))
             .child(div().w(px(63.0)).flex_none().child(label))
             .child(slider)
             .child(self.property_number(property, enabled, cx))
+            .child(self.keyframe_controls(
+                dinuosi_core::keyframes::KeyframeKind::for_property(property),
+                cx,
+            ))
     }
     /// 绘制变换或音频共用的滑块；按下保存快照并捕获根节点移动，释放提交一次历史。
     /// property 为 None 时使用音频增益，ratio 为核心计算的 0..1 比例，禁用时忽略指针。
@@ -189,6 +227,7 @@ impl Desktop {
                                 {
                                     entity.update(cx, |this, cx| {
                                         this.commit_inspector_input(cx);
+                                        this.stop_timeline();
                                         this.focus_handle.focus(window);
                                         this.timeline.before = Some(this.timeline.model.clone());
                                         this.timeline.gesture = Some(match property {
@@ -210,7 +249,8 @@ impl Desktop {
                 .inset_0(),
             )
     }
-    /// 数字框支持直接输入、Enter/失焦提交、Esc 取消及上下箭头单步调整，不添加额外说明。
+    /// 数字框支持直接输入、Enter/失焦提交、Esc 取消及上下箭头单步调整。
+    /// 所有参数沿用完整 59px 数值区与 17px 微调箭头，坐标布局负责适配窄窗口。
     fn property_number(&self, property: Property, enabled: bool, cx: &mut Context<Self>) -> Div {
         let active = self.timeline.input.as_ref().filter(|(p, _)| *p == property);
         let suffix = match property {
@@ -264,6 +304,7 @@ impl Desktop {
                             .id(gpui::SharedString::from(format!(
                                 "inspector-step-{property:?}-{delta}"
                             )))
+                            .debug_selector(move || format!("inspector-step-{property:?}-{delta}"))
                             .h(px(12.0))
                             .w_full()
                             .text_size(px(9.0))

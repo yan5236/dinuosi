@@ -8,6 +8,7 @@ mod help;
 mod i18n;
 mod input;
 mod inspector;
+mod keyframes;
 mod library;
 mod manager;
 mod media;
@@ -29,6 +30,7 @@ mod timeline_actions;
 mod timeline_blade;
 mod timeline_clip;
 mod timeline_drag;
+mod timeline_keyframes;
 mod timeline_preview;
 mod timeline_scroll;
 mod timeline_sound;
@@ -48,6 +50,8 @@ mod audio_track_tests;
 mod editor_media_tests;
 #[cfg(test)]
 mod i18n_tests;
+#[cfg(test)]
+mod keyframe_tests;
 #[cfg(test)]
 mod preview_transform_tests;
 #[cfg(test)]
