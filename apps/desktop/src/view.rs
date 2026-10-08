@@ -28,6 +28,7 @@ pub struct Desktop {
     pub(crate) busy: bool,
     pub(crate) zoom: f32,
     pub(crate) volume: f32,
+    pub(crate) preview_fullscreen: bool,
     pub(crate) session: crate::preview::EditorSession,
     pub(crate) timeline: crate::timeline_state::TimelineSession,
 }
@@ -112,6 +113,7 @@ impl Desktop {
             busy: true,
             zoom: 1.0,
             volume: 1.0,
+            preview_fullscreen: false,
             session: crate::preview::EditorSession::new(cx),
             timeline: Default::default(),
         };
@@ -265,7 +267,7 @@ impl Desktop {
 }
 impl Render for Desktop {
     /// 渲染当前窗口角色与浮层；工作区快捷键在根节点接收冒泡，焦点置于零尺寸节点以保留系统拖动。
-    /// 弹窗存在时阻止工作区快捷键，并委派 Tab、Enter、Escape 到弹窗交互，避免编辑名称时意外新建。
+    /// 弹窗存在时隔离工作区快捷键；全屏观看仅挂载播放器，避免编辑元素接收输入。
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         for image in self.session.retired_frames.drain(..) {
             if !self
@@ -276,6 +278,9 @@ impl Render for Desktop {
             {
                 let _ = window.drop_image(image);
             }
+        }
+        if self.preview_fullscreen {
+            return self.fullscreen_preview(cx).into_any_element();
         }
         let dimensions = window.viewport_size();
         let layout = crate::editor::Layout::new(dimensions.width.into(), dimensions.height.into());
@@ -413,6 +418,7 @@ impl Render for Desktop {
                         )),
                     )
             }))
+            .into_any_element()
     }
 }
 #[cfg(test)]

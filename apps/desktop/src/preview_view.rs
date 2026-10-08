@@ -11,7 +11,7 @@ use gpui::{Context, Div, MouseButton, ObjectFit, div, img, prelude::*, px, relat
 
 impl Desktop {
     /// 按素材显示比例居中绘制完整画面；四周随面板尺寸留白，透明补边透出灰色背景。
-    /// 图片采用绝对定位避免固有尺寸撑开布局；音频素材显示完整源波形，时间线叠加变换选择框。
+    /// 图片绝对定位避免撑开布局；全屏使用黑色补边且不挂载选择/变换命中层，普通时间线可编辑。
     pub(crate) fn preview_display(&self, cx: &mut Context<Self>) -> Div {
         let selected = self
             .session
@@ -24,17 +24,28 @@ impl Desktop {
             .flex_1()
             .min_h_0()
             .relative()
-            .bg(rgb(PANEL))
+            .bg(rgb(if self.preview_fullscreen {
+                0x000000
+            } else {
+                PANEL
+            }))
             .child(
                 div()
                     .debug_selector(|| "preview-viewport".into())
                     .absolute()
-                    .left(relative(0.04))
-                    .right(relative(0.04))
-                    .top(relative(0.04))
-                    .bottom(relative(0.04))
+                    .inset_0()
+                    .when(!self.preview_fullscreen, |s| {
+                        s.left(relative(0.04))
+                            .right(relative(0.04))
+                            .top(relative(0.04))
+                            .bottom(relative(0.04))
+                    })
                     .overflow_hidden()
-                    .bg(rgb(PANEL))
+                    .bg(rgb(if self.preview_fullscreen {
+                        0x000000
+                    } else {
+                        PANEL
+                    }))
                     .when(offline, |s| {
                         s.child(crate::media_status::offline_view(false, cx))
                     })
@@ -53,7 +64,7 @@ impl Desktop {
                             )
                         },
                     )
-                    .when(self.timeline.preview, |s| {
+                    .when(self.timeline.preview && !self.preview_fullscreen, |s| {
                         s.child(self.preview_transform_overlay(cx))
                     })
                     .when(audio && !offline, |s| {
@@ -237,7 +248,7 @@ impl Desktop {
             })
     }
 
-    /// 按素材或时间线模式绘制时间码、播放与定位；素材模式可将当前选区添加到主轨。
+    /// 按素材或时间线模式绘制时间码、逐帧定位和播放；全屏入口切换为独立观看布局。
     pub(crate) fn preview_controls(&self, width: f32, cx: &mut Context<Self>) -> Div {
         let enabled = self.timeline.preview && !self.timeline.model.clips.is_empty()
             || self
@@ -300,14 +311,7 @@ impl Desktop {
                     .child(
                         tool("preview-back", Icon::SkipBack, enabled).on_click(cx.listener(
                             |this, _, _, cx| {
-                                if this.timeline.preview {
-                                    this.seek_timeline(0.0, true, cx);
-                                    return;
-                                }
-                                this.stop_preview();
-                                this.session.position = this.session.trim_start;
-                                this.request_frame(cx);
-                                cx.notify();
+                                this.step_preview_frame(-1, cx);
                             },
                         )),
                     )
@@ -335,19 +339,7 @@ impl Desktop {
                     .child(
                         tool("preview-next", Icon::SkipForward, enabled).on_click(cx.listener(
                             |this, _, _, cx| {
-                                if this.timeline.preview {
-                                    this.seek_timeline(
-                                        this.timeline.model.end() as f64
-                                            / this.timeline.model.fps as f64,
-                                        true,
-                                        cx,
-                                    );
-                                    return;
-                                }
-                                this.stop_preview();
-                                this.session.position = this.session.trim_end;
-                                this.request_frame(cx);
-                                cx.notify();
+                                this.step_preview_frame(1, cx);
                             },
                         )),
                     ),
@@ -382,8 +374,11 @@ impl Desktop {
                     )
                     .child(self.slider(Pointer::Volume, (width * 0.12).max(40.0), cx))
                     .child(
-                        tool("preview-fullscreen", Icon::Fullscreen, enabled)
-                            .on_click(cx.listener(|_, _, window, _| window.toggle_fullscreen())),
+                        tool("preview-fullscreen", Icon::Fullscreen, enabled).on_click(
+                            cx.listener(|this, _, window, cx| {
+                                this.toggle_preview_fullscreen(window, cx);
+                            }),
+                        ),
                     ),
             )
     }

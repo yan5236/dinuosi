@@ -2,13 +2,17 @@
 use super::*;
 impl Desktop {
     /// 按当前焦点与统一快捷键注册表路由；输入参数时只接受提交/取消，防止误删片段。
-    /// 非输入状态下 Tab/Shift+Tab 遍历工具触发元素，以便键盘聚焦显示 Tooltip。
+    /// 全屏模式只接受播放/退出与焦点导航；其余非输入状态下 Tab 遍历工具以显示 Tooltip。
     pub(super) fn workspace_key(
         &mut self,
         event: &gpui::KeyDownEvent,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if self.preview_fullscreen {
+            self.fullscreen_preview_key(event, window, cx);
+            return;
+        }
         if self.dialog.is_some() {
             self.dialog_key(event, window, cx);
             return;

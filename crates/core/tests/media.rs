@@ -184,3 +184,39 @@ fn ffmpeg_reads_real_media_and_seek_frames() {
     std::fs::rename(renamed, &video.path).unwrap();
     std::fs::remove_dir_all(root).unwrap();
 }
+
+/// 24fps 源在 30fps 项目最后采样点之后已无可解码新帧，仍返回真实尾帧；损坏源继续报错。
+#[test]
+#[ignore = "需要本机 FFmpeg 和 ffprobe"]
+fn seek_after_last_source_frame_returns_real_tail_frame() {
+    let root = std::env::temp_dir().join(format!("dinuosi-tail-{}", uuid::Uuid::new_v4()));
+    std::fs::create_dir_all(&root).unwrap();
+    let path = root.join("tail.mp4");
+    assert!(
+        media::command("ffmpeg")
+            .args([
+                "-v",
+                "error",
+                "-f",
+                "lavfi",
+                "-i",
+                "testsrc2=size=320x180:rate=24",
+                "-t",
+                "1",
+                "-c:v",
+                "libx264"
+            ])
+            .arg(&path)
+            .status()
+            .unwrap()
+            .success()
+    );
+    let last = media::frame(&path, 23.0 / 24.0 - 0.000001).unwrap();
+    assert_ne!(last, media::frame(&path, 0.0).unwrap());
+    assert_eq!(media::frame(&path, 29.0 / 30.0).unwrap(), last);
+    assert_eq!(media::frame(&path, 1.0).unwrap(), last);
+    let broken = root.join("broken.mp4");
+    std::fs::write(&broken, b"broken").unwrap();
+    assert!(media::frame(&broken, 0.0).is_err());
+    std::fs::remove_dir_all(root).unwrap();
+}

@@ -18,6 +18,7 @@ mod playback;
 mod preferences;
 mod preview;
 mod preview_geometry;
+mod preview_player;
 mod preview_transform;
 mod preview_view;
 mod settings;
@@ -52,6 +53,8 @@ mod editor_media_tests;
 mod i18n_tests;
 #[cfg(test)]
 mod keyframe_tests;
+#[cfg(test)]
+mod preview_player_tests;
 #[cfg(test)]
 mod preview_transform_tests;
 #[cfg(test)]

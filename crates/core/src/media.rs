@@ -9,6 +9,7 @@ use std::{
 
 pub const FRAME_WIDTH: u32 = 640;
 pub const FRAME_HEIGHT: u32 = 360;
+const VIDEO_FILTER: &str = "scale=640:360:force_original_aspect_ratio=decrease:reset_sar=1,format=bgra,pad=640:360:(ow-iw)/2:(oh-ih)/2:color=black@0";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MediaKind {
@@ -269,7 +270,7 @@ pub fn video_arguments(command: &mut Command) {
         "0:v:0",
         "-an",
         "-vf",
-        "scale=640:360:force_original_aspect_ratio=decrease:reset_sar=1,format=bgra,pad=640:360:(ow-iw)/2:(oh-ih)/2:color=black@0",
+        VIDEO_FILTER,
         "-pix_fmt",
         "bgra",
         "-f",
@@ -277,17 +278,33 @@ pub fn video_arguments(command: &mut Command) {
     ]);
 }
 
-/// 解码指定秒数的一帧；FFmpeg 退出失败或输出不足时返回可展示的错误，不留下子进程。
+/// 解码指定秒数的一帧；源帧率与项目不同导致尾端无输出时，倒序解码最后一秒取得真实尾帧。
+/// 只对成功退出但无帧的寻址补取尾帧；退出失败或像素不足仍返回实际错误，不留下子进程。
 pub fn frame(path: &Path, seconds: f64) -> Result<Vec<u8>, String> {
     let mut decoder = command("ffmpeg");
     decoder
         .args(["-v", "error", "-ss", &format!("{seconds:.6}"), "-i"])
         .arg(path);
     video_arguments(&mut decoder);
-    let output = decoder
+    let mut output = decoder
         .args(["-frames:v", "1", "pipe:1"])
         .output()
         .map_err(|e| format!("无法解码预览：{e}"))?;
+    if output.status.success() && output.stdout.is_empty() {
+        let mut tail = command("ffmpeg");
+        tail.args(["-v", "error", "-sseof", "-1", "-i"]).arg(path);
+        video_arguments(&mut tail);
+        output = tail
+            .args([
+                "-vf",
+                &format!("{VIDEO_FILTER},reverse"),
+                "-frames:v",
+                "1",
+                "pipe:1",
+            ])
+            .output()
+            .map_err(|e| format!("无法解码预览：{e}"))?;
+    }
     if !output.status.success() || output.stdout.len() != (FRAME_WIDTH * FRAME_HEIGHT * 4) as usize
     {
         return Err(format!(

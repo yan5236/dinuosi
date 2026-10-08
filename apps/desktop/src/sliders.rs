@@ -14,6 +14,7 @@ pub enum Pointer {
     TrimStart,
     TrimEnd,
     Timeline,
+    PreviewProgress,
 }
 
 impl Desktop {
@@ -85,19 +86,30 @@ impl Desktop {
             .child(self.pointer_bounds(kind, cx))
     }
 
-    /// 开始指针捕获；预览寻址/选区拖动先停止设备播放，释放后恢复之前的播放状态。
+    /// 捕获指针；素材选区及全屏进度寻址暂停对应播放器，记住状态以便释放后恢复。
     pub(crate) fn begin_pointer(&mut self, kind: Pointer, x: Pixels, cx: &mut Context<Self>) {
         self.session.drag = Some(kind);
-        self.session.resume_after_drag =
-            matches!(kind, Pointer::Seek | Pointer::TrimStart | Pointer::TrimEnd)
-                && self.session.player.is_some();
+        self.session.resume_after_drag = if kind == Pointer::PreviewProgress
+            && self.timeline.preview
+        {
+            self.timeline.playing
+        } else {
+            matches!(
+                kind,
+                Pointer::Seek | Pointer::TrimStart | Pointer::TrimEnd | Pointer::PreviewProgress
+            ) && (self.session.player.is_some() || self.session.starting)
+        };
         if self.session.resume_after_drag {
-            self.stop_preview();
+            if kind == Pointer::PreviewProgress && self.timeline.preview {
+                self.stop_timeline();
+            } else {
+                self.stop_preview();
+            }
         }
         self.move_pointer(x, cx);
     }
 
-    /// 按当前鼠标横坐标更新被捕获的控件，边界外夹紧；音量直接更新设备增益。
+    /// 按真实控件边界夹紧鼠标比例；全屏进度映射当前播放范围，时间线遵循实时/释放预览偏好。
     pub(crate) fn move_pointer(&mut self, x: Pixels, cx: &mut Context<Self>) {
         let Some(kind) = self.session.drag else {
             return;
@@ -131,6 +143,16 @@ impl Desktop {
                     .clamp(self.session.trim_start, self.session.trim_end);
                 self.request_frame(cx);
             }
+            Pointer::PreviewProgress => {
+                if self.timeline.preview {
+                    let end = self.timeline.model.end() as f64 / self.timeline.model.fps as f64;
+                    self.seek_timeline(ratio as f64 * end, false, cx);
+                } else {
+                    self.session.position = self.session.trim_start
+                        + ratio as f64 * (self.session.trim_end - self.session.trim_start);
+                    self.request_frame(cx);
+                }
+            }
             Pointer::TrimStart => {
                 self.session.trim_start = (ratio as f64 * self.session.duration())
                     .min((self.session.trim_end - 0.01).max(0.0));
@@ -148,16 +170,21 @@ impl Desktop {
         cx.notify();
     }
 
-    /// 释放捕获并在需要时恢复选区播放；重复释放不会重启播放器。
+    /// 释放时确保时间线最终帧刷新，并仅恢复拖动前正在播放的对应播放器；重复释放无操作。
     pub(crate) fn end_pointer(&mut self, window: &mut gpui::Window, cx: &mut Context<Self>) {
         let Some(kind) = self.session.drag.take() else {
             return;
         };
-        if kind == Pointer::Timeline {
+        if kind == Pointer::Timeline || (kind == Pointer::PreviewProgress && self.timeline.preview)
+        {
             self.seek_timeline(self.session.timeline_position, true, cx);
         }
         if std::mem::take(&mut self.session.resume_after_drag) {
-            self.play_preview(window, cx);
+            if kind == Pointer::PreviewProgress && self.timeline.preview {
+                self.play_timeline(window, cx);
+            } else {
+                self.play_preview(window, cx);
+            }
         }
         cx.notify();
     }
