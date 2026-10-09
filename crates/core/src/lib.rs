@@ -13,6 +13,7 @@ pub mod timeline_audio;
 mod timeline_edit;
 mod timeline_file;
 mod timeline_split;
+pub mod timeline_tools;
 pub mod waveform;
 pub use storage::preferences::Preferences;
 pub use storage::{MediaImport, ProjectEntry, ProjectStore};

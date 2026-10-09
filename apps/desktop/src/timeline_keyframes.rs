@@ -101,6 +101,7 @@ impl Desktop {
         if self.busy
             || !self.timeline.model.clips.iter().any(|c| {
                 c.id == id
+                    && !c.locked
                     && !self.timeline.model.tracks[c.track].locked
                     && c.keyframe_frames(None).contains(&frame)
             })

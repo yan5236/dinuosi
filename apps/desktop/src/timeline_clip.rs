@@ -64,7 +64,7 @@ impl Desktop {
                 .bg(rgb(0x414147))
                 .border_1()
                 .border_color(rgb(if selected { TEXT } else { 0x68686e }))
-                .when(!self.timeline.blade, |s| s.cursor_grab())
+                .when(!self.timeline.blade && !clip.locked, |s| s.cursor_grab())
                 .on_mouse_down(
                     MouseButton::Left,
                     cx.listener(move |this, e, window, cx| {
@@ -142,6 +142,8 @@ impl Desktop {
                         .filter(|left| {
                             !self.timeline.blade
                                 && selected
+                                && !clip.locked
+                                && !self.timeline.model.tracks[clip.track].locked
                                 && if *left { x >= 0.0 } else { x + w <= width }
                         })
                         .map(|left| {

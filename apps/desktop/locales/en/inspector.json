@@ -4,5 +4,15 @@
   "Opacity": "Opacity",
   "Scale": "Scale",
   "Position": "Position",
-  "Rotation": "Rotation"
+  "Rotation": "Rotation",
+  "Project": "Project",
+  "Markers": "Markers",
+  "Marker": "Marker",
+  "Project name": "Project name",
+  "Resolution": "Resolution",
+  "Frame rate": "Frame rate",
+  "Bitrate": "Bitrate",
+  "Duration": "Duration",
+  "Delete marker": "Delete marker",
+  "Edit marker": "Edit marker"
 }

@@ -25,10 +25,11 @@ pub struct PreviewShape {
     pub id: String,
     pub geometry: Geometry,
     pub selected: bool,
+    pub locked: bool,
 }
 
 impl Desktop {
-    /// 按合成器的图层顺序列出当前帧可编辑的画面；排除离线、隐藏、锁定、音频及时间范围外片段。
+    /// 按合成器图层顺序列出当前帧可选画面；排除离线、隐藏、锁轨、音频及范围外片段，片段锁定另行阻止变换。
     /// 使用源尺寸与项目画布匹配合成器的补边，仅读取已加载元数据；返回顺序从顶层到底层。
     pub(crate) fn preview_shapes(&self) -> Vec<PreviewShape> {
         if !self.timeline.preview {
@@ -73,6 +74,7 @@ impl Desktop {
                         (model.width, model.height),
                     ),
                     selected: self.timeline.selected.contains(&clip.id),
+                    locked: clip.locked,
                 })
             })
             .collect()
@@ -106,7 +108,7 @@ impl Desktop {
                         let bounds = this.timeline.preview_bounds;
                         window.with_content_mask(Some(ContentMask { bounds }), |window| {
                             for shape in this.preview_shapes().iter().filter(|s| s.selected) {
-                                paint_selection(&shape.geometry, window);
+                                paint_selection(&shape.geometry, !shape.locked, window);
                             }
                         });
                     },
@@ -132,7 +134,7 @@ impl Desktop {
         let shapes = self.preview_shapes();
         let target = shapes
             .iter()
-            .filter(|s| s.selected)
+            .filter(|s| s.selected && !s.locked)
             .find_map(|s| s.geometry.handle_at(event.position).map(|h| (s, h)))
             .or_else(|| {
                 shapes
@@ -155,6 +157,11 @@ impl Desktop {
             .unwrap()
             .transform_at(self.keyframe_frame() as f64);
         self.timeline.selected = [shape.id.clone()].into();
+        if shape.locked {
+            cx.notify();
+            cx.stop_propagation();
+            return;
+        }
         self.stop_timeline();
         self.stop_preview();
         self.timeline.before = Some(self.timeline.model.clone());
@@ -239,8 +246,8 @@ impl Desktop {
     }
 }
 
-/// 绘制细白色旋转边框、四角缩放圆点及下方旋转柄；满屏时控件内收，整体由画布遮罩限制。
-fn paint_selection(g: &Geometry, window: &mut Window) {
+/// 绘制细白色旋转边框；editable 为 false 时仅显示边框，未锁定才提供缩放/旋转柄，全部控件由画布遮罩限制。
+fn paint_selection(g: &Geometry, editable: bool, window: &mut Window) {
     let corners = g.corners();
     let mut path = PathBuilder::stroke(px(1.0));
     path.move_to(corners[0]);
@@ -250,6 +257,9 @@ fn paint_selection(g: &Geometry, window: &mut Window) {
     path.close();
     if let Ok(path) = path.build() {
         window.paint_path(path, rgb(0xffffff));
+    }
+    if !editable {
+        return;
     }
     for p in g.handles() {
         paint_dot(p, 3.5, 0xffffff, window);

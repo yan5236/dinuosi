@@ -37,8 +37,9 @@ impl Desktop {
         let keys = clip
             .map(|c| c.keyframe_frames(Some(kind)))
             .unwrap_or_default();
-        let enabled =
-            clip.is_some_and(|c| !self.busy && !self.timeline.model.tracks[c.track].locked);
+        let enabled = clip.is_some_and(|c| {
+            !self.busy && !c.locked && !self.timeline.model.tracks[c.track].locked
+        });
         let filled = keys.contains(&frame);
         let nav = keys.len() >= 2;
         div()
@@ -129,7 +130,10 @@ impl Desktop {
         self.commit_inspector_input(cx);
         let frame = self.keyframe_frame();
         let Some(clip) = self.keyframe_clip(kind).filter(|c| {
-            c.contains_frame(frame) && !self.busy && !self.timeline.model.tracks[c.track].locked
+            c.contains_frame(frame)
+                && !self.busy
+                && !c.locked
+                && !self.timeline.model.tracks[c.track].locked
         }) else {
             return;
         };

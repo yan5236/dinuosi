@@ -7,7 +7,7 @@ use dinuosi_core::timeline::{Property, Timeline, TrackKind};
 use gpui::{Context, MouseDownEvent, Pixels, Point, Window};
 
 impl Desktop {
-    /// 刀片模式委派切割；选择模式开始片段移动/修剪，保持已选组，Ctrl/Shift 追加选择，锁轨忽略输入。
+    /// 刀片模式委派未锁定素材切割；选择保持已选组并支持 Ctrl/Shift 追加，锁定片段仍可选择但不启动移动/修剪，锁轨忽略输入。
     pub(crate) fn begin_clip(
         &mut self,
         id: String,
@@ -16,7 +16,14 @@ impl Desktop {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.timeline.blade {
+        if self.timeline.blade
+            && !self
+                .timeline
+                .model
+                .clips
+                .iter()
+                .any(|c| c.id == id && c.locked)
+        {
             self.click_blade_clip(id, event, window, cx);
             return;
         }
@@ -28,6 +35,7 @@ impl Desktop {
             return;
         }
         let track = clip.track;
+        let locked = clip.locked;
         if event.modifiers.control || event.modifiers.shift {
             if !self.timeline.selected.insert(id.clone()) {
                 self.timeline.selected.remove(&id);
@@ -40,6 +48,18 @@ impl Desktop {
         self.timeline.preview = true;
         self.stop_timeline();
         self.stop_preview();
+        if locked
+            || self
+                .timeline
+                .model
+                .clips
+                .iter()
+                .any(|c| c.locked && self.timeline.selected.contains(&c.id))
+        {
+            self.refresh_timeline(cx);
+            cx.stop_propagation();
+            return;
+        }
         self.timeline.before = Some(self.timeline.model.clone());
         self.timeline.gesture_scroll = gpui::point(self.timeline.scroll_x, self.timeline.scroll_y);
         self.timeline.gesture = Some(match edge {
@@ -147,6 +167,20 @@ impl Desktop {
                     .round() as i64;
                 if let Some(before) = &self.timeline.before {
                     let mut next = before.clone();
+                    let delta = before
+                        .clips
+                        .iter()
+                        .find(|c| &c.id == id)
+                        .map_or(delta, |c| {
+                            let edge = if *left { c.start } else { c.start + c.duration };
+                            delta
+                                + before.snap_offset(
+                                    &[edge + delta],
+                                    &[id.clone()].into(),
+                                    self.keyframe_frame(),
+                                    self.snap_tolerance(),
+                                )
+                        });
                     let _ = next.trim(id, *left, delta);
                     self.timeline.model = next;
                 }
@@ -236,7 +270,7 @@ impl Desktop {
                     self.insert_media_clip(
                         index,
                         track,
-                        self.timeline_frame_at(self.timeline.pointer.x),
+                        self.library_drop_start(index),
                         window,
                         cx,
                     );
@@ -305,17 +339,14 @@ impl Desktop {
         } else {
             0..duration
         };
+        let start = self.snap_clip_start(&self.timeline.model, start, range.end - range.start);
         let insertion = self.timeline.model.tracks[track]
             .kind
             .accepts(m.kind)
             .then(|| {
-                self.timeline.model.insertion_frame(
-                    track,
-                    start,
-                    (8.0 / self.pixels_per_second() * self.timeline.model.fps as f32).round()
-                        as i64,
-                    &Default::default(),
-                )
+                self.timeline
+                    .model
+                    .insertion_frame(track, start, 0, &Default::default())
             })
             .flatten();
         let start = insertion.unwrap_or(start);
@@ -356,7 +387,7 @@ impl Desktop {
         }
     }
     /// 提交前清理空非主轨并同步保存元数据；主轨保留，轨道清理与编辑共用一条撤销历史。
-    /// 失败回滚本次编辑并显示实际错误，成功刷新轨道几何和预览。
+    /// 失败回滚本次编辑并显示实际错误，清除不存在的片段选择，成功刷新轨道几何和预览。
     pub(crate) fn commit_timeline(&mut self, before: Timeline, cx: &mut Context<Self>) {
         self.timeline.model.remove_empty_tracks();
         self.timeline.rename = None;
@@ -374,6 +405,9 @@ impl Desktop {
         } else {
             self.timeline.history.record(before, &self.timeline.model);
         }
+        self.timeline
+            .selected
+            .retain(|id| self.timeline.model.clips.iter().any(|c| &c.id == id));
         self.refresh_timeline(cx);
     }
     /// 删除未锁定的选中片段，持久化成功后可撤销；不更改任何素材文件。
@@ -390,7 +424,7 @@ impl Desktop {
             .retain(|id| self.timeline.model.clips.iter().any(|c| &c.id == id));
         cx.notify();
     }
-    /// 撤销/重做由核心快照交换执行，保存失败时反向交换恢复历史和当前模型。
+    /// 撤销/重做由核心快照交换执行，保存失败时反向交换恢复历史和当前模型；成功后清理失效选择，让检查器显示正确项目资料。
     pub(crate) fn timeline_history(&mut self, redo: bool, cx: &mut Context<Self>) {
         if self.busy {
             return;
@@ -405,6 +439,9 @@ impl Desktop {
                 self.timeline.history.step(&mut self.timeline.model, !redo);
                 self.notice = Some(error);
             }
+            self.timeline
+                .selected
+                .retain(|id| self.timeline.model.clips.iter().any(|c| &c.id == id));
             self.refresh_timeline(cx);
         }
     }

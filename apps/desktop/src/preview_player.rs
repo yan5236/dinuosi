@@ -70,6 +70,7 @@ impl Desktop {
         self.project_menu = None;
         self.session.media_menu = None;
         self.timeline.keyframe_menu = None;
+        self.timeline.marker_menu = None;
         self.timeline.blade_pointer = None;
         self.preview_fullscreen = !self.preview_fullscreen;
         if window.is_fullscreen() != self.preview_fullscreen {

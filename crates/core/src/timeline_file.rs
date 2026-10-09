@@ -12,6 +12,10 @@ pub(crate) struct TimelineV1 {
     bitrate_kbps: u32,
     tracks: Vec<TrackV1>,
     clips: Vec<ClipV1>,
+    #[serde(default)]
+    markers: Vec<MarkerV1>,
+    #[serde(default = "default_snapping")]
+    snapping: bool,
 }
 #[derive(Serialize, Deserialize)]
 struct TrackV1 {
@@ -27,6 +31,8 @@ struct TrackV1 {
 #[derive(Serialize, Deserialize)]
 struct ClipV1 {
     id: String,
+    #[serde(default)]
+    locked: bool,
     source: PathBuf,
     name: String,
     track: usize,
@@ -43,6 +49,17 @@ struct ClipV1 {
     keyframes: Vec<KeyframeV1>,
 }
 #[derive(Serialize, Deserialize)]
+struct MarkerV1 {
+    id: String,
+    frame: i64,
+    name: String,
+    color: u32,
+}
+/// 旧项目默认启用磁吸，不要求重新保存后才能拖放。
+fn default_snapping() -> bool {
+    true
+}
+#[derive(Serialize, Deserialize)]
 struct KeyframeV1 {
     frame: i64,
     kind: String,
@@ -57,10 +74,21 @@ fn default_bitrate() -> u32 {
     12000
 }
 impl TimelineV1 {
-    /// 显式复制领域数据、码率及关键帧类型/局部帧/值到版本化字段，不保存选择、拖动和历史。
+    /// 显式复制领域数据、片段锁定、标记、磁吸、码率及关键帧到版本化字段，不保存选择、拖动和历史。
     pub fn from_timeline(t: &Timeline) -> Self {
         Self {
             fps: t.fps,
+            snapping: t.snapping,
+            markers: t
+                .markers
+                .iter()
+                .map(|m| MarkerV1 {
+                    id: m.id.clone(),
+                    frame: m.frame,
+                    name: m.name.clone(),
+                    color: m.color,
+                })
+                .collect(),
             canvas: [t.width, t.height],
             bitrate_kbps: t.bitrate_kbps,
             tracks: t
@@ -88,6 +116,7 @@ impl TimelineV1 {
                 .iter()
                 .map(|c| ClipV1 {
                     id: c.id.clone(),
+                    locked: c.locked,
                     source: c.source.clone(),
                     name: c.name.clone(),
                     track: c.track,
@@ -127,7 +156,7 @@ impl TimelineV1 {
     /// 校验外部字段及码率并迁移无类型的旧三轨格式；载入后移除所有空非主轨，主轨始终保留。
     /// 旧音频片段迁移至独立音频轨道且音量默认 0dB；源选区、时间、轨道开关保持不变。
     /// 缺失自定义名称标记时仅将与旧默认名一致的轨道判为默认，其余名称保留用户原文。
-    /// 旧重叠片段分配到上方新轨道；缺失关键帧字段使用空动画。
+    /// 旧重叠片段分配到上方新轨道；缺失关键帧和标记使用空集合，片段默认解锁、磁吸默认开启。
     /// 损坏类型、增益、重复关键帧或非法动画值返回错误，不进入编辑器。
     pub fn into_timeline(self) -> Result<Timeline, String> {
         let legacy = self.tracks.iter().all(|t| t.kind.is_none());
@@ -150,6 +179,17 @@ impl TimelineV1 {
             .collect::<Result<Vec<_>, _>>()?;
         let mut timeline = Timeline {
             fps: self.fps,
+            snapping: self.snapping,
+            markers: self
+                .markers
+                .into_iter()
+                .map(|m| crate::timeline_tools::Marker {
+                    id: m.id,
+                    frame: m.frame,
+                    name: m.name,
+                    color: m.color,
+                })
+                .collect(),
             width: self.canvas[0],
             height: self.canvas[1],
             bitrate_kbps: self.bitrate_kbps,
@@ -191,6 +231,7 @@ impl TimelineV1 {
                     };
                     Ok(Clip {
                         id: c.id,
+                        locked: c.locked,
                         source: c.source,
                         name: c.name,
                         track: c.track,

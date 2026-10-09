@@ -48,6 +48,8 @@ impl Desktop {
             && self.project_menu.is_none()
             && self.session.media_menu.is_none()
             && self.timeline.keyframe_menu.is_none()
+            && self.timeline.marker_menu.is_none()
+            && self.timeline.marker_dialog.is_none()
             && self.timeline.gesture.is_none()
             && self.session.drag.is_none()
             && point.x >= b.left() + px(self.timeline.header)
@@ -65,7 +67,8 @@ impl Desktop {
         self.timeline.model.clips.iter().find_map(|clip| {
             let (top, height) = self.track_geometry(clip.track);
             let y = f32::from(point.y - self.timeline.bounds.top());
-            (!self.timeline.model.tracks[clip.track].locked
+            (!clip.locked
+                && !self.timeline.model.tracks[clip.track].locked
                 && y >= top + 4.0
                 && y < top + height - 4.0
                 && frame > clip.start

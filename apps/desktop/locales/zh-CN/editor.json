@@ -15,5 +15,9 @@
   "Import media": "导入素材",
   "Settings": "设置",
   "Close window": "关闭窗口",
-  "Open Dinuosi project": "打开 Dinuosi 项目"
+  "Open Dinuosi project": "打开 Dinuosi 项目",
+  "Unlock clip": "解锁片段",
+  "Enable snapping": "开启磁吸对齐",
+  "Disable snapping": "关闭磁吸对齐",
+  "Add marker": "添加标记点"
 }

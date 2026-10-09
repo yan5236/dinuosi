@@ -28,5 +28,9 @@
   "没有打开项目": "No project is open",
   "关键帧类型无效": "Invalid keyframe type",
   "关键帧类型或时间无效": "Invalid keyframe type or time",
-  "关键帧参数无效": "Invalid keyframe value"
+  "关键帧参数无效": "Invalid keyframe value",
+  "片段已锁定": "Clip is locked",
+  "标记点格式无效": "Invalid marker data",
+  "标记点不存在": "Marker does not exist",
+  "标记点名称应为 1–64 个字符，颜色必须为有效 RGB": "Marker names must contain 1–64 characters and colors must be valid RGB"
 }

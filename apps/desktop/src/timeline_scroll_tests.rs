@@ -347,6 +347,7 @@ fn gap_drop_preview_and_commit_use_actual_clip_duration(cx: &mut TestAppContext)
     for (case, following, seconds) in [(0, 210, 2.0), (1, 180, 2.0), (2, 179, 2.0), (3, 150, 1.0)] {
         let (desktop, visual, store, entry, root) = fixture(cx, &format!("空隙插入{case}"), 1);
         let next_id = desktop.update_in(visual, |v, _, cx| {
+            v.timeline.model.snapping = false;
             let id = v
                 .timeline
                 .model
@@ -418,6 +419,7 @@ fn moving_clip_into_gap_shifts_only_when_space_is_insufficient(cx: &mut TestAppC
     for following in [180, 140] {
         let (desktop, visual, store, entry, root) = fixture(cx, &format!("移动空隙{following}"), 2);
         let (moving, next_id) = desktop.update_in(visual, |v, _, cx| {
+            v.timeline.model.snapping = false;
             let moving = v.timeline.model.clips[0].id.clone();
             let id = v
                 .timeline
@@ -442,7 +444,10 @@ fn moving_clip_into_gap_shifts_only_when_space_is_insufficient(cx: &mut TestAppC
         let drop = desktop.read_with(visual, |v, _| {
             let (top, h) = v.track_geometry(1);
             point(
-                v.timeline.bounds.left() + px(v.timeline.header + 4.0 * v.pixels_per_second()),
+                v.timeline.bounds.left()
+                    + px(v.timeline.header
+                        + 4.0 * v.pixels_per_second()
+                        + f32::from(clip.size.width) / 2.0),
                 v.timeline.bounds.top() + px(top + h / 2.0),
             )
         });

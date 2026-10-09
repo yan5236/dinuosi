@@ -223,6 +223,7 @@ impl Timeline {
     pub fn toggle_keyframe(&mut self, ids: &BTreeSet<String>, kind: KeyframeKind, frame: i64) {
         for c in self.clips.iter_mut().filter(|c| {
             ids.contains(&c.id)
+                && !c.locked
                 && !self.tracks[c.track].locked
                 && kind.accepts(c.kind)
                 && c.contains_frame(frame)
@@ -275,7 +276,10 @@ impl Timeline {
         let mut checked = Transform::default();
         checked.set(property, value)?;
         for c in self.clips.iter_mut().filter(|c| {
-            ids.contains(&c.id) && c.kind != MediaKind::Audio && !self.tracks[c.track].locked
+            ids.contains(&c.id)
+                && c.kind != MediaKind::Audio
+                && !c.locked
+                && !self.tracks[c.track].locked
         }) {
             c.edit_animated(
                 KeyframeKind::for_property(property),
@@ -299,7 +303,10 @@ impl Timeline {
             return Err("音量参数无效".into());
         }
         for c in self.clips.iter_mut().filter(|c| {
-            ids.contains(&c.id) && c.kind == MediaKind::Audio && !self.tracks[c.track].locked
+            ids.contains(&c.id)
+                && c.kind == MediaKind::Audio
+                && !c.locked
+                && !self.tracks[c.track].locked
         }) {
             c.edit_animated(KeyframeKind::Volume, frame, 0, gain, auto);
         }

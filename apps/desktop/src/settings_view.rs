@@ -41,7 +41,7 @@ fn row(label: &'static str, control: impl IntoElement) -> Div {
 }
 
 impl Settings {
-    /// 渲染当前分类；通用页通过 Switch 修改自动关键帧/实时预览及模式下拉草稿，应用前不保存偏好。
+    /// 渲染当前分类；通用页通过 Switch 修改自动关键帧/实时预览/标记竖线及模式下拉草稿，应用前不保存偏好。
     /// 语言页读取统一索引并显示单选勾选、自称和当前已应用语言译名；插件显示空列表。
     fn body(&self, cx: &mut Context<Self>) -> Div {
         let content = div().flex().flex_col().gap(px(8.0));
@@ -65,6 +65,17 @@ impl Settings {
                         self.draft.live_scrub,
                         cx.listener(|this, checked: &bool, _, cx| {
                             this.draft.live_scrub = *checked;
+                            cx.notify();
+                        }),
+                    ),
+                ))
+                .child(row(
+                    crate::i18n::t("settings", "Show marker lines", cx),
+                    Switch::new(
+                        "show-marker-lines",
+                        self.draft.show_marker_lines,
+                        cx.listener(|this, checked: &bool, _, cx| {
+                            this.draft.show_marker_lines = *checked;
                             cx.notify();
                         }),
                     ),

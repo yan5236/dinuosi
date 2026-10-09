@@ -49,8 +49,32 @@ fn audio_drop_and_volume_slider_persist_pointer_results(cx: &mut TestAppContext)
         cx.notify();
     });
     cx.run_until_parked();
+    // 空选择现在显示项目概览；先选择画面获得旧控件位置，再验证音频不会响应这些位置。
+    desktop.update_in(cx, |v, _, cx| {
+        let id = v
+            .timeline
+            .model
+            .insert(
+                ("layout.png".into(), MediaKind::Image),
+                "布局".into(),
+                0,
+                0,
+                0..30,
+                30,
+            )
+            .unwrap();
+        v.timeline.selected.insert(id);
+        cx.notify();
+    });
+    cx.run_until_parked();
     let old_rotation = cx.debug_bounds("inspector-slider-Rotation").unwrap();
     let old_opacity = cx.debug_bounds("inspector-slider-Opacity").unwrap();
+    desktop.update_in(cx, |v, _, cx| {
+        v.timeline.model.clips.clear();
+        v.timeline.selected.clear();
+        cx.notify();
+    });
+    cx.run_until_parked();
     let card = cx.debug_bounds("media-0").unwrap().center();
     let drop = desktop.read_with(cx, |v, _| {
         let (y, h) = v.track_geometry(0);

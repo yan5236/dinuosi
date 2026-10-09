@@ -142,9 +142,11 @@ impl Desktop {
         let dialog = Dialog::new(kind, &self.store, cx);
         dialog.focus_first(window, cx);
         self.dialog = Some(dialog);
+        self.timeline.marker_dialog = None;
         self.project_menu = None;
         self.session.media_menu = None;
         self.timeline.keyframe_menu = None;
+        self.timeline.marker_menu = None;
         self.menu_open = false;
         self.help_open = false;
         self.notice = None;
@@ -347,7 +349,8 @@ impl Render for Desktop {
                     || self.help_open
                     || self.project_menu.is_some()
                     || self.session.media_menu.is_some()
-                    || self.timeline.keyframe_menu.is_some(),
+                    || self.timeline.keyframe_menu.is_some()
+                    || self.timeline.marker_menu.is_some(),
                 |s| {
                     s.child(
                         div()
@@ -364,6 +367,7 @@ impl Render for Desktop {
                                 this.project_menu = None;
                                 this.session.media_menu = None;
                                 this.timeline.keyframe_menu = None;
+                                this.timeline.marker_menu = None;
                                 cx.notify();
                             })),
                     )
@@ -372,6 +376,9 @@ impl Render for Desktop {
                     })
                     .when(self.help_open, |s| {
                         s.child(self.help_menu(layout.title, cx))
+                    })
+                    .when(self.timeline.marker_menu.is_some(), |s| {
+                        s.child(self.marker_menu(window, cx))
                     })
                     .when(self.timeline.keyframe_menu.is_some(), |s| {
                         s.child(self.timeline_keyframe_menu(window, cx))
@@ -385,6 +392,9 @@ impl Render for Desktop {
                 },
             )
             .when(self.dialog.is_some(), |s| s.child(self.dialog_view(cx)))
+            .when(self.timeline.marker_dialog.is_some(), |s| {
+                s.child(self.marker_dialog_view(cx))
+            })
             .children(self.notice.clone().map(|notice| {
                 div()
                     .absolute()

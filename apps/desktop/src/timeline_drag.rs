@@ -58,10 +58,17 @@ impl Desktop {
         }
         let target = self.timeline_drop_target(self.timeline.pointer)?;
         let mut next = before.clone();
+        let delta = self.clip_move_delta(before, start);
+        let frame = before
+            .clips
+            .iter()
+            .find(|c| self.timeline.selected.contains(&c.id))?
+            .start
+            + delta;
         if let DropTarget::Track(track) = target
             && self.timeline.selected.len() == 1
             && let Some(frame) =
-                self.timeline_clip_insertion(before, track, &self.timeline.selected)
+                self.timeline_clip_insertion(before, track, frame, &self.timeline.selected)
         {
             next.move_clip_ripple(self.timeline.selected.first()?, track, frame)
                 .ok()?;
@@ -84,10 +91,6 @@ impl Desktop {
                 (index, origin + usize::from(origin >= index))
             }
         };
-        let start = self.timeline_gesture_start(start);
-        let delta = (f32::from(self.timeline.pointer.x - start.x) / self.pixels_per_second()
-            * before.fps as f32)
-            .round() as i64;
         next.move_clips(
             &self.timeline.selected,
             delta,
@@ -97,12 +100,13 @@ impl Desktop {
         Some(next)
     }
 
-    /// 把鼠标横坐标和 8px 吸附容差换算为核心片段间插入落点；排除正在移动的片段。
+    /// 把拟放置首帧换算为核心片段间插入落点；移动保留按下偏移，并应用统一磁吸，排除正在移动的片段。
     /// 库素材传空集合，已有单片段移动传当前选择；其他位置保持普通拖放/冲突分轨规则。
     pub(crate) fn timeline_clip_insertion(
         &self,
         model: &Timeline,
         track: usize,
+        frame: i64,
         exclude: &std::collections::BTreeSet<String>,
     ) -> Option<i64> {
         if model
@@ -112,12 +116,7 @@ impl Desktop {
         {
             return None;
         }
-        model.insertion_frame(
-            track,
-            self.timeline_frame_at(self.timeline.pointer.x),
-            (8.0 / self.pixels_per_second() * model.fps as f32).round() as i64,
-            exclude,
-        )
+        model.insertion_frame(track, frame, 0, exclude)
     }
 
     /// 在根层绘制库素材缩略图、保留按下偏移的二维片段浮块或轨道名称；不受轨道内容裁切。

@@ -16,7 +16,8 @@ impl Timeline {
         let mut right_ids = BTreeSet::new();
         let mut rights = Vec::new();
         for clip in next.clips.iter_mut().filter(|c| ids.contains(&c.id)) {
-            if next.tracks[clip.track].locked
+            if clip.locked
+                || next.tracks[clip.track].locked
                 || frame <= clip.start
                 || frame >= clip.start + clip.duration
             {

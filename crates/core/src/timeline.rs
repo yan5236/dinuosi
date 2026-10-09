@@ -87,6 +87,8 @@ impl Property {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Clip {
     pub id: String,
+    /// 锁定只禁止片段编辑，时间线和检查器仍可选择。
+    pub locked: bool,
     pub source: PathBuf,
     pub name: String,
     pub track: usize,
@@ -175,10 +177,12 @@ pub struct Timeline {
     pub bitrate_kbps: u32,
     pub tracks: Vec<Track>,
     pub clips: Vec<Clip>,
+    pub markers: Vec<crate::timeline_tools::Marker>,
+    pub snapping: bool,
 }
 
 impl Default for Timeline {
-    /// 创建唯一空主轨；字幕、媒体与音频轨道按需创建，不生成示例素材。
+    /// 创建唯一空主轨并默认开启磁吸；标记为空，字幕、媒体与音频轨道按需创建，不生成示例素材。
     fn default() -> Self {
         Self {
             fps: 30,
@@ -186,6 +190,8 @@ impl Default for Timeline {
             height: 1080,
             bitrate_kbps: 12000,
             clips: Vec::new(),
+            markers: Vec::new(),
+            snapping: true,
             tracks: vec![Track {
                 kind: TrackKind::Main,
                 name: "主轨".into(),
@@ -214,7 +220,7 @@ impl Timeline {
             .max()
             .unwrap_or(0)
     }
-    /// 校验载入/提交数据的画布、码率、轨道、时长、唯一身份和参数；错误不修改状态。
+    /// 校验载入/提交数据的画布、码率、轨道、片段及标记身份、时长和参数；错误不修改状态。
     /// 图片时长独立于默认源帧数，但仍限于一天；视频和音频不得超过源入点后的可用帧数。
     pub fn validate(&self) -> Result<(), String> {
         if !(1..=240).contains(&self.fps)
@@ -234,6 +240,7 @@ impl Timeline {
         {
             return Err("时间线格式无效".into());
         }
+        self.validate_markers()?;
         let mut ids = BTreeSet::new();
         for clip in &self.clips {
             if !ids.insert(&clip.id)
@@ -293,7 +300,10 @@ impl Timeline {
     ) -> Result<(), String> {
         Transform::default().set(property, value)?;
         for c in self.clips.iter_mut().filter(|c| {
-            ids.contains(&c.id) && c.kind != MediaKind::Audio && !self.tracks[c.track].locked
+            ids.contains(&c.id)
+                && c.kind != MediaKind::Audio
+                && !c.locked
+                && !self.tracks[c.track].locked
         }) {
             c.transform.set(property, value)?;
         }
@@ -306,7 +316,10 @@ impl Timeline {
             return Err("音量参数无效".into());
         }
         for c in self.clips.iter_mut().filter(|c| {
-            ids.contains(&c.id) && c.kind == MediaKind::Audio && !self.tracks[c.track].locked
+            ids.contains(&c.id)
+                && c.kind == MediaKind::Audio
+                && !c.locked
+                && !self.tracks[c.track].locked
         }) {
             c.gain = gain;
         }

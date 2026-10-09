@@ -103,7 +103,7 @@ impl Desktop {
             )
     }
 
-    /// 依草图顺序绘制分组工具，选择和刀片可切换；未实现的剪辑工具禁用，缩放控件独立靠右。
+    /// 依草图顺序绘制分组工具，接通选择、刀片、磁吸、标记和片段锁；其他剪辑工具保留禁用，缩放控件独立靠右。
     /// 工具提示使用立即向下显示的 Tooltip；缩放按钮仅改变标尺密度，不创建历史记录。
     fn timeline_toolbar(&self, height: f32, cx: &mut Context<Self>) -> Div {
         let groups: &[&[Icon]] = &[
@@ -140,15 +140,42 @@ impl Desktop {
                         crate::tooltip::Tooltip::tool(
                             format!("timeline-{}", icon.name()),
                             *icon,
-                            matches!(*icon, Icon::Select | Icon::Razor)
-                                || (*icon == Icon::Trash && !self.timeline.selected.is_empty()),
+                            matches!(
+                                *icon,
+                                Icon::Select | Icon::Razor | Icon::Snap | Icon::Marker
+                            ) || (matches!(*icon, Icon::Trash | Icon::Lock)
+                                && !self.timeline.selected.is_empty()),
                             if *icon == Icon::Lock {
-                                crate::i18n::t("editor", "Lock clip", cx)
+                                crate::i18n::t(
+                                    "editor",
+                                    if self.selected_clips_locked() {
+                                        "Unlock clip"
+                                    } else {
+                                        "Lock clip"
+                                    },
+                                    cx,
+                                )
+                            } else if *icon == Icon::Snap {
+                                crate::i18n::t(
+                                    "editor",
+                                    if self.timeline.model.snapping {
+                                        "Disable snapping"
+                                    } else {
+                                        "Enable snapping"
+                                    },
+                                    cx,
+                                )
+                            } else if *icon == Icon::Marker {
+                                crate::i18n::t("editor", "Add marker", cx)
                             } else {
                                 crate::i18n::t("icons", icon.name(), cx)
                             },
                         )
-                        .selected(if self.timeline.blade {
+                        .selected(if *icon == Icon::Snap {
+                            self.timeline.model.snapping
+                        } else if *icon == Icon::Lock {
+                            self.selected_clips_locked()
+                        } else if self.timeline.blade {
                             *icon == Icon::Razor
                         } else {
                             *icon == Icon::Select
@@ -156,7 +183,13 @@ impl Desktop {
                         .on_click(cx.listener({
                             let icon = *icon;
                             move |this, _, window, cx| {
-                                if icon == Icon::Trash {
+                                if icon == Icon::Snap {
+                                    this.toggle_snapping(window, cx);
+                                } else if icon == Icon::Marker {
+                                    this.add_timeline_marker(window, cx);
+                                } else if icon == Icon::Lock {
+                                    this.toggle_clip_lock(window, cx);
+                                } else if icon == Icon::Trash {
                                     this.delete_clips(cx);
                                 } else if matches!(icon, Icon::Select | Icon::Razor) {
                                     this.set_blade_tool(icon == Icon::Razor, window, cx);

@@ -4,5 +4,15 @@
   "Opacity": "不透明度",
   "Scale": "缩放",
   "Position": "坐标",
-  "Rotation": "旋转"
+  "Rotation": "旋转",
+  "Project": "项目",
+  "Markers": "标记点",
+  "Marker": "标记点",
+  "Project name": "项目名称",
+  "Resolution": "分辨率",
+  "Frame rate": "帧率",
+  "Bitrate": "码率",
+  "Duration": "时长",
+  "Delete marker": "删除标记点",
+  "Edit marker": "修改标记点"
 }

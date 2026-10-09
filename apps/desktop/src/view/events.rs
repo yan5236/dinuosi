@@ -13,6 +13,10 @@ impl Desktop {
             self.fullscreen_preview_key(event, window, cx);
             return;
         }
+        if self.timeline.marker_dialog.is_some() {
+            self.marker_dialog_key(event, window, cx);
+            return;
+        }
         if self.dialog.is_some() {
             self.dialog_key(event, window, cx);
             return;
@@ -36,6 +40,15 @@ impl Desktop {
                 self.focus_handle.focus(window);
                 cx.notify();
             }
+            return;
+        }
+        if self.timeline.marker_menu.is_some() {
+            if key == "escape" {
+                self.timeline.marker_menu = None;
+                self.focus_handle.focus(window);
+                cx.notify();
+            }
+            cx.stop_propagation();
             return;
         }
         if self.timeline.keyframe_menu.is_some() {

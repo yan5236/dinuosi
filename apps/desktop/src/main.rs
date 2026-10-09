@@ -8,9 +8,11 @@ mod help;
 mod i18n;
 mod input;
 mod inspector;
+mod inspector_overview;
 mod keyframes;
 mod library;
 mod manager;
+mod marker_dialog;
 mod media;
 mod media_actions;
 mod media_status;
@@ -32,8 +34,10 @@ mod timeline_blade;
 mod timeline_clip;
 mod timeline_drag;
 mod timeline_keyframes;
+mod timeline_markers;
 mod timeline_preview;
 mod timeline_scroll;
+mod timeline_snap;
 mod timeline_sound;
 mod timeline_state;
 mod timeline_tracks;
@@ -69,6 +73,8 @@ mod timeline_handle_tests;
 mod timeline_scroll_tests;
 #[cfg(test)]
 mod timeline_tests;
+#[cfg(test)]
+mod timeline_tools_tests;
 #[cfg(test)]
 mod timeline_zoom_tests;
 #[cfg(test)]

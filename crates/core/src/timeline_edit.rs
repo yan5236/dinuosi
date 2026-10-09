@@ -41,10 +41,13 @@ impl Timeline {
     }
 
     /// 将已有自由轨道移动到指定插入线，主轨保持最下方；锁定轨道或非法位置拒绝修改。
-    /// 片段随轨道整体移动，轨道名称和开关保持不变，不产生多余空轨道。
+    /// 片段随轨道整体移动；含锁定片段时拒绝重排，轨道名称和开关保持不变，不产生多余空轨道。
     pub fn reorder_track(&mut self, from: usize, above: usize) -> Result<(), String> {
         if from >= self.main_track() || above > self.main_track() || self.tracks[from].locked {
             return Err("无法移动此轨道".into());
+        }
+        if self.clips.iter().any(|c| c.track == from && c.locked) {
+            return Err("片段已锁定".into());
         }
         let to = if above > from { above - 1 } else { above };
         let track = self.tracks.remove(from);
@@ -97,6 +100,7 @@ impl Timeline {
         let id = Uuid::new_v4().to_string();
         self.clips.push(Clip {
             id: id.clone(),
+            locked: false,
             source,
             name,
             track,
@@ -123,6 +127,9 @@ impl Timeline {
     ) -> Result<(), String> {
         let selected: Vec<_> = self.clips.iter().filter(|c| ids.contains(&c.id)).collect();
         for c in &selected {
+            if c.locked {
+                return Err("片段已锁定".into());
+            }
             self.accept_track(c.track)?;
             let target = c.track as isize + track_delta;
             if target < 0 {
@@ -158,6 +165,9 @@ impl Timeline {
             .iter_mut()
             .find(|c| c.id == id)
             .ok_or("片段不存在")?;
+        if c.locked {
+            return Err("片段已锁定".into());
+        }
         if self.tracks[c.track].locked {
             return Err("轨道已锁定".into());
         }
@@ -195,7 +205,7 @@ impl Timeline {
     /// 删除选中的未锁定片段并清理空自由轨道；保留主轨、素材库、源文件和剩余片段时间位置。
     pub fn delete(&mut self, ids: &BTreeSet<String>) {
         self.clips
-            .retain(|c| !ids.contains(&c.id) || self.tracks[c.track].locked);
+            .retain(|c| !ids.contains(&c.id) || c.locked || self.tracks[c.track].locked);
         self.remove_empty_tracks();
     }
 
@@ -293,6 +303,9 @@ impl Timeline {
             .iter()
             .position(|c| c.id == id)
             .ok_or("片段不存在")?;
+        if next.clips[index].locked {
+            return Err("片段已锁定".into());
+        }
         next.accept_track(next.clips[index].track)?;
         next.accept_track(track)?;
         if !next.tracks[track].kind.accepts(next.clips[index].kind) {
@@ -317,6 +330,14 @@ impl Timeline {
         } else {
             0
         };
+        if shift > 0
+            && self
+                .clips
+                .iter()
+                .any(|c| c.track == track && c.start >= start && c.locked)
+        {
+            return Err("片段已锁定".into());
+        }
         if start < 0
             || duration < 1
             || self

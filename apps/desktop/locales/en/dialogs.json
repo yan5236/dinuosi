@@ -15,5 +15,9 @@
   "Also delete the project source folder (permanent)": "Also delete the project source folder (permanent)",
   "Cancel": "Cancel",
   "Processing…": "Processing…",
-  "Delete “{name}”?": "Delete “{name}”?"
+  "Delete “{name}”?": "Delete “{name}”?",
+  "Edit marker": "Edit marker",
+  "Marker name": "Marker name",
+  "Color": "Color",
+  "Confirm": "Confirm"
 }

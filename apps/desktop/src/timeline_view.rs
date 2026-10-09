@@ -158,8 +158,10 @@ impl Desktop {
                                         .child(tick.label),
                                 )
                             })
-                    })),
+                    }))
+                    .children(self.ruler_markers(width, cx)),
             )
+            .children(self.marker_lines(origin, width, cx))
             .when(position >= 0.0 && position <= width, |s| {
                 s.child(
                     div()
@@ -197,6 +199,21 @@ impl Desktop {
                                 ),
                         ),
                 )
+            })
+            .when_some(self.snap_guide_frame(), |s, frame| {
+                let x =
+                    frame as f32 / self.timeline.model.fps as f32 * pps - self.timeline.scroll_x;
+                s.when(x >= 0.0 && x <= width, |s| {
+                    s.child(
+                        div()
+                            .absolute()
+                            .left(px(origin + x))
+                            .top(px(38.0))
+                            .bottom(px(12.0))
+                            .w(px(1.0))
+                            .bg(rgb(0xe3b85b)),
+                    )
+                })
             })
             .child(self.timeline_scrollbar(false, cx))
             .child(self.timeline_scrollbar(true, cx))
@@ -243,10 +260,29 @@ impl Desktop {
                         .kind
                         .accepts(self.session.media[*index].kind) =>
                 {
-                    self.timeline_clip_insertion(&self.timeline.model, track, &Default::default())
+                    self.timeline_clip_insertion(
+                        &self.timeline.model,
+                        track,
+                        self.library_drop_start(*index),
+                        &Default::default(),
+                    )
                 }
-                Gesture::Move { .. } if self.timeline.selected.len() == 1 => self
-                    .timeline_clip_insertion(&self.timeline.model, track, &self.timeline.selected),
+                Gesture::Move { start, .. } if self.timeline.selected.len() == 1 => {
+                    let frame = self
+                        .timeline
+                        .model
+                        .clips
+                        .iter()
+                        .find(|c| self.timeline.selected.contains(&c.id))?
+                        .start
+                        + self.clip_move_delta(&self.timeline.model, *start);
+                    self.timeline_clip_insertion(
+                        &self.timeline.model,
+                        track,
+                        frame,
+                        &self.timeline.selected,
+                    )
+                }
                 _ => None,
             }
         } else {
@@ -318,8 +354,7 @@ impl Desktop {
                     }
                     line = true;
                 }
-                let start =
-                    insertion.unwrap_or_else(|| self.timeline_frame_at(self.timeline.pointer.x));
+                let start = insertion.unwrap_or_else(|| self.library_drop_start(*index));
                 let duration = if self.session.selected == Some(*index) {
                     self.timeline.model.frame(self.session.trim_end)
                         - self.timeline.model.frame(self.session.trim_start)

@@ -1,0 +1,97 @@
+//! 检查器项目概览；复用现有灰阶和字段行，不添加新的设置入口。
+use crate::{
+    ui::{MUTED, TEXT},
+    view::Desktop,
+};
+use gpui::{Context, Div, div, prelude::*, px, rgb};
+impl Desktop {
+    /// 未选中片段时显示当前项目名称、输出参数及剪辑时长；数据来自当前模型，修改设置后立即刷新。
+    pub(crate) fn project_inspector(&self, cx: &mut Context<Self>) -> Div {
+        let model = &self.timeline.model;
+        let name = self
+            .current
+            .as_ref()
+            .map_or("", |e| e.name.as_str())
+            .to_owned();
+        let fields = [
+            ("Project name", name),
+            ("Resolution", format!("{} × {}", model.width, model.height)),
+            ("Frame rate", format!("{} fps", model.fps)),
+            ("Bitrate", format!("{} kbps", model.bitrate_kbps)),
+            (
+                "Duration",
+                crate::timeline_markers::timecode(model.end(), model.fps),
+            ),
+        ];
+        div()
+            .pt(px(26.0))
+            .px(px(20.0))
+            .children(fields.into_iter().map(|(label, value)| {
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(12.0))
+                    .min_h(px(37.0))
+                    .text_size(px(12.0))
+                    .child(
+                        div()
+                            .w(px(85.0))
+                            .flex_none()
+                            .text_color(rgb(MUTED))
+                            .child(crate::i18n::t("inspector", label, cx)),
+                    )
+                    .child(div().flex_1().min_w_0().text_color(rgb(TEXT)).child(value))
+            }))
+    }
+    /// 根据当前选择生成“基本/项目”与“标记点”页签；切换前提交输入，保留片段选择和播放位置。
+    pub(crate) fn inspector_tabs(&self, empty: bool, cx: &mut Context<Self>) -> Div {
+        div()
+            .h(px(37.0))
+            .flex()
+            .gap(px(20.0))
+            .pl(px(20.0))
+            .border_b_1()
+            .border_color(rgb(crate::ui::LINE))
+            .children([false, true].into_iter().map(|markers| {
+                div()
+                    .id(if markers {
+                        "inspector-markers-tab"
+                    } else {
+                        "inspector-basic-tab"
+                    })
+                    .debug_selector(move || {
+                        if markers {
+                            "inspector-markers-tab".into()
+                        } else {
+                            "inspector-basic-tab".into()
+                        }
+                    })
+                    .h_full()
+                    .pt(px(7.0))
+                    .pb(px(8.0))
+                    .cursor_pointer()
+                    .whitespace_nowrap()
+                    .text_size(px(12.0))
+                    .when(self.timeline.markers_tab == markers, |s| {
+                        s.border_b_1().border_color(rgb(TEXT))
+                    })
+                    .child(crate::i18n::t(
+                        "inspector",
+                        if markers {
+                            "Markers"
+                        } else if empty {
+                            "Project"
+                        } else {
+                            "Basic"
+                        },
+                        cx,
+                    ))
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        this.commit_inspector_input(cx);
+                        this.timeline.markers_tab = markers;
+                        this.focus_handle.focus(window);
+                        cx.notify();
+                    }))
+            }))
+    }
+}

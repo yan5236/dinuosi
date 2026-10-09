@@ -11,7 +11,7 @@ use gpui::{Context, Div, MouseButton, Window, canvas, div, prelude::*, px, rgb, 
 
 impl Desktop {
     /// 保持草图的“基本”页签、图片、视频的变换布局；选中音频仅显示音量滑块及右侧 dB 值。
-    /// 没有选择时保留原变换控件并禁用，锁定片段不可修改；英文页签扩宽，避免文字换行。
+    /// 空选择显示项目概览，另一页签显示排序标记；锁定片段保留参数展示但禁用全部写入控件。
     pub(crate) fn inspector(&self, width: f32, cx: &mut Context<Self>) -> Div {
         let audio = self
             .timeline
@@ -23,6 +23,7 @@ impl Desktop {
         let enabled = self.timeline.model.clips.iter().any(|c| {
             self.timeline.selected.contains(&c.id)
                 && (c.kind == dinuosi_core::media::MediaKind::Audio) == audio
+                && !c.locked
                 && !self.timeline.model.tracks[c.track].locked
         });
         div()
@@ -31,29 +32,14 @@ impl Desktop {
             .flex_none()
             .bg(rgb(PANEL))
             .overflow_hidden()
-            .child(
-                div()
-                    .h(px(37.0))
-                    .border_b_1()
-                    .border_color(rgb(LINE))
-                    .pl(px(20.0))
-                    .child(
-                        div()
-                            .w(px(if crate::i18n::locale(cx) == "en" {
-                                38.0
-                            } else {
-                                28.0
-                            }))
-                            .whitespace_nowrap()
-                            .pt(px(7.0))
-                            .pb(px(8.0))
-                            .border_b_1()
-                            .border_color(rgb(TEXT))
-                            .text_size(px(12.0))
-                            .child(crate::i18n::t("inspector", "Basic", cx)),
-                    ),
-            )
-            .child(if audio {
+            .flex()
+            .flex_col()
+            .child(self.inspector_tabs(self.timeline.selected.is_empty(), cx))
+            .child(if self.timeline.markers_tab {
+                self.markers_inspector(cx)
+            } else if self.timeline.selected.is_empty() {
+                self.project_inspector(cx)
+            } else if audio {
                 self.audio_inspector(enabled, cx)
             } else {
                 div()
@@ -450,7 +436,7 @@ impl Desktop {
                 .model
                 .clips
                 .iter()
-                .any(|c| &c.id == id && !self.timeline.model.tracks[c.track].locked)
+                .any(|c| &c.id == id && !c.locked && !self.timeline.model.tracks[c.track].locked)
         });
         self.commit_timeline(before, cx);
     }
