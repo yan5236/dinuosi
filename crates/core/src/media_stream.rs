@@ -8,7 +8,7 @@ use std::{
 };
 
 pub struct Decoder {
-    processes: Vec<Child>,
+    processes: Vec<Arc<Mutex<Child>>>,
     pub frames: Arc<Mutex<Option<Vec<u8>>>>,
     pub error: Arc<Mutex<Option<String>>>,
     audio: Option<Pcm>,
@@ -67,12 +67,12 @@ impl Decoder {
             let mut child = command
                 .spawn()
                 .map_err(|e| format!("无法启动音频解码：{e}"))?;
+            let stdout = child.stdout.take().ok_or("无法读取音频流")?;
+            let child = Arc::new(Mutex::new(child));
             decoder
                 .error_readers
-                .extend(collect_errors(&mut child, decoder.error.clone()));
-            decoder.audio = Some(Pcm(PcmSource::Ffmpeg(BufReader::new(
-                child.stdout.take().ok_or("无法读取音频流")?,
-            ))));
+                .extend(collect_errors(&child, decoder.error.clone()));
+            decoder.audio = Some(Pcm(PcmSource::Ffmpeg(BufReader::new(stdout))));
             decoder.processes.push(child);
         }
         if media.kind == MediaKind::Video {
@@ -88,10 +88,11 @@ impl Decoder {
             let mut child = command
                 .spawn()
                 .map_err(|e| format!("无法启动视频解码：{e}"))?;
+            let mut reader = BufReader::new(child.stdout.take().ok_or("无法读取视频流")?);
+            let child = Arc::new(Mutex::new(child));
             decoder
                 .error_readers
-                .extend(collect_errors(&mut child, decoder.error.clone()));
-            let mut reader = BufReader::new(child.stdout.take().ok_or("无法读取视频流")?);
+                .extend(collect_errors(&child, decoder.error.clone()));
             let frames = decoder.frames.clone();
             std::thread::spawn(move || {
                 loop {
@@ -114,11 +115,13 @@ impl Decoder {
     }
 
     /// 在调用方消费到音频 EOF 后等待进程和错误读取线程，确认完整解码是否成功。
-    /// 必须先消费管道；进程失败或错误输出返回可显示错误，MIDI 无子进程时直接成功。
+    /// 必须先消费管道；成功退出时容忍可恢复坏包日志，进程失败仍返回详细错误，MIDI 直接成功。
     pub fn finish(mut self) -> Result<(), String> {
         let mut failed = false;
         for process in &mut self.processes {
             failed |= !process
+                .lock()
+                .unwrap()
                 .wait()
                 .map_err(|e| format!("等待音频解码失败：{e}"))?
                 .success();
@@ -140,24 +143,45 @@ impl Drop for Decoder {
     /// 终止并回收所有解码进程，解除管道阻塞；不写入、复制或删除源素材。
     fn drop(&mut self) {
         for process in &mut self.processes {
+            let mut process = process.lock().unwrap();
             let _ = process.kill();
             let _ = process.wait();
         }
     }
 }
 
-/// 在后台消费 FFmpeg stderr，避免管道填满；实际错误提供给所有前端读取。
-/// 返回读取线程以便离线提取在 EOF 后确认全部错误，实时播放仍可随时销毁解码器。
+/// 后台排空 FFmpeg stderr，再按子进程退出状态向波形和实时播放调用方报告失败。
+/// 成功退出的可恢复坏包日志不发布；失败保留日志，无日志或状态查询失败时提供具体错误。
+/// 返回线程供 EOF 确认；等待退出时不持进程锁，让 Drop 始终可以终止仍在运行的解码器。
 fn collect_errors(
-    child: &mut Child,
+    child: &Arc<Mutex<Child>>,
     error: Arc<Mutex<Option<String>>>,
 ) -> Option<std::thread::JoinHandle<()>> {
-    child.stderr.take().map(|mut stderr| {
+    let stderr = child.lock().unwrap().stderr.take();
+    let child = child.clone();
+    stderr.map(|mut stderr| {
         std::thread::spawn(move || {
             let mut message = String::new();
             let _ = stderr.read_to_string(&mut message);
-            if !message.trim().is_empty() {
-                *error.lock().unwrap() = Some(format!("媒体解码失败：{}", message.trim()));
+            loop {
+                let status = child.lock().unwrap().try_wait();
+                match status {
+                    Ok(Some(status)) => {
+                        if !status.success() {
+                            *error.lock().unwrap() = Some(if message.trim().is_empty() {
+                                format!("媒体解码进程失败：{status}")
+                            } else {
+                                format!("媒体解码失败：{}", message.trim())
+                            });
+                        }
+                        break;
+                    }
+                    Ok(None) => std::thread::sleep(std::time::Duration::from_millis(10)),
+                    Err(e) => {
+                        *error.lock().unwrap() = Some(format!("读取媒体解码进程状态失败：{e}"));
+                        break;
+                    }
+                }
             }
         })
     })
