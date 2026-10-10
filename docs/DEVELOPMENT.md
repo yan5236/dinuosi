@@ -97,4 +97,4 @@ python ./tools/collect-licenses.py
 
 下载输入、运行库、构建缓存、安装包、测试项目和日志保存在忽略的 `.local/` 或 `target/` 中；大型音源由准备脚本获取。不要将这些本机产物加入版本控制。
 
-README 的界面图片来自实际软件截图，使用合成测试素材；对应源图为 `.local/blade-qa/09-direct-cut.png`，仓库保留副本 `assets/readme/editor.png`。更新界面后应使用新的真实截图替换，不以概念图代替已实现功能。
+README 的界面图片来自 2026-10-10 当前源码构建后启动的真实软件，使用独立测试项目与合成素材；对应源图为 `.local/readme-current/editor.png`，构建与截图对应证据为 `.local/readme-current/evidence.json`，仓库保留副本 `assets/readme/editor.png`。更新界面后应使用新的真实截图替换，不以概念图代替已实现功能。

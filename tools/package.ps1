@@ -54,6 +54,8 @@ $version = (Select-String -Path "$root/Cargo.toml" -Pattern '^version = "([^"]+)
 $stage = "$work/package-$([guid]::NewGuid().ToString('N'))"
 New-Item -ItemType Directory -Force $stage, "$stage/runtime/ffmpeg", "$stage/licenses", $OutputDirectory | Out-Null
 Copy-Item -LiteralPath $exe -Destination "$stage/dinuosi.exe"
+# 主程序的 MIT 原文随应用分发，并进入文件清单与卸载文件列表。
+Copy-Item -LiteralPath "$root/LICENSE" -Destination "$stage/LICENSE"
 foreach ($file in $manifest.files) { Copy-Item -LiteralPath "$work/runtime/ffmpeg/bin/$($file.name)" -Destination "$stage/runtime/ffmpeg" }
 Copy-Item -Path "$work/licenses/*" -Destination "$stage/licenses" -Recurse
 Copy-Item -LiteralPath "$root/assets/audio/FluidR3-LICENSE.txt" -Destination "$stage/licenses"
@@ -66,6 +68,8 @@ Copy-Item -LiteralPath "$work/runtime-manifest.json", "$work/license-audit.json"
 $sourceName = "Dinuosi-$version-ffmpeg-8.0.3-sources.zip"
 $notes = @"
 Dinuosi $version - internal Windows x64 acceptance build
+
+Dinuosi: MIT. The full license text is included in LICENSE at the application root.
 
 This software uses FFmpeg 8.0.3 under LGPL-2.1-or-later, as a separately
 replaceable executable and libav DLLs. Corresponding source and build patches
@@ -80,8 +84,8 @@ MPL-2.0 dependencies, if present, have their corresponding source in sources/.
 NSIS installer uses zlib compression and its license is included in NSIS.txt.
 
 PUBLIC RELEASE BLOCKERS
-Dinuosi's own distribution license is not yet chosen. Rights to supplied
-icons and brand assets require owner confirmation before public publication.
+Rights to supplied icons and brand assets require owner confirmation before
+public publication.
 Clean Windows and Windows 11 installation have not been established merely
 by a successful test on the development machine. This is an unsigned test
 build; no public release, code-signing or video export is included.

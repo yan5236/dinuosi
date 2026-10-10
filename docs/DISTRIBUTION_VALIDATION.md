@@ -70,9 +70,9 @@ FluidR3_GM.sf2为148,398,306字节，旧音源5,969,788字节，原始音源增�
 
 FFmpeg/zlib/LAME、FluidR3、Rust运行依赖和NSIS的相应声明随包保存。运行时文件可由用户替换兼容版本；运行时不强制校验其SHA，也没有EULA覆盖LGPL修改与替换权利。原始完整FFmpeg/LAME源码归档含各自可选模块的许可文本；本轮编译的二进制没有启用GPL-only模块。
 
-下列事项仍必须在公开发布前解决：
+Dinuosi 主程序采用 [MIT 许可证](../LICENSE)。下列事项仍必须在公开发布前解决：
 
-1. Dinuosi主程序许可证及现有图标、Logo授权确认。未替资源所有者重新授权。
+1. 现有图标、Logo授权确认。未替资源所有者重新授权。
 2. 五个旧crate发布包及已检查的对应源码提交没有独立完整许可文件：convert_case 0.4.0、hexf-parse 0.2.1、mac 0.1.1、seahash 4.1.0、simd_helpers 0.1.0。保留原始Cargo作者/许可声明、完整发布源码及未改写的SPDX标准文本；没有虚构版权年份或持有人。这是内部验收材料缺口，不是“全部许可已经法律审清”。其他未知缺口会拒绝收集/打包。
 3. Microsoft静态C运行库的适用再分发条款确认；它属于Visual Studio/Build Tools授权，不能归入FFmpeg LGPL。没有捆绑Windows系统DLL。
 4. 干净Windows和Windows11实际安装/运行验证。没有授权或确认可用Hyper-V测试环境，未自行变更系统权限或虚拟机。
