@@ -4,5 +4,7 @@
   "Website": "官网",
   "Unavailable": "暂无",
   "Source code": "开源地址",
-  "Version {version}": "版本 {version}"
+  "Version {version}": "版本 {version}",
+  "Third-party licenses": "第三方许可证",
+  "Third-party license file is unavailable": "第三方许可文件不可用"
 }

@@ -1,9 +1,9 @@
 use dinuosi_core::{media, waveform::Waveform};
 
 /// 生成真实音频并验证静音、弱/强包络、压缩格式、损坏解码反馈及无 PCM 拒绝；源文件始终只读。
-/// 显式依赖本机 FFmpeg/ffprobe，默认忽略，避免把没有解码环境的检查当成通过。
+/// 显式依赖应用配套 FFmpeg/ffprobe，默认忽略，避免把没有解码环境的检查当成通过。
 #[test]
-#[ignore = "需要本机 FFmpeg 和 ffprobe"]
+#[ignore = "需要准备应用配套 FFmpeg 和 ffprobe"]
 fn waveform_decodes_real_audio_and_reports_failure() {
     let root = std::env::temp_dir().join(format!("dinuosi-wave-{}", uuid::Uuid::new_v4()));
     std::fs::create_dir(&root).unwrap();
@@ -26,6 +26,7 @@ fn waveform_decodes_real_audio_and_reports_failure() {
                 media::command("ffmpeg")
                     .args(["-v", "error", "-i"])
                     .arg(&wav)
+                    .args(["-strict", "-2", "-ac", "2"])
                     .arg(&path)
                     .status()
                     .unwrap()
@@ -69,7 +70,7 @@ fn waveform_decodes_real_audio_and_reports_failure() {
 /// 生成固定码率 MP3 并损坏最后一个音频包，验证 FFmpeg 成功恢复后的 PCM、波形及共享错误状态。
 /// 只使用独立临时素材；同时确认完全损坏时仍返回 FFmpeg 详情，避免把实际失败吞掉。
 #[test]
-#[ignore = "需要本机 FFmpeg 和 ffprobe"]
+#[ignore = "需要准备应用配套 FFmpeg 和 ffprobe"]
 fn waveform_keeps_recoverable_mp3_and_rejects_fatal_damage() {
     let root = std::env::temp_dir().join(format!("dinuosi-bad-packet-{}", uuid::Uuid::new_v4()));
     std::fs::create_dir(&root).unwrap();

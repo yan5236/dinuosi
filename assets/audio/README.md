@@ -1,7 +1,9 @@
 # MIDI 音源
 
-`TimGM6mb.sf2` 为未修改的 TimGM6mb General MIDI 采样库，供 RustySynth 合成标准 MIDI。编译嵌入 Core，无需用户安装音源或 FFmpeg MIDI 插件。
+`FluidR3_GM.sf2` 为未经修改的 Fluid Release 3 General MIDI 音源，使用 RustySynth 编译嵌入 Core。用户无需安装音源；所有 GM 乐器及打击乐保留。
 
-来源：[Debian timgm6mb-soundfont 1.3-5](https://deb.debian.org/debian/pool/main/t/timgm6mb-soundfont/timgm6mb-soundfont_1.3-5_all.deb)，上游：[MuseScore 原始资源](https://github.com/musescore/musescore-old/commit/90c33ef9d87b3f5ff92efd3b07d89eb455fb1fef)。原始署名与资源许可在 `TimGM6mb-LICENSE.txt`，完整 GPL-2 文本在 `GPL-2.0.txt`；资源许可证与尚未确定的软件发布许可证分别管理。
+固定来源：Debian `fluid-soundfont-gm` 3.1-5.3。音源采用 MIT 许可，版权与原始许可文本见 `FluidR3-LICENSE.txt`。Debian 打包脚本的 GPL 许可不适用于所提取的音源文件，打包脚本不随应用分发。
 
-保留全部 GM 乐器与打击乐，不替换 MIDI 中的乐器、音高、速度或控制器。不同播放器所用音源会影响音色；当前内置音源不承诺与 PotPlayer 默认音源逐样本一致。
+音源约 141.5 MiB，不进入 Git；开发前运行 `tools/prepare-media.ps1`，按 `distribution/inputs.lock.json` 下载并验证原始 Debian 包及提取文件。音源变化会改变 MIDI 音色，不能承诺与旧音源或其他播放器逐样本一致。
+
+旧 TimGM6mb 及仅属于它的 GPL 文件已从当前版本移除，不改写历史。主程序发布许可证与第三方资源许可分别管理。

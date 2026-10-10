@@ -75,14 +75,14 @@ impl Desktop {
             cx.notify();
             return;
         }
-        let options = auxiliary_options(crate::i18n::t("help", "About", cx), 520.0, 340.0, cx);
+        let options = auxiliary_options(crate::i18n::t("help", "About", cx), 520.0, 390.0, cx);
         match cx.open_window(options, |window, cx| {
             cx.new(|cx| {
                 cx.observe_global::<crate::i18n::Locale>(|_, cx| cx.notify())
                     .detach();
                 let focus = cx.focus_handle();
                 focus.focus(window);
-                About { focus }
+                About { focus, error: None }
             })
         }) {
             Ok(handle) => {
@@ -97,9 +97,30 @@ impl Desktop {
 
 pub struct About {
     focus: gpui::FocusHandle,
+    error: Option<String>,
+}
+impl About {
+    /// 定位当前程序旁的许可声明文件；存在时清除本窗口错误并委托系统默认查看器打开。
+    /// cx 用于启动系统查看器及通知重绘；定位失败或文件缺失时保存本地化错误，不修改项目。
+    /// 此入口不返回结果，也不接收系统查看器的启动/读取结果，不能确认外部查看器已成功打开。
+    fn open_licenses(&mut self, cx: &mut Context<Self>) {
+        let path = std::env::current_exe().ok().and_then(|exe| {
+            exe.parent()
+                .map(|root| root.join("licenses/THIRD_PARTY_NOTICES.txt"))
+        });
+        if let Some(path) = path.filter(|path| path.is_file()) {
+            self.error = None;
+            cx.open_with_system(&path);
+        } else {
+            self.error =
+                Some(crate::i18n::t("help", "Third-party license file is unavailable", cx).into());
+        }
+        cx.notify();
+    }
 }
 impl Render for About {
-    /// 显示编译版本与品牌，官网显示暂无；独立零尺寸焦点保留系统标题栏命中，链接交给浏览器。
+    /// 显示编译版本、品牌及必要许可入口；官网保持暂无，源代码链接交给浏览器。
+    /// 许可文件来自配套安装目录，交给系统默认文本查看器打开，不联网或改变编辑状态。
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         window.set_window_title(&format!(
             "Dinuosi - {}",
@@ -169,6 +190,20 @@ impl Render for About {
                                     .child(SOURCE_URL)
                                     .on_click(|_, _, cx| cx.open_url(SOURCE_URL)),
                             ),
+                    )
+                    .child(
+                        div()
+                            .id("third-party-licenses")
+                            .focusable()
+                            .cursor_pointer()
+                            .underline()
+                            .child(crate::i18n::t("help", "Third-party licenses", cx))
+                            .on_click(cx.listener(|this, _, _, cx| this.open_licenses(cx))),
+                    )
+                    .children(
+                        self.error
+                            .as_ref()
+                            .map(|message| div().text_color(rgb(0xdc5555)).child(message.clone())),
                     ),
             )
     }

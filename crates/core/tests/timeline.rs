@@ -337,7 +337,7 @@ fn composite_applies_centered_transform_and_opacity() {
 
 /// 使用真实解码器检查音频片段的延迟、叠加与轨道静音，确保拖入音频后仍可实际播放。
 #[test]
-#[ignore = "需要本机 FFmpeg 和 ffprobe"]
+#[ignore = "需要准备应用配套 FFmpeg 和 ffprobe"]
 fn timeline_audio_mixes_and_respects_track_mute() {
     let root = std::env::temp_dir().join(format!("dinuosi-mix-{}", uuid::Uuid::new_v4()));
     std::fs::create_dir_all(&root).unwrap();

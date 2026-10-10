@@ -3,7 +3,7 @@ use dinuosi_core::media::{self, MediaKind};
 /// 用竖屏、方形、超宽及非方形像素素材验证比例与透明补边；采样区须完整不被裁切或拉伸。
 /// 需真实 FFmpeg；静态帧与连续视频帧共享参数，检查 alpha 和有效画面矩形。
 #[test]
-#[ignore = "需要本机 FFmpeg 和 ffprobe"]
+#[ignore = "需要准备应用配套 FFmpeg 和 ffprobe"]
 fn preview_padding_tracks_display_aspect_ratio() {
     let root = std::env::temp_dir().join(format!("dinuosi-aspect-{}", uuid::Uuid::new_v4()));
     std::fs::create_dir(&root).unwrap();
@@ -17,7 +17,7 @@ fn preview_padding_tracks_display_aspect_ratio() {
         assert!(
             media::command("ffmpeg")
                 .args([
-                    "-v", "error", "-f", "lavfi", "-i", input, "-t", "0.25", "-c:v", "libx264"
+                    "-v", "error", "-f", "lavfi", "-i", input, "-t", "0.25", "-c:v", "mpeg4"
                 ])
                 .arg(&path)
                 .status()
@@ -53,9 +53,9 @@ fn preview_padding_tracks_display_aspect_ratio() {
 
 /// 用 FFmpeg 生成真实视频、音频和图片，验证类型/时长、寻址帧、PCM 区间及流式画面。
 /// 同时验证无头批量导入、去重、坏文件反馈、引用持久化和改名后的离线保留/恢复。
-/// 需 PATH 中提供 FFmpeg/ffprobe；显式运行此检查，不把环境缺失当成通过。
+/// 需在测试程序旁部署配套 FFmpeg/ffprobe；显式运行，不从 PATH 补找工具。
 #[test]
-#[ignore = "需要本机 FFmpeg 和 ffprobe"]
+#[ignore = "需要准备应用配套 FFmpeg 和 ffprobe"]
 fn ffmpeg_reads_real_media_and_seek_frames() {
     let root = std::env::temp_dir().join(format!("dinuosi-decode-{}", std::process::id()));
     std::fs::create_dir_all(&root).unwrap();
@@ -77,7 +77,7 @@ fn ffmpeg_reads_real_media_and_seek_frames() {
                 "-t",
                 "3",
                 "-c:v",
-                "libx264",
+                "mpeg4",
                 "-pix_fmt",
                 "yuv420p",
                 "-c:a",
@@ -187,7 +187,7 @@ fn ffmpeg_reads_real_media_and_seek_frames() {
 
 /// 24fps 源在 30fps 项目最后采样点之后已无可解码新帧，仍返回真实尾帧；损坏源继续报错。
 #[test]
-#[ignore = "需要本机 FFmpeg 和 ffprobe"]
+#[ignore = "需要准备应用配套 FFmpeg 和 ffprobe"]
 fn seek_after_last_source_frame_returns_real_tail_frame() {
     let root = std::env::temp_dir().join(format!("dinuosi-tail-{}", uuid::Uuid::new_v4()));
     std::fs::create_dir_all(&root).unwrap();
@@ -204,7 +204,7 @@ fn seek_after_last_source_frame_returns_real_tail_frame() {
                 "-t",
                 "1",
                 "-c:v",
-                "libx264"
+                "mpeg4"
             ])
             .arg(&path)
             .status()
@@ -219,4 +219,24 @@ fn seek_after_last_source_frame_returns_real_tail_frame() {
     std::fs::write(&broken, b"broken").unwrap();
     assert!(media::frame(&broken, 0.0).is_err());
     std::fs::remove_dir_all(root).unwrap();
+}
+
+/// 读取既有合成 H.264 样本，验证移除 GPL 编码器后仍能探测、寻址和输出真实视频像素。
+/// 夹具由原有合成素材无损截取；断言媒体类型、输出缓冲长度及非灰度像素，不校验逐像素一致性。
+#[test]
+#[ignore = "需要 tools/prepare-media.ps1 准备固定运行时"]
+fn lgpl_runtime_decodes_h264_fixture() {
+    let path =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/video-h264.mp4");
+    let item = media::probe(&path).unwrap();
+    assert_eq!(item.kind, MediaKind::Video);
+    let frame = media::frame(&item.path, 0.0).unwrap();
+    assert_eq!(frame.len(), 640 * 360 * 4);
+    assert!(
+        frame
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .any(|pixel| pixel[0] != pixel[1] || pixel[1] != pixel[2])
+    );
 }

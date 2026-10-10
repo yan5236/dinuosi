@@ -163,7 +163,7 @@ fn project_roundtrip_legacy_and_corruption() {
 }
 /// 用实际 FFmpeg 解码恒定 PCM，验证音量渐变、左右声道一致、跳转和静音后恢复。
 #[test]
-#[ignore = "需要本机 FFmpeg 和 ffprobe"]
+#[ignore = "需要准备应用配套 FFmpeg 和 ffprobe"]
 fn volume_keyframes_change_real_pcm_and_seek() {
     use dinuosi_core::{media, timeline_audio::TimelineAudio};
     let root = std::env::temp_dir().join(format!("dinuosi-volume-keys-{}", uuid::Uuid::new_v4()));

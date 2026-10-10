@@ -66,7 +66,7 @@ impl MidiPcm {
         let font = SOUNDFONT
             .get_or_init(|| {
                 SoundFont::new(&mut Cursor::new(
-                    include_bytes!("../../../assets/audio/TimGM6mb.sf2").as_slice(),
+                    include_bytes!("../../../assets/audio/FluidR3_GM.sf2").as_slice(),
                 ))
                 .map(Arc::new)
                 .map_err(|e| format!("内置 MIDI 音源无效：{e}"))

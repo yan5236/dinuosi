@@ -48,7 +48,7 @@ fn blend_fast_paths_preserve_pixels() {
 /// 生成真实视频并暂时移走测试源文件，证明参数更新复用源帧；寻址、源入点、fps、
 /// 重新加载、离线、隐藏和帧尾必须失效。逐帧寻址缓存保持一个源帧，失败后可恢复。
 #[test]
-#[ignore = "需要本机 FFmpeg 和 ffprobe"]
+#[ignore = "需要准备应用配套 FFmpeg 和 ffprobe"]
 fn cached_transform_reuses_decode_and_invalidates_source_changes() {
     let root = std::env::temp_dir().join(format!("dinuosi-cache-{}", uuid::Uuid::new_v4()));
     std::fs::create_dir(&root).unwrap();
@@ -66,7 +66,7 @@ fn cached_transform_reuses_decode_and_invalidates_source_changes() {
                 "-t",
                 "2",
                 "-c:v",
-                "libx264"
+                "mpeg4"
             ])
             .arg(&path)
             .status()

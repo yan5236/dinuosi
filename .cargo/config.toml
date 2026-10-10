@@ -1,0 +1,3 @@
+# Windows x64 MSVC 目标的开发、测试及发行构建均静态链接 C 运行库，用户无需另装 VC++ 运行库。
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]

@@ -1,0 +1,55 @@
+{
+  "ffmpegVersion": "8.0.3",
+  "zlibVersion": "1.3.1",
+  "nsisVersion": "3.13",
+  "soundfontSha256": "74594e8f4250680adf590507a306655a299935343583256f3b722c48a1bc1cb0",
+  "ffmpegSigningKey": "FCF986EA15E6E293A5644F10B4322F04D67658D8",
+  "inputs": {
+    "ffmpegSignature": {
+      "file": "ffmpeg-8.0.3.tar.xz.asc",
+      "url": "https://ffmpeg.org/releases/ffmpeg-8.0.3.tar.xz.asc",
+      "sha256": "975f9512458fc39cacf35a9496f51c9d82e3a3b684a9db111bedcfa523f2b2b8"
+    },
+    "nsis": {
+      "file": "nsis-official.zip",
+      "url": "https://master.dl.sourceforge.net/project/nsis/NSIS%203/3.13/nsis-3.13.zip?viasf=1",
+      "sha256": "ba63dffc4410ee89193e1cb5a41989991bd77c61068da17e3156d136b7b0b3d8"
+    },
+    "ffmpegKey": {
+      "file": "ffmpeg-devel.asc",
+      "url": "https://ffmpeg.org/ffmpeg-devel.asc",
+      "sha256": "397b3becedcd5a98769967ff1ff8501ddc89f8368b8f766e4701377d7dbaabe5"
+    },
+    "soundfontLicense": {
+      "file": "fluid-copyright.txt",
+      "url": "https://metadata.ftp-master.debian.org/changelogs/main/f/fluid-soundfont/fluid-soundfont_3.1-5.3_copyright",
+      "sha256": "f2f5e6358fc7c1fe62aafc6c8229c4c5898e5afb0d4ce1322b15362a8cbd600e"
+    },
+    "nasm": {
+      "file": "nasm-2.16.03-win64.zip",
+      "url": "https://www.nasm.us/pub/nasm/releasebuilds/2.16.03/win64/nasm-2.16.03-win64.zip",
+      "sha256": "3ee4782247bcb874378d02f7eab4e294a84d3d15f3f6ee2de2f47a46aa7226e6"
+    },
+    "zlib": {
+      "file": "zlib-v1.3.1.tar.gz",
+      "url": "https://codeload.github.com/madler/zlib/tar.gz/refs/tags/v1.3.1",
+      "sha256": "17e88863f3600672ab49182f217281b6fc4d3c762bde361935e436a95214d05c"
+    },
+    "ffmpeg": {
+      "file": "ffmpeg-8.0.3.tar.xz",
+      "url": "https://ffmpeg.org/releases/ffmpeg-8.0.3.tar.xz",
+      "sha256": "6136812ea6d4e68bdba27e33c2a94382711cdf4f8602ffef056ff792bd6f9818"
+    },
+    "soundfont": {
+      "file": "fluid-soundfont-gm_3.1-5.3_all.deb",
+      "url": "https://deb.debian.org/debian/pool/main/f/fluid-soundfont/fluid-soundfont-gm_3.1-5.3_all.deb",
+      "sha256": "6f531493ac4e4d9772fd96b2488ea1790af81c196135fbdd25997da0781fc60e"
+    },
+    "lame": {
+      "url": "https://master.dl.sourceforge.net/project/lame/lame/3.100/lame-3.100.tar.gz?viasf=1",
+      "file": "lame-3.100.tar.gz",
+      "sha256": "ddfe36cab873794038ae2c1210557ad34857a4b6bdc515785d1da9e175b1da1e"
+    }
+  },
+  "lameVersion": "3.100"
+}

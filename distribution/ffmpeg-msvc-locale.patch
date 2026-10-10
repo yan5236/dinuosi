@@ -1,0 +1,47 @@
+--- a/configure
++++ b/configure
+@@ -5112,7 +5112,7 @@
+         _depflags='-MMD -MF $(@:.o=.d) -MT $@'
+         _cflags_speed='-O3'
+         _cflags_size='-Oz'
+-    elif $_cc -V 2>&1 | grep -q Sun; then
++    elif [ "$toolchain" != msvc ] && $_cc -V 2>&1 | grep -q Sun; then
+         _type=suncc
+         _ident=$($_cc -V 2>&1 | head -n1 | cut -d' ' -f 2-)
+         _DEPCMD='$(DEP$(1)) $(DEP$(1)FLAGS) $($(1)DEP_FLAGS) $< | sed -e "1s,^.*: ,$@: ," -e "\$$!s,\$$, \\\," -e "1!s,^.*: , ," > $(@:.o=.d)'
+@@ -5177,12 +5177,12 @@
+         _flags_filter=msvc_flags_link
+         _ld_lib='lib%.a'
+         _ld_path='-libpath:'
+-    elif VSLANG=1033 $_cc -nologo- 2>&1 | grep -q ^Microsoft || { $_cc -v 2>&1 | grep -q clang && $_cc -? > /dev/null 2>&1; }; then
++    elif VSLANG=1033 $_cc -nologo- 2>&1 | grep -q Microsoft || { $_cc -v 2>&1 | grep -q clang && $_cc -? > /dev/null 2>&1; }; then
+         _type=msvc
+-        if VSLANG=1033 $_cc -nologo- 2>&1 | grep -q ^Microsoft; then
++        if VSLANG=1033 $_cc -nologo- 2>&1 | grep -q Microsoft; then
+             # Depending on the tool (cl.exe or link.exe), the version number
+             # is printed on the first line of stderr or stdout
+-            _ident=$(VSLANG=1033 $_cc 2>&1 | grep ^Microsoft | head -n1 | tr -d '\r')
++            _ident=$(VSLANG=1033 $_cc 2>&1 | grep Microsoft | head -n1 | tr -d '\r')
+         else
+             _ident=$($_cc --version 2>/dev/null | head -n1 | tr -d '\r')
+         fi
+@@ -5292,7 +5292,7 @@
+     DEPCCFLAGS=$_flags
+ fi
+ 
+-if VSLANG=1033 $ar 2>&1 | grep -q ^Microsoft; then
++if VSLANG=1033 $ar 2>&1 | grep -q Microsoft; then
+     arflags="-nologo"
+     ar_o='-out:$@'
+ elif $ar 2>&1 | grep -q "\[D\] "; then
+--- a/compat/windows/mswindres
++++ b/compat/windows/mswindres
+@@ -10,7 +10,7 @@
+     exit 0
+ fi
+ 
+-EXTRA_OPTS="-nologo"
++EXTRA_OPTS="-nologo -c65001"
+ 
+ while [ $# -gt 2 ]; do
+     case $1 in

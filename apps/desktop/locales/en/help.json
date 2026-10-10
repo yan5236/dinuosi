@@ -4,5 +4,7 @@
   "Website": "Website",
   "Unavailable": "Unavailable",
   "Source code": "Source code",
-  "Version {version}": "Version {version}"
+  "Version {version}": "Version {version}",
+  "Third-party licenses": "Third-party licenses",
+  "Third-party license file is unavailable": "Third-party license file is unavailable"
 }

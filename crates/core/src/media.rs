@@ -31,26 +31,46 @@ pub struct Media {
     pub offline: bool,
 }
 
-/// 构造无控制台的媒体子进程；优先使用程序旁的 FFmpeg，随后使用 PATH。
-/// 参数通过 Command 逐项传递，文件名不会被 shell 解释；缺失程序由启动错误反馈。
+/// 构造应用配套目录中的媒体子进程，不读取 PATH，也不依赖启动时的工作目录。
+/// 参数逐项传递，不经 shell；工具或 DLL 缺失由调用方的启动/退出错误报告。
+/// 仅当操作系统无法定位本进程时终止，避免猜测路径而运行未经选择的工具。
 pub fn command(program: &str) -> Command {
-    let local = std::env::current_exe()
-        .ok()
-        .and_then(|p| p.parent().map(|d| d.join(format!("{program}.exe"))));
+    let executable = std::env::current_exe().expect("无法定位应用程序路径");
+    let root = executable.parent().expect("应用程序路径没有父目录");
     let mut command = Command::new(
-        local
-            .filter(|p| p.is_file())
-            .unwrap_or_else(|| program.into()),
+        root.join("runtime")
+            .join("ffmpeg")
+            .join(format!("{program}.exe")),
     );
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
         command.creation_flags(0x08000000);
     }
+    // 同时固定 DLL 搜索的工作目录与 PATH，配套 DLL 缺失时不能借用用户环境中的另一版。
+    let runtime = root.join("runtime/ffmpeg");
+    command.current_dir(runtime);
+    if let Some(windows) = std::env::var_os("SystemRoot") {
+        let windows = PathBuf::from(windows);
+        let path = std::env::join_paths([windows.join("System32"), windows]).expect("系统路径无效");
+        command.env("PATH", path);
+    } else {
+        command.env("PATH", "");
+    }
     command.stdin(Stdio::null());
     command
 }
 
+/// 返回媒体工具的诊断；没有 stderr 时保留退出状态，便于识别缺失 DLL 等启动失败。
+/// 只读取进程结果，不修改源素材，成功结果也可用于诊断但由调用方决定是否报错。
+fn process_error(output: &std::process::Output) -> String {
+    let message = String::from_utf8_lossy(&output.stderr);
+    if message.trim().is_empty() {
+        format!("媒体工具退出异常：{}", output.status)
+    } else {
+        message.trim().to_owned()
+    }
+}
 /// 规范化文件路径并读取真实流类型、时长和首帧；拒绝目录、未知类型及损坏文件。
 /// MIDI 由采样合成器读取真实时长；图片默认五秒，保留计入旋转和像素比例的源尺寸。
 pub fn probe(path: &Path) -> Result<Media, String> {
@@ -92,7 +112,7 @@ pub fn probe(path: &Path) -> Result<Media, String> {
         return Err(format!(
             "无法读取素材 {}：{}",
             path.display(),
-            String::from_utf8_lossy(&output.stderr).trim()
+            process_error(&output)
         ));
     }
     let data: Value =
@@ -307,10 +327,7 @@ pub fn frame(path: &Path, seconds: f64) -> Result<Vec<u8>, String> {
     }
     if !output.status.success() || output.stdout.len() != (FRAME_WIDTH * FRAME_HEIGHT * 4) as usize
     {
-        return Err(format!(
-            "无法解码画面：{}",
-            String::from_utf8_lossy(&output.stderr).trim()
-        ));
+        return Err(format!("无法解码画面：{}", process_error(&output)));
     }
     Ok(output.stdout)
 }

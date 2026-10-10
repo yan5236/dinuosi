@@ -1,11 +1,11 @@
 use dinuosi_core::{media, media_stream::Decoder};
 use std::{fs, path::Path, time::Instant};
 
-/// 创建两秒标准 MIDI：相同音高可切换乐器，含速度事件；独占临时目录避免测试互相覆盖。
-fn write_midi(path: &Path, program: u8) {
+/// 创建两秒标准 MIDI，按给定 GM 乐器和音高写入音符及速度事件；仅写独占测试目录。
+fn write_midi(path: &Path, program: u8, note: u8) {
     let track = [
-        0, 0xff, 0x51, 3, 7, 0xa1, 0x20, 0, 0xc0, program, 0, 0x90, 60, 100, 0x87, 0x40, 0x80, 60,
-        0, 0x87, 0x40, 0xff, 0x2f, 0,
+        0, 0xff, 0x51, 3, 7, 0xa1, 0x20, 0, 0xc0, program, 0, 0x90, note, 100, 0x87, 0x40, 0x80,
+        note, 0, 0x87, 0x40, 0xff, 0x2f, 0,
     ];
     let mut bytes = b"MThd\0\0\0\x06\0\0\0\x01\x01\xe0MTrk".to_vec();
     bytes.extend_from_slice(&(track.len() as u32).to_be_bytes());
@@ -20,8 +20,8 @@ fn sampled_midi_respects_instruments_and_seek() {
     fs::create_dir(&root).unwrap();
     let piano = root.join("钢琴.MID");
     let violin = root.join("小提琴.midi");
-    write_midi(&piano, 0);
-    write_midi(&violin, 40);
+    write_midi(&piano, 0, 60);
+    write_midi(&violin, 40, 60);
     let piano = media::probe(&piano).unwrap();
     assert_eq!(piano.kind, media::MediaKind::Audio);
     assert_eq!(piano.duration, 2.0);
@@ -102,4 +102,49 @@ fn write_wav(path: &Path, samples: &[f32]) {
         wav.extend_from_slice(&((sample.clamp(-1.0, 1.0) * 32767.0) as i16).to_le_bytes());
     }
     fs::write(path, wav).unwrap();
+}
+
+/// 验证内嵌音源的 128 种 GM 乐器均输出有限且有声的 PCM，并检查第十声道低音鼓有声音。
+/// 使用独占临时 MIDI，逐音色尝试低/中/高音区；通过后清理目录，不代表逐项覆盖全部打击乐音色。
+#[test]
+fn embedded_font_plays_all_gm_instruments_and_percussion() {
+    let root = std::env::temp_dir().join(format!("dinuosi-gm-{}", uuid::Uuid::new_v4()));
+    fs::create_dir(&root).unwrap();
+    let path = root.join("乐器.mid");
+    for program in 0..128 {
+        let mut audible = false;
+        for note in [36, 48, 60, 72, 84] {
+            write_midi(&path, program, note);
+            let item = media::probe(&path).unwrap();
+            let samples: Vec<_> = Decoder::start(&item, 0.0, 0.5)
+                .unwrap()
+                .take_audio()
+                .unwrap()
+                .collect();
+            assert_eq!(samples.len(), 48000);
+            assert!(samples.iter().all(|s| s.is_finite() && s.abs() <= 1.0));
+            audible |= samples.iter().any(|s| s.abs() > 0.0001);
+            if audible {
+                break;
+            }
+        }
+        assert!(audible, "GM 乐器 {program} 在各个测试音域均没有声音");
+    }
+    write_midi(&path, 0, 60);
+    let mut bytes = fs::read(&path).unwrap();
+    for index in 22..bytes.len() - 2 {
+        if bytes[index] == 0x90 || bytes[index] == 0x80 {
+            bytes[index] |= 9;
+            bytes[index + 1] = 36;
+        }
+    }
+    fs::write(&path, bytes).unwrap();
+    let item = media::probe(&path).unwrap();
+    let samples: Vec<_> = Decoder::start(&item, 0.0, 0.2)
+        .unwrap()
+        .take_audio()
+        .unwrap()
+        .collect();
+    assert!(samples.iter().any(|s| s.abs() > 0.001), "GM 打击乐没有声音");
+    fs::remove_dir_all(root).unwrap();
 }

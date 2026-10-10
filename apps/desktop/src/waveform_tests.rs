@@ -4,9 +4,9 @@ use gpui::{Modifiers, MouseButton, TestAppContext, point, px, size};
 use std::sync::Arc;
 
 /// 用真实导入及 GPUI 点击/缩放/裁边事件验证两处波形共用缓存、源入点、离线恢复及重开。
-/// 需要本机 FFmpeg；仅使用独立临时项目，不访问音频设备或修改用户项目。
+/// 需要准备应用配套 FFmpeg；仅使用独立临时项目，不访问音频设备或修改用户项目。
 #[gpui::test]
-#[ignore = "需要本机 FFmpeg 和 ffprobe"]
+#[ignore = "需要准备应用配套 FFmpeg 和 ffprobe"]
 fn waveform_preview_and_timeline_follow_real_audio(cx: &mut TestAppContext) {
     let root = std::env::temp_dir().join(format!("dinuosi-wave-ui-{}", std::process::id()));
     std::fs::create_dir_all(&root).unwrap();
