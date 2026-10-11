@@ -108,7 +108,8 @@ def build():
     run(["cmake", "--install", aom_build], ROOT, env)
     vpx_args = ["./configure", f"--prefix={prefix}", "--enable-pic", "--disable-shared",
         "--enable-static", "--disable-examples", "--disable-tools", "--disable-unit-tests", "--disable-docs"]
-    vpx_args.append("--as=nasm" if platform.machine() == "x86_64" else "--disable-asm")
+    if platform.machine() == "x86_64":
+        vpx_args.append("--as=nasm")
     run(vpx_args, sources["vpx"], env)
     run(["make", "-j", jobs, "install"], sources["vpx"], env)
     # ARM 的 OpenH264 汇编依赖外部 gas-preprocessor，软件路径使用其自带 C 实现以保持自包含。

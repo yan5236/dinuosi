@@ -2,6 +2,12 @@ name: Export platform verification
 
 on:
   workflow_dispatch:
+    inputs:
+      platform:
+        description: Native platform to verify
+        type: choice
+        default: all
+        options: [all, windows-2022, ubuntu-24.04, macos-14]
   push:
     branches: [main]
     paths:
@@ -21,7 +27,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-2022, ubuntu-24.04, macos-14]
+        os: ${{ fromJSON(inputs.platform && inputs.platform != 'all' && format('["{0}"]', inputs.platform) || '["windows-2022","ubuntu-24.04","macos-14"]') }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 90
     env:
