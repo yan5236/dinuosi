@@ -13,14 +13,21 @@ EVIDENCE = ROOT / ".local/ci-export"
 def window_id(process):
     """从本机窗口系统查询指定进程的真实窗口，返回标识；未创建窗口或查询失败抛出异常。
 
-    Linux 需 X11 工具，macOS 使用系统 Quartz 元数据，Windows 使用进程主窗口句柄；不模拟 GPUI。
+    Linux 需 X11 工具，macOS 只选择可见的主窗口，Windows 使用进程主窗口句柄；不模拟 GPUI。
     """
     if sys.platform == "win32":
         args = ["powershell", "-NoProfile", "-Command", f"(Get-Process -Id {process.pid}).MainWindowHandle"]
     elif sys.platform == "darwin":
         source = '''import Cocoa
 let windows = CGWindowListCopyWindowInfo([.optionAll, .excludeDesktopElements], kCGNullWindowID) as! [[String: Any]]
-guard let window = windows.first(where: { ($0[kCGWindowOwnerPID as String] as? Int) == Int(CommandLine.arguments.last!) && ($0[kCGWindowLayer as String] as? Int) == 0 }) else { exit(1) }
+guard let window = windows.first(where: {
+    let bounds = $0[kCGWindowBounds as String] as? [String: Any] ?? [:]
+    return ($0[kCGWindowOwnerPID as String] as? Int) == Int(CommandLine.arguments.last!)
+        && ($0[kCGWindowLayer as String] as? Int) == 0
+        && ($0[kCGWindowIsOnscreen as String] as? Bool) == true
+        && (bounds["Width"] as? Double ?? 0) >= 640
+        && (bounds["Height"] as? Double ?? 0) >= 480
+}) else { exit(1) }
 print(window[kCGWindowNumber as String]!)'''
         args = ["swift", "-e", source, str(process.pid)]
     else:
