@@ -7,7 +7,7 @@ on:
         description: Native platform to verify
         type: choice
         default: all
-        options: [all, windows-2022, ubuntu-24.04, macos-14]
+        options: [all, windows-2022, ubuntu-24.04, macos-14, macos-15-intel]
   push:
     branches: [main]
     paths:
@@ -27,7 +27,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: ${{ fromJSON(inputs.platform && inputs.platform != 'all' && format('["{0}"]', inputs.platform) || '["windows-2022","ubuntu-24.04","macos-14"]') }}
+        os: ${{ fromJSON(inputs.platform && inputs.platform != 'all' && format('["{0}"]', inputs.platform) || '["windows-2022","ubuntu-24.04","macos-14","macos-15-intel"]') }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 90
     env:
@@ -115,6 +115,7 @@ jobs:
           set -o pipefail
           cargo build -p dinuosi-desktop --locked 2>&1 | tee .local/ci-export/desktop-build.log
           cargo test -p dinuosi-desktop --locked -- --test-threads=1 2>&1 | tee .local/ci-export/desktop-tests.log
+          cargo test -p dinuosi-desktop --locked -- --ignored --test-threads=1 2>&1 | tee .local/ci-export/desktop-media-tests.log
           cargo clippy --workspace --all-targets --locked -- -D warnings
           cargo fmt --all -- --check
       - name: Start native desktop on Linux virtual display

@@ -41,6 +41,6 @@ cargo run -p dinuosi-desktop --locked
 
 ## 验证
 
-工作流覆盖三平台共享模块测试、全部自包含媒体/导出回归、桌面构建及 GPUI 事件测试、严格 Clippy、格式、真实窗口启动。Linux 窗口启动在 Xvfb/Openbox/Vulkan 软件驱动中进行；该结果不证明 Wayland、实机 GPU、音频设备或文件选择器已经验收。截图权限受限时保留明确状态，窗口未创建仍失败。
+工作流覆盖三平台共享模块测试、全部自包含媒体/导出回归、桌面构建及 GPUI 事件/波形测试、严格 Clippy、格式、真实窗口启动。macOS 分别使用 ARM64 和 Intel runner（标签依据 [GitHub 官方 runner 列表](https://docs.github.com/en/actions/reference/runners/github-hosted-runners)）。Linux 窗口启动在 Xvfb/Openbox/Vulkan 软件驱动中进行；该结果不证明 Wayland、实机 GPU、音频设备或文件选择器已经验收。截图权限受限时保留明确状态，窗口未创建仍失败。
 
 需要真实外部 MIDI 文件的试听检查不计入无输入 CI。源码中的所有 `#[ignore]` 只在显式执行后计为通过。签名、公证、新平台安装包、干净系统安装、设备播放、文件选择器与完整鼠标验收仍属于独立发行/实机检查。
