@@ -6,9 +6,9 @@
   "ffmpegSigningKey": "FCF986EA15E6E293A5644F10B4322F04D67658D8",
   "inputs": {
     "aom": {
-      "file": "aom-3.13.1.tar.gz",
-      "url": "https://aomedia.googlesource.com/aom/+archive/refs/tags/v3.13.1.tar.gz",
-      "sha256": "8cee6a70531e4055e696a8c0b47fafb1d3bdcef3dacc6315c6fe00feb3270ef9"
+      "file": "libaom-3.13.1.tar.gz",
+      "url": "https://storage.googleapis.com/aom-releases/libaom-3.13.1.tar.gz",
+      "sha256": "19e45a5a7192d690565229983dad900e76b513a02306c12053fb9a262cbeca7d"
     },
     "vpx": {
       "file": "libvpx-1.15.2.tar.gz",

@@ -21,8 +21,8 @@ def run(name, args, *, data=None, timeout=900):
     try:
         result = subprocess.run(args, cwd=ROOT, input=data, capture_output=True, timeout=timeout)
         code, output, error = result.returncode, result.stdout, result.stderr
-    except (OSError, subprocess.TimeoutExpired) as error:
-        code, output, error = 1, b"", str(error).encode()
+    except (OSError, subprocess.TimeoutExpired) as failure:
+        code, output, error = 1, b"", str(failure).encode()
     (EVIDENCE / f"{name}.log").write_bytes(output + b"\n" + error)
     print(f"{name}: {'PASS' if code == 0 else 'FAIL'}", flush=True)
     return code, output
@@ -48,6 +48,7 @@ def prepare_font():
     if hashlib.sha256(font.read_bytes()).hexdigest() != lock["soundfontSha256"]:
         raise ValueError("内嵌音源哈希不符")
     shutil.copyfile(font, ROOT / "assets/audio/FluidR3_GM.sf2")
+    font.unlink()
     archive.unlink()
     (EVIDENCE / "data.tar.xz").unlink()
 
@@ -158,6 +159,8 @@ def self_check():
     try:
         validate_streams(probe, "vp9")
     except AssertionError:
+        code, _ = run("self-check-missing-command", [str(EVIDENCE / "nonexistent-ci-command")])
+        assert code != 0
         return
     raise AssertionError("错误尺寸未被拒绝")
 

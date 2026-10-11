@@ -17,8 +17,11 @@ foreach($key in 'ffmpeg','zlib','lame','aom','vpx'){
     if ($key -eq 'aom') {
         New-Item -ItemType Directory -Force "$work/sources/aom-3.13.1" | Out-Null
         $sourcesPosix += '/aom-3.13.1'
+        $stripComponents = '--strip-components=1'
+    } else {
+        $stripComponents = ''
     }
-    & "$MsysRoot/usr/bin/bash.exe" --noprofile --norc -c "export PATH=/usr/bin:`$PATH; tar -xf '$archivePosix' -C '$sourcesPosix'"
+    & "$MsysRoot/usr/bin/bash.exe" --noprofile --norc -c "export PATH=/usr/bin:`$PATH; tar -xf '$archivePosix' $stripComponents -C '$sourcesPosix'"
     if($LASTEXITCODE -ne 0){throw "源码提取失败：$key"}
 }
 Copy-Item "$NasmDirectory/*" "$work/build/nasm/nasm-2.16.03" -Recurse -Force

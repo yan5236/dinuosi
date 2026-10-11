@@ -46,8 +46,8 @@ Expand-Archive "$work/downloads/$($lock.inputs.nasm.file)" "$work/build/nasm" -F
 
 if ($Build) {
     if (!$VcVars -or !(Test-Path -LiteralPath $VcVars)) { throw '-Build 需要 -VcVars 指定 MSVC x64 环境脚本' }
-    # AOM 的官方归档没有顶层目录；编码库固定提取到对应版本目录后再由共享构建脚本使用。
-    & $bash --noprofile --norc -c "export PATH=/usr/bin:`$PATH; mkdir -p '$posixWork/sources/aom-3.13.1'; tar -xf '$posixWork/downloads/$($lock.inputs.aom.file)' -C '$posixWork/sources/aom-3.13.1'; tar -xf '$posixWork/downloads/$($lock.inputs.vpx.file)' -C '$posixWork/sources'"
+    # 固定发行归档带 libaom 顶层目录；移除一层并沿用共享脚本的 aom 目录，不使用动态 Gitiles 归档。
+    & $bash --noprofile --norc -c "export PATH=/usr/bin:`$PATH; mkdir -p '$posixWork/sources/aom-3.13.1'; tar -xf '$posixWork/downloads/$($lock.inputs.aom.file)' --strip-components=1 -C '$posixWork/sources/aom-3.13.1'; tar -xf '$posixWork/downloads/$($lock.inputs.vpx.file)' -C '$posixWork/sources'"
     if ($LASTEXITCODE -ne 0) { throw 'AV1/VP9 源码提取失败' }
     & $bash --noprofile --norc -c "export PATH=/usr/bin:`$PATH; cd '$posixWork/sources'; tar -xf '../downloads/$($lock.inputs.ffmpeg.file)'; tar -xf '../downloads/$($lock.inputs.zlib.file)'; tar -xf '../downloads/$($lock.inputs.lame.file)'; cd ffmpeg-8.0.3; patch -p1 < '$posixRoot/distribution/ffmpeg-msvc-locale.patch'; cd ../zlib-1.3.1; patch -p1 < '$posixRoot/distribution/zlib-msvc.patch'"
     if ($LASTEXITCODE -ne 0) { throw '源码提取或构建补丁失败' }
