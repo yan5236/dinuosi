@@ -4,7 +4,7 @@
 
 ## 环境
 
-当前开发与发行目标为 Windows x64：
+Windows x64 的构建与发行环境：
 
 - Rust stable，MSVC 工具链；`rust-toolchain.toml` 声明 rustfmt 和 Clippy，Rust 依赖由 `Cargo.lock` 锁定。
 - Visual Studio C++ Build Tools，包含 x64 编译工具和 Windows SDK。构建 GPUI 时需要能从 PATH 找到 `fxc.exe`。
