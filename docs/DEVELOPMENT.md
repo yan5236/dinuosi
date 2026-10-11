@@ -32,7 +32,7 @@ Windows 脚本将桥接动态库和配套 libav 部署到 `target/debug`、`targ
 
 删除 `target/` 后需重新部署。当前脚本使用这些默认 Cargo 输出路径；自行更改 target 目录时，也需在相应程序旁部署 `runtime/ffmpeg/`。
 
-`-DeployOnly` 在复制前检查桥接库、必要 libav 和测试工具是否完整，不下载、不重新提取音源，也不要求 MSYS2。它不能与 `-Build` 同时使用；首次完整准备仍使用 BUILDING.md 中的 `-Build` 命令。
+`-DeployOnly` 在复制前检查桥接库、必要 libav 和测试工具是否完整，并按已有许可审计生成第三方声明；同时部署主程序 `LICENSE` 和 `licenses/` 到四个默认程序目录。它不下载、不重新提取音源，也不要求 MSYS2。许可材料缺失或 Cargo 输入变化时，先执行 `python tools/collect-licenses.py`，再重新部署。它不能与 `-Build` 同时使用；首次完整准备仍使用 BUILDING.md 中的 `-Build` 命令，并会获取锁定 Rust 依赖和收集许可。
 
 ## 媒体运行方式
 
@@ -92,7 +92,7 @@ python ./tools/collect-licenses.py
 ./tools/package.ps1
 ```
 
-许可收集使用本机已下载的 Cargo 依赖，并在需要时联网查询原始许可材料。打包会验证运行时、锁定源码、补丁及许可材料的一致性，输出到 `target/distribution/`：
+许可收集使用本机已下载的 Cargo 依赖，并在需要时联网查询原始许可材料。开发部署与发行打包共用 `tools/write-license-notices.ps1`，声明开头包含主程序 MIT 信息及完整原文，随后保留原生库和 Rust 依赖许可；关于窗口的“第三方许可证”打开程序旁的 `licenses/THIRD_PARTY_NOTICES.txt`，无需先生成安装包。打包会验证运行时、锁定源码、补丁及许可材料的一致性，输出到 `target/distribution/`：
 
 - Windows x64 安装程序。
 - 同内容便携 ZIP。

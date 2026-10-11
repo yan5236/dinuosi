@@ -4,8 +4,8 @@ $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 $work = Join-Path $root '.local/distribution'
 
-# 将已有 DLL 部署到四个默认 Cargo 程序目录，CLI 仅部署到 deps 测试目录。
-# 复制前检查桥接库、libav 和测试工具完整性；缺失时抛错，不下载、不编译、不修改源媒体。
+# 将已有 DLL、主程序 LICENSE 和完整第三方声明部署到四个默认 Cargo 程序目录，CLI 仅部署到 deps。
+# 复制前检查运行库并按现有许可审计生成声明；材料缺失或过期时抛错，不下载、不编译、不修改源媒体。
 # 应用目录中旧的 ffmpeg.exe/ffprobe.exe 会移除，避免将测试工具误认为应用媒体依赖。
 function Deploy-MediaRuntime {
     $source = Join-Path $work 'runtime/ffmpeg/bin'
@@ -15,9 +15,14 @@ function Deploy-MediaRuntime {
             throw "媒体运行时缺少 $name；首次准备请加 -Build，已有 FFmpeg 缺桥接库时见 BUILDING.md"
         }
     }
+    & "$PSScriptRoot/write-license-notices.ps1"
     foreach ($profile in 'debug', 'debug/deps', 'release', 'release/deps') {
         $destination = Join-Path $root "target/$profile/runtime/ffmpeg"
         New-Item -ItemType Directory -Force $destination | Out-Null
+        $application = Join-Path $root "target/$profile"
+        Copy-Item -LiteralPath "$root/LICENSE" -Destination $application -Force
+        New-Item -ItemType Directory -Force "$application/licenses" | Out-Null
+        Copy-Item -Path "$work/licenses/*" -Destination "$application/licenses" -Recurse -Force
         $testing = $profile.EndsWith('/deps')
         Get-ChildItem -LiteralPath $source -File | Where-Object {
             $_.Extension -eq '.dll' -or ($testing -and $_.Extension -eq '.exe')
@@ -110,5 +115,9 @@ set PATH=%VCToolsInstallDir%bin\Hostx64\x64;$MsysRoot\usr\bin;%PATH%
     & (Join-Path $PSScriptRoot 'seal-runtime.ps1') -MsysRoot $MsysRoot -VcVars $VcVars
 }
 
+& cargo fetch --locked
+if ($LASTEXITCODE -ne 0) { throw 'Rust 依赖下载失败，无法收集第三方许可证' }
+& python "$PSScriptRoot/collect-licenses.py"
+if ($LASTEXITCODE -ne 0) { throw '第三方许可证收集失败' }
 Deploy-MediaRuntime
 Write-Output '锁定音源、媒体运行时和安装工具准备完成。'

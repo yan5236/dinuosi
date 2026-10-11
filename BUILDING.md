@@ -105,7 +105,7 @@ cargo test -p dinuosi-core --locked --test runtime relocated_runtime_ignores_pat
 cargo run -p dinuosi-desktop --locked
 ```
 
-这一步不联网、不编译，也不要求 MSYS2。**全新机器或已删除 `.local/` 的机器不能用它代替第 3 步**；没有完整运行库时会明确报错。
+这一步不联网、不编译，也不要求 MSYS2，并会恢复程序旁的 MIT 和第三方许可证文件。许可缓存缺失或 Cargo 依赖变化时，先运行 `python tools/collect-licenses.py` 收集当前许可，再重新部署。**全新机器或已删除 `.local/` 的机器不能用它代替第 3 步**；没有完整运行库时会明确报错。
 
 如果缺库时已经打开软件，补齐后需保存工作并完全退出、重新启动。进程会缓存首次动态库加载结果，仅重开项目不能清除失败缓存。源文件仍在原路径时会重新探测；跨电脑移动项目后，项目内的本机素材路径还需对应实际源文件位置。
 

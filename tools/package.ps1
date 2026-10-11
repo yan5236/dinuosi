@@ -92,46 +92,7 @@ Copy-Item "$work/source-bundle/AOM-*.txt", "$work/source-bundle/VPX-*.txt" -Dest
 Copy-Item -LiteralPath "$work/build/nsis/nsis-3.13/COPYING" -Destination "$stage/licenses/NSIS.txt"
 Copy-Item -LiteralPath "$work/runtime-manifest.json", "$work/license-audit.json" -Destination "$stage/licenses"
 $sourceName = "Dinuosi-$version-ffmpeg-8.0.3-sources.zip"
-$notes = @"
-Dinuosi $version - internal Windows x64 acceptance build
-
-Dinuosi: MIT. The full license text is included in LICENSE at the application root.
-AV1: libaom 3.13.1, BSD-2-Clause. VP9: libvpx 1.15.2, BSD-3-Clause.
-Original codec licenses and patent grants are included in AOM-*.txt and VPX-*.txt.
-
-This software uses FFmpeg 8.0.3 under LGPL-2.1-or-later, as a separately
-replaceable libav DLLs loaded by the MIT Dinuosi media bridge. Corresponding source and build patches
-are provided in the accompanying $sourceName. Do not distribute this build
-without making that source archive available from the same download location.
-All runtime DLLs are built from that source; user-installed FFmpeg is not used.
-
-FluidR3_GM.sf2: MIT, Copyright 2000-2002, 2008 Frank Wen and 2008 Toby Smithe.
-RustySynth: MIT. Original dependency notices are included below and separately.
-The actual Windows dependency inventory is rust-dependencies.json.
-MPL-2.0 dependencies, if present, have their corresponding source in sources/.
-NSIS installer uses zlib compression and its license is included in NSIS.txt.
-
-PUBLIC RELEASE BLOCKERS
-Rights to supplied icons and brand assets require owner confirmation before
-public publication.
-Clean Windows and Windows 11 installation have not been established merely
-by a successful test on the development machine. This is an unsigned test
-build; no public release or code-signing is included.
-
-Five legacy crates omit standalone license files in their original publications; their original license declarations, full published sources and the referenced standard license texts are preserved. This omission requires explicit public-release review; no copyright holder or year has been fabricated.
-
-Microsoft C runtime code is statically linked using the installed Visual Studio Build Tools. Its redistribution terms belong to the Visual Studio/Build Tools license, not the FFmpeg LGPL. Windows system DLLs are not bundled. Verify the applicable Microsoft redistribution terms before public release.
-
-The third-party licenses remain applicable independently of Dinuosi's license.
-No EULA overrides the LGPL user's modification or replacement rights.
-
-DEPENDENCY NOTICES
-"@
-foreach ($entry in $dependencies) {
-    $notes += "`n`n$($entry.name) $($entry.version) -- $($entry.selected)`n$($entry.repository)`n"
-    foreach ($notice in $entry.notices) { $notes += "`n" + (Get-Content "$work/licenses/$($notice.file)" -Raw) }
-}
-[IO.File]::WriteAllText("$stage/licenses/THIRD_PARTY_NOTICES.txt",$notes,[Text.UTF8Encoding]::new($false))
+& "$PSScriptRoot/write-license-notices.ps1" -OutputFile "$stage/licenses/THIRD_PARTY_NOTICES.txt"
 [IO.File]::WriteAllText("$stage/licenses/SOURCE.txt","Corresponding FFmpeg/zlib/LAME/libaom/libvpx source: $sourceName (delivered alongside this package).`n",[Text.UTF8Encoding]::new($false))
 $files = Get-ChildItem $stage -File -Recurse
 $inventory = @($files | ForEach-Object { @{path=[IO.Path]::GetRelativePath($stage,$_.FullName).Replace('\','/'); sha256=(Get-FileHash $_.FullName).Hash.ToLowerInvariant();bytes=$_.Length} })
