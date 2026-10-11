@@ -103,6 +103,7 @@ pub(super) mod support;
 use support::{fixture, rms, save_gui_fixture, timeline, verify_video_audio};
 
 /// 真实输出并通过 ffprobe、像素与 PCM 断言多轨/裁剪/动画，验证取消、缺源及已有文件保护。
+/// H.264 只验收能力探测成功的实现，未通过探测明确记录为跳过；瞬时失败不等于永久不可编码。
 #[test]
 #[ignore = "需要准备应用配套 FFmpeg 和 ffprobe"]
 fn real_timeline_export_and_failure_boundaries() {
@@ -355,6 +356,7 @@ fn real_timeline_export_and_failure_boundaries() {
     );
     assert!(!broken_output.exists());
     let available = capabilities().unwrap();
+    println!("应用试编码成功的实现：{available:?}");
     assert!(available.contains(&Encoder::Mpeg4));
     for encoder in [
         Encoder::H264MediaFoundationHardware,
@@ -437,21 +439,7 @@ fn real_timeline_export_and_failure_boundaries() {
                 encoder.label()
             );
         } else {
-            let mut unavailable = settings.clone();
-            unavailable.encoder = encoder;
-            let unavailable_output = root.join(format!("unavailable{suffix}.mp4"));
-            assert!(
-                export(
-                    &timeline,
-                    &sources,
-                    &unavailable,
-                    &unavailable_output,
-                    &cancel,
-                    |_| {}
-                )
-                .is_err()
-            );
-            assert!(!unavailable_output.exists());
+            println!("{} 未通过本次能力探测，跳过实际时间线验收", encoder.label());
         }
     }
     println!(

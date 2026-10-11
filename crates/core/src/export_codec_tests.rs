@@ -24,7 +24,7 @@ fn encoder_arguments_match_the_selected_implementation() {
 }
 
 /// 真实试编码后对 AV1/VP9 的 MP4/MKV 输出验证格式、时长、裁剪混合像素与音量动画。
-/// 固定受控运行库必须包含两种软件编码器；输出证据只写忽略的项目 QA 目录。
+/// 固定受控运行库必须包含两种软件编码器；每次使用独立 QA 子目录，避免旧素材阻止重复运行。
 #[test]
 #[ignore = "需要准备包含 libaom 与 libvpx 的配套 FFmpeg"]
 fn real_av1_vp9_exports() {
@@ -36,7 +36,9 @@ fn real_av1_vp9_exports() {
     println!("缓存能力读取耗时 {:?}", start.elapsed());
     assert!(available.contains(&Encoder::Av1));
     assert!(available.contains(&Encoder::Vp9));
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.local/export-codecs-qa");
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../.local/export-codecs-qa")
+        .join(uuid::Uuid::new_v4().to_string());
     fs::create_dir_all(&root).unwrap();
     let (video, audio, image) = super::tests::support::fixture(&root);
     let timeline = super::tests::support::timeline(&video, &audio, &image);

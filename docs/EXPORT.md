@@ -35,3 +35,11 @@ Microsoft 文档说明系统 H.264 MFT 的输入、参数与平台支持；FFmpe
 
 真实媒体回归由 `cargo test -p dinuosi-core --locked export::tests -- --ignored --nocapture` 执行，需在测试程序旁准备当前受控运行库。普通边界与 GPUI 事件回归随工作区测试执行。当前任务的具体运行结果记录于 [验证历史](VALIDATION_HISTORY.md)。
 AV1/VP9 的四种编码器/封装组合由 `cargo test -p dinuosi-core --locked real_av1_vp9_exports -- --ignored --nocapture` 验证，检查真实格式、时长、混合像素和音量动画；能力读取耗时同时输出。
+
+## 平台验证边界
+
+当前 H.264 仅接入 Windows Media Foundation，未接入 macOS VideoToolbox 或 Linux VAAPI/NVENC 等实现。媒体工具定位固定使用 `.exe`，受控源码构建、部署与安装脚本依赖 Windows/MSVC；AV1/VP9 上游可跨平台不代表当前应用已可跨平台导出。
+
+`.github/workflows/export-platforms.yml` 在 Windows 2022、Ubuntu 24.04、macOS 14 上运行无 GUI 的 Core 常规测试与原样真实导出回归。Windows 从锁定源码重建配套运行库；Unix 使用系统 FFmpeg 作为环境对照，只部署原生文件名，不通过改名或 PATH 回退掩盖应用缺口。Unix 系统工具可能包含 GPL 编码库，仅用于 CI 诊断，不属于交付运行库或许可验收。
+
+每个平台保留源码 SHA、系统/架构、FFmpeg 版本/配置/编码器列表、应用测试日志，以及五种现有编码实现的 MP4/MKV 工具试编码样片和 ffprobe 结果。工具试编码与应用时间线验收分开标记；应用失败会使该平台任务失败，未通过探测的 H.264 时间线检查明确记为跳过。CI 不验证桌面界面、真实显卡、安装包、公开发行或干净系统实机体验；macOS 14 的架构以报告记录为准，不能推广到另一架构。
