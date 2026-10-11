@@ -73,7 +73,10 @@ def build():
     """
     lock = json.loads(LOCK.read_text())
     inputs = {**lock["inputs"], **lock["unixInputs"]}
-    archives = {key: fetch(inputs[key]) for key in ("ffmpeg", "ffmpegKey", "ffmpegSignature", "zlib", "lame", "aom", "vpx", "openh264")}
+    source_keys = ("ffmpeg", "zlib", "lame", "aom", "vpx", "openh264")
+    if platform.machine() == "x86_64":
+        source_keys += ("nasmSource",)
+    archives = {key: fetch(inputs[key]) for key in (*source_keys, "ffmpegKey", "ffmpegSignature")}
     gpg = WORK / "gpg"
     gpg.mkdir(parents=True, exist_ok=True, mode=0o700)
     run(["gpg", "--homedir", gpg, "--import", archives["ffmpegKey"]], ROOT)
@@ -82,7 +85,7 @@ def build():
     if f"[GNUPG:] VALIDSIG {lock['ffmpegSigningKey']} " not in verified.stdout:
         raise ValueError("FFmpeg 签名身份不符")
     sources = {}
-    for key in ("ffmpeg", "zlib", "lame", "aom", "vpx", "openh264"):
+    for key in source_keys:
         folder = WORK / "sources" / key
         folder.mkdir(parents=True, exist_ok=True)
         with tarfile.open(archives[key]) as archive:
@@ -96,6 +99,12 @@ def build():
     env["PKG_CONFIG_LIBDIR"] = str(prefix / "lib/pkgconfig")
     env.pop("PKG_CONFIG_PATH", None)
     jobs = os.environ.get("DINUOSI_BUILD_JOBS", "2")
+    if "nasmSource" in sources:
+        # libaom 3.13.1 的帮助文本检测不兼容 NASM 3；使用与 Windows 相同的锁定 2.16.03。
+        tools = WORK / "tools"
+        run(["./configure", f"--prefix={tools}"], sources["nasmSource"], env)
+        run(["make", "-j", jobs, "install"], sources["nasmSource"], env)
+        env["PATH"] = str(tools / "bin") + os.pathsep + env["PATH"]
     run(["./configure", f"--prefix={prefix}", "--static"], sources["zlib"], env)
     run(["make", "-j", jobs, "install"], sources["zlib"], env)
     run(["./configure", f"--prefix={prefix}", "--disable-shared", "--enable-static", "--with-pic", "--disable-frontend"], sources["lame"], env)
@@ -103,7 +112,7 @@ def build():
     aom_build = WORK / "build/aom"
     run(["cmake", "-S", sources["aom"], "-B", aom_build, "-DCMAKE_BUILD_TYPE=Release",
         f"-DCMAKE_INSTALL_PREFIX={prefix}", "-DCMAKE_INSTALL_LIBDIR=lib", "-DCMAKE_POSITION_INDEPENDENT_CODE=ON",
-        "-DBUILD_SHARED_LIBS=OFF", "-DENABLE_TESTS=OFF", "-DENABLE_EXAMPLES=OFF", "-DENABLE_TOOLS=OFF", "-DENABLE_DOCS=OFF"], ROOT, env)
+        "-DBUILD_SHARED_LIBS=OFF", "-DENABLE_NASM=ON", "-DENABLE_TESTS=OFF", "-DENABLE_EXAMPLES=OFF", "-DENABLE_TOOLS=OFF", "-DENABLE_DOCS=OFF"], ROOT, env)
     run(["cmake", "--build", aom_build, "--parallel", jobs], ROOT, env)
     run(["cmake", "--install", aom_build], ROOT, env)
     vpx_args = ["./configure", f"--prefix={prefix}", "--enable-pic", "--disable-shared",

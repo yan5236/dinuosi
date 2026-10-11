@@ -37,7 +37,7 @@ python3 tools/prepare-media-unix.py
 cargo run -p dinuosi-desktop --locked
 ```
 
-脚本验证锁定源码 SHA-256 与 FFmpeg 官方签名，在 `.local/distribution/unix/` 原生构建，生成运行库哈希清单，部署到 Cargo debug/release 及 deps。仅重新部署可运行 `python3 tools/prepare-media-unix.py --deploy`，脚本拒绝构建输入、运行库或内嵌音源发生漂移。支持 `CARGO_TARGET_DIR`，自定义 `--target` 子目录需将运行库部署到相应程序旁。
+脚本验证锁定源码 SHA-256 与 FFmpeg 官方签名，在 `.local/distribution/unix/` 原生构建，生成运行库哈希清单，部署到 Cargo debug/release 及 deps。x86_64 的汇编工具也从锁定 NASM 2.16.03 源码构建，避免 Homebrew 新版 NASM 与当前 libaom 的检测不兼容。仅重新部署可运行 `python3 tools/prepare-media-unix.py --deploy`，脚本拒绝构建输入、运行库或内嵌音源发生漂移。支持 `CARGO_TARGET_DIR`，自定义 `--target` 子目录需将运行库部署到相应程序旁。
 
 ## 验证
 
