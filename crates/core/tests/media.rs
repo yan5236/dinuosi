@@ -240,3 +240,116 @@ fn lgpl_runtime_decodes_h264_fixture() {
             .any(|pixel| pixel[0] != pixel[1] || pixel[1] != pixel[2])
     );
 }
+
+/// 将旋转和非方形像素的视频与 CLI 独立解码逐字节对照，再验证五秒起始时间戳不改变秒级寻址。
+/// 只生成独立测试素材，CLI 仅用于夹具及对照；实际探测、静态帧和流式视频均走原生动态库。
+#[test]
+#[ignore = "需要准备原生动态库及测试夹具工具"]
+fn native_rotation_and_start_timestamp_match_reference() {
+    let root =
+        std::env::temp_dir().join(format!("dinuosi-native-metadata-{}", uuid::Uuid::new_v4()));
+    std::fs::create_dir(&root).unwrap();
+    let original = root.join("original.mp4");
+    let rotated = root.join("rotated.mp4");
+    let shifted = root.join("shifted.mp4");
+    assert!(
+        media::command("ffmpeg")
+            .args([
+                "-v",
+                "error",
+                "-f",
+                "lavfi",
+                "-i",
+                "testsrc2=size=64x32:rate=24:duration=1",
+                "-vf",
+                "setsar=2",
+                "-c:v",
+                "mpeg4"
+            ])
+            .arg(&original)
+            .status()
+            .unwrap()
+            .success()
+    );
+    for (path, input, output) in [
+        (&rotated, vec!["-display_rotation:v:0", "90"], vec![]),
+        (&shifted, vec![], vec!["-output_ts_offset", "5"]),
+    ] {
+        assert!(
+            media::command("ffmpeg")
+                .args(["-v", "error"])
+                .args(input)
+                .arg("-i")
+                .arg(&original)
+                .args(["-c", "copy"])
+                .args(output)
+                .arg(path)
+                .status()
+                .unwrap()
+                .success()
+        );
+    }
+    for (index, angle, flip) in [
+        (0, "90", None),
+        (1, "180", None),
+        (2, "270", None),
+        (3, "45", None),
+        (4, "90", Some("-display_hflip:v:0")),
+        (5, "270", Some("-display_vflip:v:0")),
+        (6, "0", Some("-display_hflip:v:0")),
+        (7, "0", Some("-display_vflip:v:0")),
+    ] {
+        let path = root.join(format!("matrix-{index}.mp4"));
+        let mut tool = media::command("ffmpeg");
+        tool.args(["-v", "error", "-display_rotation:v:0", angle]);
+        if let Some(flip) = flip {
+            tool.arg(flip);
+        }
+        assert!(
+            tool.arg("-i")
+                .arg(&original)
+                .args(["-c", "copy"])
+                .arg(&path)
+                .status()
+                .unwrap()
+                .success()
+        );
+        let size = media::probe(&path).unwrap().source_size;
+        assert_eq!(
+            size,
+            if matches!(angle, "90" | "270") {
+                (32, 128)
+            } else {
+                (128, 32)
+            }
+        );
+        let reference = media::command("ffmpeg").args(["-v", "error", "-i"]).arg(&path).args([
+            "-vf", "scale=640:360:force_original_aspect_ratio=decrease:reset_sar=1,format=bgra,pad=640:360:(ow-iw)/2:(oh-ih)/2:color=black@0",
+            "-frames:v", "1", "-pix_fmt", "bgra", "-f", "rawvideo", "pipe:1"]).output().unwrap();
+        assert!(reference.status.success());
+        let actual = media::frame(&path, 0.0).unwrap();
+        assert_eq!(actual.len(), reference.stdout.len());
+        let differences = actual
+            .iter()
+            .zip(&reference.stdout)
+            .filter(|(a, b)| a != b)
+            .count();
+        assert_eq!(differences, 0, "旋转/镜像矩阵 {index} 与 CLI 对照不一致");
+    }
+    for time in [0.0, 0.5] {
+        assert_eq!(
+            media::frame(&shifted, time).unwrap(),
+            media::frame(&original, time).unwrap()
+        );
+    }
+    let item = media::probe(&shifted).unwrap();
+    let decoder = dinuosi_core::media_stream::Decoder::start(&item, 0.0, 0.2).unwrap();
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    while decoder.frames.lock().unwrap().is_none() {
+        assert!(std::time::Instant::now() < deadline);
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    assert!(decoder.error.lock().unwrap().is_none());
+    drop(decoder);
+    std::fs::remove_dir_all(root).unwrap();
+}

@@ -22,12 +22,18 @@ int dn_video_stream(AVFormatContext *format) {
     return -1;
 }
 
-/* 读取显示矩阵或旧 rotate 标签中的旋转角；无元数据返回零，不修改源流。 */
-double dn_rotation(const AVStream *stream) {
+/* 借用流的显示矩阵；大小不足或不存在返回空，指针仅在所属输入上下文存活期间有效。 */
+const int32_t *dn_display_matrix(const AVStream *stream) {
     const AVPacketSideData *side = av_packet_side_data_get(stream->codecpar->coded_side_data,
         stream->codecpar->nb_coded_side_data, AV_PKT_DATA_DISPLAYMATRIX);
-    if (side && side->size >= 9 * sizeof(int32_t)) {
-        double value = -av_display_rotation_get((const int32_t *)side->data);
+    return side && side->size >= 9 * sizeof(int32_t) ? (const int32_t *)side->data : NULL;
+}
+
+/* 读取显示矩阵或旧 rotate 标签中的旋转角；按整数角归一矩阵误差，无元数据返回零。 */
+double dn_rotation(const AVStream *stream) {
+    const int32_t *matrix = dn_display_matrix(stream);
+    if (matrix) {
+        double value = -round(av_display_rotation_get(matrix));
         if (isfinite(value)) return value;
     }
     AVDictionaryEntry *tag = av_dict_get(stream->metadata, "rotate", NULL, 0);

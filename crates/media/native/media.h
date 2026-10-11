@@ -43,5 +43,6 @@ DN_API int dn_encode_finish(DnEncoder *, char *);
 DN_API void dn_encode_free(DnEncoder *);
 int dn_error(int, char *);
 double dn_rotation(const AVStream *);
+const int32_t *dn_display_matrix(const AVStream *);
 int dn_video_stream(AVFormatContext *);
 #endif

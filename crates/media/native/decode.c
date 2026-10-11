@@ -85,7 +85,7 @@ fail:
 /* 用第一张实际解码帧建立独立单线程滤镜图，先精确裁剪再归零时间。
    视频自动旋转后应用宿主缩放/fps，音频统一 48kHz 交错 float 立体声；失败由调用者回收图。 */
 static int filters(DnDecoder *d, AVFrame *frame) {
-    char args[1024], description[2048], rotation[64] = "";
+    char args[1024], description[2048], rotation[128] = "";
     AVStream *stream = d->format->streams[d->stream];
     AVRational tb = stream->time_base;
     d->graph = avfilter_graph_alloc();
@@ -108,9 +108,24 @@ static int filters(DnDecoder *d, AVFrame *frame) {
         snprintf(args, sizeof(args), "video_size=%dx%d:pix_fmt=%d:time_base=%d/%d:pixel_aspect=%d/%d:colorspace=%d:range=%d",
             frame->width, frame->height, frame->format, tb.num, tb.den, sar.num, sar.den, frame->colorspace, frame->color_range);
         double angle = fmod(dn_rotation(stream) + 360, 360);
-        if (fabs(angle - 90) < 1) strcpy(rotation, "transpose=clock,");
-        else if (fabs(angle - 270) < 1) strcpy(rotation, "transpose=cclock,");
-        else if (fabs(angle - 180) < 1) strcpy(rotation, "hflip,vflip,");
+        const int32_t *matrix = dn_display_matrix(stream);
+        switch ((int)angle) {
+        case 90:
+            snprintf(rotation, sizeof(rotation), "transpose=%s,", matrix && matrix[3] > 0 ? "cclock_flip" : "clock");
+            break;
+        case 270:
+            snprintf(rotation, sizeof(rotation), "transpose=%s,", matrix && matrix[3] < 0 ? "clock_flip" : "cclock");
+            break;
+        case 180:
+            if (!matrix || matrix[0] < 0) strcat(rotation, "hflip,");
+            if (!matrix || matrix[4] < 0) strcat(rotation, "vflip,");
+            break;
+        case 0:
+            if (matrix && matrix[4] < 0) strcpy(rotation, "vflip,");
+            break;
+        default:
+            snprintf(rotation, sizeof(rotation), "rotate=%.6f*PI/180,", angle);
+        }
         snprintf(description, sizeof(description), "trim=start=%.9f:end=%.9f,setpts=PTS-%.9f/TB,%s%s",
             d->start, d->end, d->start, rotation, d->filter);
     }
