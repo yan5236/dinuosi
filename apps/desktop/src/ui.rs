@@ -171,14 +171,19 @@ pub fn window_controls(window: &Window, show_maximize: bool) -> Div {
         )
 }
 
-/// 返回标题栏空白拖动区，支持系统拖动、双击最大化和窗口贴靠。
-/// 与菜单和按钮分离，避免操作控件时意外拖动窗口。
+/// 返回标题栏空白拖动区，与菜单和按钮分离；Windows 保留系统命中、双击及窗口贴靠行为。
+/// Linux 的命中区回调为空实现，按下时显式请求 X11/Wayland 窗口管理器接管拖动。
 pub fn title_drag() -> Div {
     div()
         .debug_selector(|| "title-drag".to_owned())
         .h_full()
         .flex_1()
         .window_control_area(WindowControlArea::Drag)
+        .when(cfg!(target_os = "linux"), |drag| {
+            drag.on_mouse_down(gpui::MouseButton::Left, |_, window, _| {
+                window.start_window_move()
+            })
+        })
 }
 
 /// 返回工具组之间的单像素分隔线；高度限制在工具栏内部。

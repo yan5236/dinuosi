@@ -57,7 +57,8 @@ def verify():
             elif sys.platform == "linux":
                 args = ["import", "-window", identifier, str(screenshot)]
             else:
-                script = """Add-Type -AssemblyName System.Windows.Forms
+                script = """$ErrorActionPreference = 'Stop'
+Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 $bounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
 $bitmap = [System.Drawing.Bitmap]::new($bounds.Width, $bounds.Height)

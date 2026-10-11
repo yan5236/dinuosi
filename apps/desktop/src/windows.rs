@@ -3,8 +3,8 @@
 use crate::view::Desktop;
 use dinuosi_core::{ProjectEntry, ProjectStore};
 use gpui::{
-    App, AppContext, Bounds, Global, TitlebarOptions, Window, WindowBounds, WindowHandle,
-    WindowOptions, px, size,
+    App, AppContext, Bounds, Global, TitlebarOptions, Window, WindowBounds, WindowDecorations,
+    WindowHandle, WindowOptions, px, size,
 };
 
 struct WindowRole {
@@ -56,6 +56,7 @@ pub(crate) fn options(editor: bool, cx: &App) -> WindowOptions {
             dimensions
         }),
         is_resizable: editor,
+        window_decorations: cfg!(target_os = "linux").then_some(WindowDecorations::Client),
         titlebar: Some(TitlebarOptions {
             title: Some("Dinuosi".into()),
             appears_transparent: true,

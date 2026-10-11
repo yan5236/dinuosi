@@ -20,10 +20,10 @@ Windows 用户数据位置保持 `%LOCALAPPDATA%/Dinuosi`；macOS 新默认是 `
 
 Windows 沿用 [开发指南](DEVELOPMENT.md) 的 MSVC 准备和打包链路。
 
-Linux 需 Rust stable、C/C++ 编译工具、Python 3.12+、CMake、NASM、pkg-config、GPG，以及 GPUI/Rodio 的系统开发依赖。Ubuntu 24.04：
+Linux 需 Rust stable、C/C++ 编译工具、Python 3.12+、CMake、NASM、pkg-config、GPG、patchelf，以及 GPUI/Rodio 的系统开发依赖。Ubuntu 24.04：
 
 ```sh
-sudo apt-get install build-essential cmake nasm pkg-config gnupg libasound2-dev libudev-dev libssl-dev libfontconfig1-dev libwayland-dev libxkbcommon-dev libxkbcommon-x11-dev libxcb1-dev libxcb-shape0-dev libxcb-xfixes0-dev libx11-dev libxi-dev libxrandr-dev libxcursor-dev libxinerama-dev libxrender-dev libvulkan-dev mesa-vulkan-drivers fonts-noto-cjk fonts-noto-core
+sudo apt-get install build-essential cmake nasm pkg-config gnupg patchelf libasound2-dev libudev-dev libssl-dev libfontconfig1-dev libwayland-dev libxkbcommon-dev libxkbcommon-x11-dev libxcb1-dev libxcb-shape0-dev libxcb-xfixes0-dev libx11-dev libxi-dev libxrandr-dev libxcursor-dev libxinerama-dev libxrender-dev libvulkan-dev mesa-vulkan-drivers fonts-noto-cjk fonts-noto-core
 ```
 
 桌面需要可用的 X11/Wayland 会话和 Vulkan 驱动；文件选择器使用 GPUI 的桌面 portal，需要已安装并运行匹配桌面的 `xdg-desktop-portal` 后端；声音输出需要正常音频设备/系统服务。

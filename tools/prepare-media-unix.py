@@ -127,7 +127,7 @@ def build():
     if sys.platform == "darwin":
         args.extend(["--enable-videotoolbox", "--install-name-dir=@rpath", f"--extra-ldflags=-L{prefix / 'lib'} -Wl,-rpath,@loader_path"])
     else:
-        args.append(f"--extra-ldflags=-L{prefix / 'lib'} -Wl,-rpath,'$$ORIGIN'")
+        args.append(f"--extra-ldflags=-L{prefix / 'lib'}")
     run(args, ffmpeg_build, env)
     run(["make", "-j", jobs], ffmpeg_build, env)
     run(["make", "install"], ffmpeg_build, env)
@@ -135,6 +135,10 @@ def build():
     for path in [install / "bin/ffmpeg", install / "bin/ffprobe", *list((install / "lib").iterdir())]:
         if path.is_file() and (path.name in ("ffmpeg", "ffprobe") or ".so" in path.name or path.suffix == ".dylib"):
             shutil.copy2(path, runtime / path.name)
+    if sys.platform == "linux":
+        # ELF 的 $ORIGIN 在 configure/make 多层展开中会丢失，部署后统一写入可迁移的相对加载路径。
+        for path in sorted(runtime.iterdir()):
+            run(["patchelf", "--set-rpath", "$ORIGIN", path], ROOT)
     version = subprocess.check_output([str(runtime / "ffmpeg"), "-version"], text=True)
     assert version.startswith(f"ffmpeg version {lock['ffmpegVersion']}")
     license_text = subprocess.check_output([str(runtime / "ffmpeg"), "-L"], text=True, stderr=subprocess.STDOUT)

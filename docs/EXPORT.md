@@ -12,7 +12,7 @@
 
 ## 编码与许可边界
 
-主程序仍为 MIT。H.264 是编码格式，libx264 是其具体实现；本项目不捆绑 libx264，也不启用 FFmpeg GPL/nonfree/version3。受控构建通过 `--enable-mediafoundation` 启用 FFmpeg 的 LGPL 模块，调用 Windows 已安装的 H.264 Media Foundation 编码器。主程序仅以受控子进程交互，不回退到系统 PATH。能力检测分别实际试编码 Windows 硬件 H.264、Windows 软件 H.264、AV1、VP9 与 FFmpeg 原生 MPEG-4，只有成功的实现进入选项；有可用硬件时默认选择它。未复制驱动 DLL。
+主程序仍为 MIT。H.264 是编码格式，libx264 是其具体实现；本项目不捆绑 libx264，也不启用 FFmpeg GPL/nonfree/version3。Windows 使用 Media Foundation，macOS 使用 VideoToolbox，并在 Linux/macOS 提供 OpenH264 软件路径。主程序仅以受控子进程交互，不回退到系统 PATH。能力检测按本机平台实际试编码对应 H.264 后端、AV1、VP9 与 FFmpeg 原生 MPEG-4，只有成功的实现进入选项；有可用硬件时默认选择它。未复制驱动 DLL；Unix 构建/部署与第三方边界见 [跨平台支持](CROSS_PLATFORM.md)。
 
 AV1 使用 libaom 3.13.1（BSD-2-Clause），VP9 使用 libvpx 1.15.2（BSD-3-Clause）。两库只链接至独立的 LGPL FFmpeg，不链接至 MIT 主程序；不改变主程序许可证。官方 `LICENSE`、`PATENTS` 和固定哈希源码随运行库封存，打包时核对原文并带入应用及源码包。AV1/VP9 同样通过真实三帧试编码进入菜单，支持 MP4/MKV + AAC。AV1 使用 `cpu-used=6`，VP9 使用 `deadline=good,cpu-used=4`，均启用行并行，在现有码率设置下折中速度与画质。
 
@@ -38,10 +38,10 @@ AV1/VP9 的四种编码器/封装组合由 `cargo test -p dinuosi-core --locked 
 
 ## 平台验证边界
 
-当前 H.264 仅接入 Windows Media Foundation，未接入 macOS VideoToolbox 或 Linux VAAPI/NVENC 等实现。媒体工具定位固定使用 `.exe`，受控源码构建、部署与安装脚本依赖 Windows/MSVC；AV1/VP9 上游可跨平台不代表当前应用已可跨平台导出。
+媒体工具按本平台原生文件名定位，三平台均从锁定源码构建配套运行库。Linux 当前提供软件 H.264，未接入 VAAPI/NVENC；macOS 的硬件/软件系统后端必须通过本机探测。Windows 安装包链路保持原样，Unix 安装、签名/公证与实机发行验收另行处理。
 
-`.github/workflows/export-platforms.yml` 在 Windows 2022、Ubuntu 24.04、macOS 14 上运行无 GUI 的 Core 常规测试与原样真实导出回归。Windows 从锁定源码重建配套运行库；Unix 使用系统 FFmpeg 作为环境对照，只部署原生文件名，不通过改名或 PATH 回退掩盖应用缺口。Unix 系统工具可能包含 GPL 编码库，仅用于 CI 诊断，不属于交付运行库或许可验收。
+`.github/workflows/export-platforms.yml` 在 Windows 2022、Ubuntu 24.04、macOS 14 上执行共享模块、媒体/导出回归，并构建桌面程序、运行 GPUI 事件测试和真实窗口启动检查。Unix 不再复制系统 FFmpeg，使用 `prepare-media-unix.py` 原生构建的受控运行库。可按平台手动重跑，便于保留失败证据并独立验证修复。
 
-每个平台保留源码 SHA、系统/架构、FFmpeg 版本/配置/编码器列表、应用测试日志，以及五种现有编码实现的 MP4/MKV 工具试编码样片和 ffprobe 结果。工具试编码与应用时间线验收分开标记；应用失败会使该平台任务失败，未通过探测的 H.264 时间线检查明确记为跳过。CI 不验证桌面界面、真实显卡、安装包、公开发行或干净系统实机体验；macOS 14 的架构以报告记录为准，不能推广到另一架构。
+每个平台保留源码 SHA、系统/架构、FFmpeg 版本/配置/编码器列表、应用测试日志，以及本平台编码实现的 MP4/MKV 工具试编码样片和 ffprobe 结果。工具试编码与应用时间线验收分开标记；应用失败会使该平台任务失败，未通过探测的系统 H.264 检查明确记为跳过，Unix 软件 OpenH264 必须通过。CI 的 GPUI 事件测试和窗口启动不代替完整实机鼠标、显卡、音频设备、文件选择器、安装包或干净系统验收；macOS 架构以报告记录为准，不能推广到另一架构。
 
 当前平台实测结果与 CI 发现的构建输入问题见 [导出平台验证](EXPORT_PLATFORM_VALIDATION.md)。
