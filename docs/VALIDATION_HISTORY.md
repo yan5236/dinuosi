@@ -1,5 +1,13 @@
 # 历史验证记录
 
+## Windows 程序图标验证（2026-10-11）
+
+- 当前媒体动态库分支及未提交的许可证部署修复先合并并推送到 `main`，基线为 `87a1aec`；许可证部署隔离回归通过。
+- Desktop 为 Debug/Release EXE 嵌入编号 1 的品牌 ICO，沿用已有应用 PNG，不修改界面 Logo 或 SVG。9 个透明尺寸帧全部与 EXE 的原始资源字节一致；ICO 重建字节一致，检查可拒绝旧版无品牌图标的 EXE。
+- Windows Debug 和 Release 均实际启动隔离窗口，系统窗口类图标与 EXE 图标的 32px 绘制像素一致；在真实桌面截取并检查任务栏，均显示青色 D。资源和窗口证据在 `.local/windows-icon/debug/`、`.local/windows-icon/release/`，包含 `result.json`、`window-icon.png` 与 `taskbar.png`。
+- 格式、Desktop 全目标严格 Clippy、Debug 构建及 Release 构建通过。Release 首次默认并发因编译器内存不足失败，降低为 `-j 1` 后成功；既有 `proc-macro-error2` 未来兼容性提示仍存在。许可审计重新收集 466 个 Windows 运行依赖且阻断数为零，离线部署通过。
+- 本轮未重新生成安装包、未执行完整媒体回归，也未重跑 Linux/macOS 原生构建。
+
 以下记录从 README 迁入，描述对应日期和版本的验证范围，不代表当前版本的完整能力或本次重新验证结果。最新 Windows 发行验收见 [DISTRIBUTION_VALIDATION.md](DISTRIBUTION_VALIDATION.md)。文中的截图、日志和测试项目保存在本机忽略目录，不随仓库提供。
 
 ## FFmpeg 动态库迁移与四环境复验（2026-10-11）

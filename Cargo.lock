@@ -1432,6 +1432,7 @@ dependencies = [
  "dinuosi-command",
  "dinuosi-core",
  "dinuosi-icons",
+ "embed-resource",
  "gpui",
  "image",
  "rodio",

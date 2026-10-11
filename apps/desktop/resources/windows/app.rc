@@ -1,0 +1,2 @@
+// GPUI 0.2.2 按编号 1 加载窗口类图标，Windows Shell 同时将它用作 EXE 图标。
+1 ICON "../../assets/brand/dinuosi.ico"

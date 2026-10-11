@@ -20,6 +20,9 @@ serde_json.workspace = true
 image = { version = "0.25", default-features = false }
 rodio = { version = "=0.21.1", default-features = false, features = ["playback"] }
 
+[build-dependencies]
+embed-resource = "=3.0.11"
+
 [dev-dependencies]
 gpui = { workspace = true, features = ["test-support"] }
 
