@@ -39,11 +39,21 @@ cargo run -p dinuosi-desktop --locked
 
 ## 媒体运行方式
 
-Core 通过后台子进程调用 `ffprobe.exe` 探测媒体，调用 `ffmpeg.exe` 解码画面和声音，通过管道读取 BGRA 帧和 PCM 样本。Desktop 负责界面绘制、播放调度与音频设备输出。Windows 上的媒体子进程不显示控制台；用户只需操作图形界面。
+Core 通过 `crates/media` 的安全接口直接调用 FFmpeg 8 的 libav 动态库，完成探测、BGRA/PCM 解码及时间线编码/封装。Desktop 负责界面绘制、播放调度与音频设备输出；应用正常媒体流程不创建 FFmpeg/ffprobe 子进程。Dinuosi 自身的用户 CLI 尚未实现。
 
-工具固定定位到当前程序旁的 `runtime/ffmpeg/`，并使用配套 libav DLL，不回退到 PATH。媒体工具或 DLL 缺失会报告错误。这里使用的是 FFmpeg 的命令行接口，Dinuosi 自身的用户 CLI 尚未实现。
+桥接动态库及配套 libav 位于当前程序旁 `runtime/ffmpeg/`，不回退到 PATH。Windows 使用 `dinuosi_media.dll`，Linux/macOS 使用 `libdinuosi_media.so` / `libdinuosi_media.dylib`。动态库或 ABI 不匹配会返回具体错误。FFmpeg/ffprobe 可执行工具仅用于测试夹具、独立输出对照和构建许可检查；移除它们后应用仍可探测、播放及导出。
 
-FFmpeg 当前固定为 8.0.3，构建禁用 GPL、nonfree、version3、外部库自动探测和网络协议，加入 zlib、LGPL LAME、BSD libaom 3.13.1 与 libvpx 1.15.2；显式启用 Media Foundation，以 Windows 已安装的编码器导出 H.264，并支持软件 AV1/VP9。它作为独立工具随包部署，FFmpeg 和编码库代码不链接进 MIT 主程序。编码库使用 Visual Studio Build Tools 配套 CMake/Ninja、MSBuild 及锁定 NASM 构建（也需安装 CMake 组件）。MIDI 使用 RustySynth 与 FluidR3 音源合成，不经过 FFmpeg。升级旧运行库需重新 `-Build`，仅复制旧运行库不会增加编码能力。导出流程、限制和验证见 [EXPORT.md](EXPORT.md)。
+FFmpeg 固定为 8.0.3，保留禁止 GPL、nonfree、version3、自动探测和网络协议的约束，编码器与音源保持既有选择。MIT 原生桥接库动态链接可替换 libav，FFmpeg 算法代码不静态链接进 Rust 主程序；MIDI 继续由 RustySynth 与 FluidR3 合成。构建脚本同时编译桥接库，封存/打包记录桥接源码和构建脚本哈希，并随对应源码包交付。此链接边界按 [FFmpeg 官方分发要求](https://ffmpeg.org/legal.html)管理，现有公开发行审查项继续保留。
+
+已有 FFmpeg 构建可单独重编桥接库：
+
+```powershell
+python tools/build-media-library.py --prefix .local/distribution/runtime/ffmpeg
+./tools/seal-runtime.ps1 -MsysRoot $msysRoot -VcVars $vcVars
+./tools/prepare-media.ps1 -MsysRoot $msysRoot
+```
+
+此步骤要求已保留锁定源码归档；源码包无法对应时封存或打包应失败。Unix 的准备脚本同时编译桥接库并记录全部原生输入；重新部署仍逐项校验哈希。导出行为与跨平台加载约定见 [EXPORT.md](EXPORT.md) 与 [跨平台支持](CROSS_PLATFORM.md)。
 
 `.cargo/config.toml` 为 Windows MSVC 目标启用静态 C 运行库链接，使主程序无需用户另装 Visual C++ Redistributable。该文件是共享构建配置，不是本机 Cargo 缓存。
 

@@ -2,19 +2,17 @@
 use crate::{
     composite,
     export::ExportSettings,
-    export_process::{Process, ProcessList},
-    media::{self, Media, MediaKind},
+    export_cancel::{CancellationList, register},
+    media::{Media, MediaKind},
     timeline::{Clip, Timeline},
 };
 use std::{
     collections::BTreeMap,
-    io::{BufReader, Read},
-    process::{ChildStdout, Stdio},
+    sync::{Arc, atomic::AtomicBool},
 };
 
 struct Source {
-    process: Process,
-    reader: BufReader<ChildStdout>,
+    decoder: dinuosi_media::Decoder,
     pixels: Vec<u8>,
     size: (u32, u32),
     index: i64,
@@ -22,51 +20,30 @@ struct Source {
 }
 
 impl Source {
-    /// 从裁剪入点启动原显示比例 BGRA 顺序流，以项目帧率输出；图片只读取原尺寸一帧。
-    /// 保留 FFmpeg 自动旋转并归一非方形像素，失败通过统一进程诊断返回。
+    /// 从裁剪入点创建原生 BGRA 顺序解码，计入旋转/像素比例并按项目帧率输出。
+    /// 图片仅消费首帧，原生上下文独占；取消句柄登记到本次导出，失败不写源文件。
     fn start(
         clip: &Clip,
         media: &Media,
         timeline: &Timeline,
-        processes: &ProcessList,
+        sessions: &CancellationList,
     ) -> Result<Self, String> {
         let size = media.source_size;
-        let mut command = media::command("ffmpeg");
-        command.args(["-v", "error", "-threads", "1", "-filter_threads", "1"]);
-        if media.kind == MediaKind::Video {
-            command.args([
-                "-ss",
-                &format!("{:.9}", clip.source_in as f64 / timeline.fps as f64),
-            ]);
-        }
-        command.arg("-i").arg(&clip.source);
+        let cancel = Arc::new(AtomicBool::new(false));
+        register(sessions, &cancel);
+        let offset = if media.kind == MediaKind::Video {
+            clip.source_in as f64 / timeline.fps as f64
+        } else {
+            0.0
+        };
         let filter = format!(
-            "scale={}:{}:flags=bicubic,setsar=1,fps={}",
+            "scale={}:{}:flags=bicubic,setsar=1,format=bgra,fps={}",
             size.0, size.1, timeline.fps
         );
-        command.args([
-            "-map", "0:v:0", "-an", "-vf", &filter, "-pix_fmt", "bgra", "-f", "rawvideo",
-        ]);
-        if media.kind == MediaKind::Image {
-            command.args(["-frames:v", "1"]);
-        }
-        command
-            .arg("pipe:1")
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped());
-        let process = Process::spawn(&mut command, processes)?;
-        let reader = BufReader::new(
-            process
-                .child
-                .lock()
-                .unwrap()
-                .stdout
-                .take()
-                .ok_or("无法读取导出画面流")?,
-        );
+        let decoder =
+            dinuosi_media::Decoder::open(&clip.source, false, offset, 1e12, &filter, cancel)?;
         Ok(Self {
-            process,
-            reader,
+            decoder,
             pixels: vec![0; size.0 as usize * size.1 as usize * 4],
             size,
             index: -1,
@@ -75,24 +52,20 @@ impl Source {
     }
 
     /// 顺序读取到目标项目源帧，低帧率素材尾端重复最后有效画面，与预览尾帧语义一致。
-    /// 复用原尺寸像素缓冲；EOF 时先确认进程成功并保留尾帧，部分帧或真实解码错误终止导出。
+    /// 复用原尺寸像素缓冲；正常 EOF 保留尾帧，部分帧或真实原生解码错误终止导出。
     fn read(&mut self, index: i64) -> Result<&[u8], String> {
         let target = if self.image { 0 } else { index };
         while self.index < target {
-            match self.reader.read(&mut self.pixels[..1]) {
-                Ok(0) => {
-                    self.process.finish()?;
-                    if self.index < 0 {
-                        return Err("素材没有可导出的画面".into());
-                    }
-                    self.index = target;
-                    break;
+            let count = self.decoder.read(&mut self.pixels)?;
+            if count == 0 {
+                if self.index < 0 {
+                    return Err("素材没有可导出的画面".into());
                 }
-                Ok(_) => self
-                    .reader
-                    .read_exact(&mut self.pixels[1..])
-                    .map_err(|e| format!("素材画面不完整：{e}"))?,
-                Err(e) => return Err(format!("读取导出画面失败：{e}")),
+                self.index = target;
+                break;
+            }
+            if count != self.pixels.len() {
+                return Err("素材画面不完整".into());
             }
             self.index += 1;
         }
@@ -106,7 +79,7 @@ pub struct Renderer {
 }
 
 impl Renderer {
-    /// 创建不持有媒体进程的渲染会话；每个活动片段按需启动，结束后立即释放。
+    /// 创建不持有原生解码句柄的渲染会话；每个活动片段按需打开，结束后立即释放。
     pub fn new() -> Self {
         Self {
             sources: BTreeMap::new(),
@@ -122,7 +95,7 @@ impl Renderer {
         frame: f64,
         media: &[Media],
         settings: &ExportSettings,
-        processes: &ProcessList,
+        sessions: &CancellationList,
     ) -> Result<&[u8], String> {
         self.sources.retain(|id, _| {
             timeline.clips.iter().any(|clip| {
@@ -154,7 +127,7 @@ impl Renderer {
                 if !self.sources.contains_key(&clip.id) {
                     self.sources.insert(
                         clip.id.clone(),
-                        Source::start(clip, source_media, timeline, processes)?,
+                        Source::start(clip, source_media, timeline, sessions)?,
                     );
                 }
                 let source = self.sources.get_mut(&clip.id).unwrap();
@@ -190,14 +163,14 @@ mod tests {
         let mut settings = ExportSettings::for_timeline(&timeline, Encoder::Av1);
         settings.width = 128;
         settings.height = 128;
-        let processes = ProcessList::default();
+        let sessions = CancellationList::default();
         let first = renderer
-            .render(&timeline, 0.0, &[], &settings, &processes)
+            .render(&timeline, 0.0, &[], &settings, &sessions)
             .unwrap()
             .as_ptr();
         renderer.output.fill(12);
         let frame = renderer
-            .render(&timeline, 1.0, &[], &settings, &processes)
+            .render(&timeline, 1.0, &[], &settings, &sessions)
             .unwrap();
         assert_eq!(first, frame.as_ptr());
         assert!(
@@ -210,7 +183,7 @@ mod tests {
         settings.width = 64;
         assert_eq!(
             renderer
-                .render(&timeline, 2.0, &[], &settings, &processes)
+                .render(&timeline, 2.0, &[], &settings, &sessions)
                 .unwrap()
                 .len(),
             64 * 128 * 4

@@ -29,7 +29,7 @@ impl TimelineAudio {
         Self::start_inner(t, offset, sources, None, |_| {})
     }
 
-    /// 建立导出混音，逐片段检查取消且在解码器启动后立即登记其进程。
+    /// 建立导出混音，逐片段检查取消且在解码器打开后立即登记原子取消句柄。
     /// register 只登记共享取消句柄；MIDI 长入点合成也可以中断，既有播放入口不受影响。
     pub(crate) fn start_cancellable(
         t: &Timeline,
@@ -42,7 +42,7 @@ impl TimelineAudio {
     }
 
     /// 共用轨道、裁剪与音量动画初始化；导出模式低并发解码并逐层登记取消句柄。
-    /// 任一失败释放已启动的层与进程；缺少可播放音频的片段维持既有跳过语义。
+    /// 任一失败释放已打开的层与原生解码句柄；缺少可播放音频的片段维持既有跳过语义。
     fn start_inner(
         t: &Timeline,
         offset: f64,
@@ -127,7 +127,7 @@ impl TimelineAudio {
             .find_map(|l| l.decoder.error.lock().unwrap().take())
     }
 
-    /// 在混音消费结束后排空片段剩余 PCM 并确认解码成功，避免末尾 stderr 发布竞态。
+    /// 在混音消费结束后排空片段剩余 PCM 并确认解码成功，避免末尾解码错误发布竞态。
     /// 必须由后台调用；每 4096 样本检查取消，异常不发布带损坏或缺失音频的导出文件。
     pub(crate) fn finish_cancellable(
         self,

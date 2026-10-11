@@ -1,103 +1,74 @@
-//! 受控运行库的真实编码能力探测。
-use crate::{
-    export::Encoder,
-    export_process::{Process, ProcessList},
-    media,
+//! 受控动态库的真实编码能力探测。
+use crate::export::Encoder;
+use std::sync::{
+    Arc, OnceLock,
+    atomic::{AtomicBool, Ordering},
 };
-use std::{io::Write, process::Stdio, sync::OnceLock};
 
-/// 返回本次应用启动内缓存的真实编码能力，避免反复打开弹窗重复启动编码进程。
-/// 首次调用阻塞探测，应由调用方放入后台；运行库或驱动变更后需重启应用重新探测。
+/// 返回本次启动内缓存的真实编码能力；首次阻塞探测，应由宿主在后台调用。
+/// 使用独立工作线程避免 Windows GUI 的 STA COM 环境污染 Media Foundation；变更运行库需重启。
 pub fn capabilities() -> Result<Vec<Encoder>, String> {
     static AVAILABLE: OnceLock<Result<Vec<Encoder>, String>> = OnceLock::new();
-    AVAILABLE.get_or_init(probe).clone()
+    AVAILABLE
+        .get_or_init(|| {
+            std::thread::spawn(probe)
+                .join()
+                .map_err(|_| "编码能力探测线程失败".to_owned())?
+        })
+        .clone()
 }
 
-/// 对受控运行库逐个执行真实三帧编码，只有成功初始化并输出的实现才成为可选编码器。
-/// 每个探测最多十秒，不使用系统 PATH 或 GPL 外部编码库；诊断通过错误返回。
+/// 对本平台候选逐一执行真实三帧原生编码及封装，只有完整成功的实现成为选项。
+/// 每个会话十秒后设置取消标志，临时输出始终清理；不启动 FFmpeg CLI 或使用 PATH。
 fn probe() -> Result<Vec<Encoder>, String> {
+    let root = std::env::temp_dir().join(format!("dinuosi-codecs-{}", uuid::Uuid::new_v4()));
+    std::fs::create_dir(&root).map_err(|e| e.to_string())?;
     let mut available = Vec::new();
     let mut last_error = String::new();
     for encoder in Encoder::candidates() {
-        let mut command = media::command("ffmpeg");
-        command
-            .args([
-                "-v",
-                "error",
-                "-threads",
-                "1",
-                "-filter_threads",
-                "1",
-                "-f",
-                "rawvideo",
-                "-pixel_format",
-                "bgra",
-                "-video_size",
-                "320x240",
-                "-framerate",
-                "30",
-                "-i",
-                "pipe:0",
-                "-frames:v",
-                "3",
-                "-an",
-                "-threads",
-                "1",
-                "-c:v",
-                encoder.id(),
-                "-pix_fmt",
-                encoder.pixel_format(),
-                "-b:v",
-                "1000k",
-            ])
-            .stdin(Stdio::piped())
-            .stdout(Stdio::null())
-            .stderr(Stdio::piped());
-        encoder.configure(&mut command);
-        command.args(["-f", "null", "-"]);
-        let processes = ProcessList::default();
-        match Process::spawn(&mut command, &processes) {
-            Ok(mut process) => {
-                let mut stdin = process
-                    .child
-                    .lock()
-                    .unwrap()
-                    .stdin
-                    .take()
-                    .ok_or("无法写入编码能力检测")?;
-                let writer =
-                    std::thread::spawn(move || stdin.write_all(&vec![0; 320 * 240 * 4 * 3]));
+        let path = root.join("probe.mkv");
+        let cancel = Arc::new(AtomicBool::new(false));
+        let done = AtomicBool::new(false);
+        let result = std::thread::scope(|scope| {
+            scope.spawn(|| {
                 let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-                loop {
-                    if process
-                        .child
-                        .lock()
-                        .unwrap()
-                        .try_wait()
-                        .map_err(|e| e.to_string())?
-                        .is_some()
-                    {
-                        break;
-                    }
+                while !done.load(Ordering::Relaxed) {
                     if std::time::Instant::now() >= deadline {
-                        let _ = process.child.lock().unwrap().kill();
+                        cancel.store(true, Ordering::Relaxed);
                         break;
                     }
                     std::thread::sleep(std::time::Duration::from_millis(20));
                 }
-                let result = process.finish();
-                let written = writer
-                    .join()
-                    .map_err(|_| "编码探测写入线程失败".to_owned())?
-                    .map_err(|e| e.to_string());
-                match result.and(written) {
-                    Ok(()) => available.push(encoder),
-                    Err(error) => last_error = error,
+            });
+            let result = (|| {
+                let config = dinuosi_media::Encoding {
+                    size: (320, 240),
+                    fps: 30,
+                    bitrate_kbps: 1000,
+                    encoder: encoder.id(),
+                    pixel_format: encoder.pixel_format(),
+                    options: encoder.options(),
+                    container: "matroska",
+                    duration: 0.1,
+                };
+                let mut native =
+                    dinuosi_media::Encoder::open(&path, None, &config, cancel.clone())?;
+                let pixels = [0, 0, 0, 255].repeat(320 * 240);
+                for _ in 0..3 {
+                    native.write(&pixels)?;
                 }
-            }
+                native.finish()
+            })();
+            done.store(true, Ordering::Relaxed);
+            result
+        });
+        match result {
+            Ok(()) => available.push(encoder),
             Err(error) => last_error = error,
         }
+        let _ = std::fs::remove_file(&path);
     }
+    let _ = std::fs::remove_dir(&root);
     if available.is_empty() {
         Err(format!("没有可用的视频编码器：{last_error}"))
     } else {

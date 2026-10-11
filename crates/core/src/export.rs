@@ -1,6 +1,6 @@
 //! 时间线导出：受控编码器、后台进度、可取消处理和无覆盖的最终文件发布。
 use crate::{
-    export_process::{Process, ProcessList, register},
+    export_cancel::{CancellationList, register},
     export_render::Renderer,
     media::{self, Media},
     timeline::Timeline,
@@ -10,8 +10,10 @@ use std::{
     fs::{self, File},
     io::{BufWriter, Write},
     path::{Path, PathBuf},
-    process::Stdio,
-    sync::atomic::{AtomicBool, Ordering},
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
 };
 
 pub use crate::export_capabilities::capabilities;
@@ -91,33 +93,17 @@ impl Encoder {
             Self::H264OpenH264 | Self::Av1 | Self::Vp9 | Self::Mpeg4 => "yuv420p",
         }
     }
-    /// 追加选中实现的专用参数，能力探测和真实导出共用；不启动进程。
-    /// 系统 H.264 后端显式区分硬件与软件；AV1/VP9 使用速度预设和行并行，不改变许可边界。
-    pub(crate) fn configure(self, command: &mut std::process::Command) {
+    /// 返回选中实现的原生 AVOption 字典，用于能力探测和导出；不启动子进程。
+    /// 系统 H.264 显式区分软硬件，AV1/VP9 沿用既有速度与并行参数。
+    pub(crate) fn options(self) -> &'static str {
         match self {
-            Self::H264MediaFoundationHardware | Self::H264MediaFoundation => {
-                command.args([
-                    "-hw_encoding",
-                    if self == Self::H264MediaFoundationHardware {
-                        "1"
-                    } else {
-                        "0"
-                    },
-                ]);
-            }
-            Self::Av1 => {
-                command.args(["-cpu-used", "6", "-row-mt", "1"]);
-            }
-            Self::Vp9 => {
-                command.args(["-deadline", "good", "-cpu-used", "4", "-row-mt", "1"]);
-            }
-            Self::H264VideoToolboxHardware => {
-                command.args(["-allow_sw", "0"]);
-            }
-            Self::H264VideoToolbox => {
-                command.args(["-allow_sw", "1", "-require_sw", "1"]);
-            }
-            Self::H264OpenH264 | Self::Mpeg4 => {}
+            Self::H264MediaFoundationHardware => "hw_encoding=1",
+            Self::H264MediaFoundation => "hw_encoding=0",
+            Self::H264VideoToolboxHardware => "allow_sw=0",
+            Self::H264VideoToolbox => "allow_sw=1:require_sw=1",
+            Self::Av1 => "cpu-used=6:row-mt=1",
+            Self::Vp9 => "deadline=good:cpu-used=4:row-mt=1",
+            Self::H264OpenH264 | Self::Mpeg4 => "",
         }
     }
 
@@ -181,6 +167,7 @@ impl ExportSettings {
 }
 
 /// 阻塞导出不可变时间线快照；宿主必须在后台调用，progress 报告 0..1，取消以错误返回。
+/// 原生 libav 编码器通过原子标志取消，不创建媒体子进程。
 /// 在输出同目录创建独立临时目录，编码完成且所有媒体成功后无覆盖发布；任何失败清理临时文件。
 /// 源素材从引用路径读取，已有输出永不覆盖；运行期间输出路径被占用也返回错误。
 pub fn export(
@@ -202,26 +189,26 @@ pub fn export(
     if !output.parent().is_some_and(Path::is_dir) {
         return Err("输出文件夹不存在".into());
     }
-    let processes = ProcessList::default();
+    let sessions = CancellationList::default();
     let stop = AtomicBool::new(false);
     std::thread::scope(|scope| {
         scope.spawn(|| {
             while !stop.load(Ordering::Relaxed) {
                 if cancel.load(Ordering::Relaxed) {
-                    for child in processes
+                    for child in sessions
                         .lock()
                         .unwrap()
                         .iter()
                         .filter_map(std::sync::Weak::upgrade)
                     {
-                        let _ = child.lock().unwrap().kill();
+                        child.store(true, Ordering::Relaxed);
                     }
                 }
                 std::thread::sleep(std::time::Duration::from_millis(30));
             }
         });
         let result = run(
-            timeline, sources, settings, output, cancel, &progress, &processes,
+            timeline, sources, settings, output, cancel, &progress, &sessions,
         );
         stop.store(true, Ordering::Relaxed);
         if result.is_err() && cancel.load(Ordering::Relaxed) {
@@ -232,7 +219,7 @@ pub fn export(
     })
 }
 
-/// 校验参与输出的已载入源引用；隐藏且无声音的片段不读取，不启动无法取消的探测。
+/// 校验参与输出的已载入源引用；隐藏且无声音的片段不读取，不额外执行源探测。
 /// 源文件缺失、离线或尺寸超出安全范围返回具体错误，防止预览跳过行为掩盖数据丢失。
 fn sources(timeline: &Timeline, items: &[Media]) -> Result<Vec<Media>, String> {
     let mut sources = Vec::new();
@@ -275,7 +262,7 @@ impl Drop for Temporary {
     }
 }
 
-/// 先写精确时间线 PCM，再顺序合成并编码视频；两阶段共享取消监视和进度。
+/// 先写精确时间线 PCM，再通过原生 libav 顺序编码并封装；两阶段共享原子取消和进度。
 /// 完成编码后使用同卷硬链接原子创建最终文件，目标已存在时失败，避免 rename 覆盖平台差异。
 fn run(
     timeline: &Timeline,
@@ -284,7 +271,7 @@ fn run(
     output: &Path,
     cancel: &AtomicBool,
     progress: &impl Fn(f32),
-    processes: &ProcessList,
+    sessions: &CancellationList,
 ) -> Result<(), String> {
     check_cancel(cancel)?;
     let sources = sources(timeline, items)?;
@@ -299,9 +286,7 @@ fn run(
     let duration = timeline.end() as f64 / timeline.fps as f64;
     let total_samples = (duration * 96000.0).round() as u64;
     let mut audio = TimelineAudio::start_cancellable(timeline, 0.0, &sources, cancel, |decoder| {
-        for child in decoder.cancellation_processes() {
-            register(processes, &child);
-        }
+        register(sessions, &decoder.cancellation());
     })?;
     let mut writer =
         BufWriter::new(File::create(&audio_path).map_err(|e| format!("无法创建导出音频：{e}"))?);
@@ -321,69 +306,20 @@ fn run(
     drop(writer);
     audio.finish_cancellable(cancel)?;
     check_cancel(cancel)?;
-    let mut command = media::command("ffmpeg");
-    command
-        .args([
-            "-v",
-            "error",
-            "-n",
-            "-f",
-            "rawvideo",
-            "-pixel_format",
-            "bgra",
-            "-video_size",
-            &format!("{}x{}", settings.width, settings.height),
-            "-framerate",
-            &settings.fps.to_string(),
-            "-i",
-            "pipe:0",
-            "-f",
-            "f32le",
-            "-ar",
-            "48000",
-            "-ac",
-            "2",
-            "-i",
-        ])
-        .arg(&audio_path);
-    command.args(["-threads", "2", "-filter_threads", "1"]);
-    command.args([
-        "-map",
-        "0:v:0",
-        "-map",
-        "1:a:0",
-        "-c:v",
-        settings.encoder.id(),
-        "-pix_fmt",
-        settings.encoder.pixel_format(),
-        "-b:v",
-        &format!("{}k", settings.bitrate_kbps),
-        "-c:a",
-        "aac",
-        "-b:a",
-        "192k",
-        "-t",
-        &format!("{duration:.9}"),
-        "-f",
-        settings.container.muxer(),
-    ]);
-    settings.encoder.configure(&mut command);
-    if settings.container == Container::Mp4 {
-        command.args(["-movflags", "+faststart"]);
-    }
-    command
-        .arg(&video_path)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::null())
-        .stderr(Stdio::piped());
-    let mut encoder = Process::spawn(&mut command, processes)?;
-    let mut stdin = encoder
-        .child
-        .lock()
-        .unwrap()
-        .stdin
-        .take()
-        .ok_or("无法写入视频编码器")?;
+    let native_cancel = Arc::new(AtomicBool::new(false));
+    register(sessions, &native_cancel);
+    let config = dinuosi_media::Encoding {
+        size: (settings.width, settings.height),
+        fps: settings.fps,
+        bitrate_kbps: settings.bitrate_kbps,
+        encoder: settings.encoder.id(),
+        pixel_format: settings.encoder.pixel_format(),
+        options: settings.encoder.options(),
+        container: settings.container.muxer(),
+        duration,
+    };
+    let mut encoder =
+        dinuosi_media::Encoder::open(&video_path, Some(&audio_path), &config, native_cancel)?;
     let mut renderer = Renderer::new();
     let frame_count = (duration * settings.fps as f64).ceil() as u64;
     for frame in 0..frame_count {
@@ -393,18 +329,11 @@ fn run(
             frame as f64 * timeline.fps as f64 / settings.fps as f64,
             &sources,
             settings,
-            processes,
+            sessions,
         )?;
-        if let Err(error) = stdin.write_all(pixels) {
-            drop(stdin);
-            return Err(encoder
-                .finish()
-                .err()
-                .unwrap_or_else(|| format!("写入视频编码器失败：{error}")));
-        }
+        encoder.write(pixels)?;
         progress(0.15 + (frame + 1) as f32 / frame_count as f32 * 0.8);
     }
-    drop(stdin);
     encoder.finish()?;
     check_cancel(cancel)?;
     publish(&video_path, output, cancel)?;

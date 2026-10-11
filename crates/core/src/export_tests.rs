@@ -5,6 +5,7 @@ use crate::{
     media::MediaKind,
     timeline::{TrackKind, Transform},
 };
+use std::process::Stdio;
 use std::sync::Mutex;
 
 /// 验证非法参数、已有输出及取消不产生文件，也不改变原文件内容。

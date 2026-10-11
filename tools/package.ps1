@@ -7,6 +7,12 @@ if (!$OutputDirectory) { $OutputDirectory = Join-Path $root 'target/distribution
 $OutputDirectory = [IO.Path]::GetFullPath($OutputDirectory)
 $manifest = Get-Content "$work/runtime-manifest.json" -Raw | ConvertFrom-Json
 $lock = Get-Content "$root/distribution/inputs.lock.json" -Raw | ConvertFrom-Json
+if (!($manifest.files.name -contains 'dinuosi_media.dll') -or !$manifest.bridgeInputs.Count) { throw '运行时未包含已封存的媒体动态库，请重新构建并封存' }
+foreach ($input in $manifest.bridgeInputs) {
+    if ((Get-FileHash (Join-Path $root $input.path)).Hash.ToLowerInvariant() -ne $input.sha256) { throw "媒体桥接源码已变更：$($input.path)" }
+    $bundled = if ($input.path -like 'crates/media/native/*') { "$work/source-bundle/media-native/$(Split-Path $input.path -Leaf)" } else { "$work/source-bundle/build-media-library.py" }
+    if ((Get-FileHash $bundled).Hash.ToLowerInvariant() -ne $input.sha256) { throw "媒体桥接对应源码不符：$bundled" }
+}
 foreach ($flag in '--disable-gpl','--disable-nonfree','--disable-version3','--enable-libaom','--enable-libvpx') {
     if (!$manifest.configuration.Contains($flag)) { throw "运行时构建约束不符：$flag" }
 }
@@ -94,7 +100,7 @@ AV1: libaom 3.13.1, BSD-2-Clause. VP9: libvpx 1.15.2, BSD-3-Clause.
 Original codec licenses and patent grants are included in AOM-*.txt and VPX-*.txt.
 
 This software uses FFmpeg 8.0.3 under LGPL-2.1-or-later, as a separately
-replaceable executable and libav DLLs. Corresponding source and build patches
+replaceable libav DLLs loaded by the MIT Dinuosi media bridge. Corresponding source and build patches
 are provided in the accompanying $sourceName. Do not distribute this build
 without making that source archive available from the same download location.
 All runtime DLLs are built from that source; user-installed FFmpeg is not used.

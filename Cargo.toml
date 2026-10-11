@@ -1,5 +1,5 @@
 [workspace]
-members = ["apps/desktop", "crates/core", "crates/command", "crates/icons"]
+members = ["apps/desktop", "crates/core", "crates/command", "crates/icons", "crates/media"]
 default-members = ["apps/desktop"]
 resolver = "3"
 

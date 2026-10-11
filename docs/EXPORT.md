@@ -12,11 +12,11 @@
 
 ## 编码与许可边界
 
-主程序仍为 MIT。H.264 是编码格式，libx264 是其具体实现；本项目不捆绑 libx264，也不启用 FFmpeg GPL/nonfree/version3。Windows 使用 Media Foundation，macOS 使用 VideoToolbox，并在 Linux/macOS 提供 OpenH264 软件路径。主程序仅以受控子进程交互，不回退到系统 PATH。能力检测按本机平台实际试编码对应 H.264 后端、AV1、VP9 与 FFmpeg 原生 MPEG-4，只有成功的实现进入选项；有可用硬件时默认选择它。未复制驱动 DLL；Unix 构建/部署与第三方边界见 [跨平台支持](CROSS_PLATFORM.md)。
+主程序仍为 MIT。H.264 是编码格式，libx264 是其具体实现；本项目不捆绑 libx264，也不启用 FFmpeg GPL/nonfree/version3。Windows 使用 Media Foundation，macOS 使用 VideoToolbox，并在 Linux/macOS 提供 OpenH264 软件路径。Core 通过 MIT 原生桥接库直接调用受控 libav 动态库，不创建媒体子进程或回退系统 PATH。能力检测按本机平台实际试编码对应 H.264 后端、AV1、VP9 与 FFmpeg 原生 MPEG-4，只有成功的实现进入选项；有可用硬件时默认选择它。未复制驱动 DLL；Unix 构建/部署与第三方边界见 [跨平台支持](CROSS_PLATFORM.md)。
 
-AV1 使用 libaom 3.13.1（BSD-2-Clause），VP9 使用 libvpx 1.15.2（BSD-3-Clause）。两库只链接至独立的 LGPL FFmpeg，不链接至 MIT 主程序；不改变主程序许可证。官方 `LICENSE`、`PATENTS` 和固定哈希源码随运行库封存，打包时核对原文并带入应用及源码包。AV1/VP9 同样通过真实三帧试编码进入菜单，支持 MP4/MKV + AAC。AV1 使用 `cpu-used=6`，VP9 使用 `deadline=good,cpu-used=4`，均启用行并行，在现有码率设置下折中速度与画质。
+AV1 使用 libaom 3.13.1（BSD-2-Clause），VP9 使用 libvpx 1.15.2（BSD-3-Clause）。两库链接至可替换的 LGPL libavcodec，不静态链接进 Rust 主程序；不改变主程序许可证。官方 `LICENSE`、`PATENTS` 和固定哈希源码随运行库封存，打包时核对原文并带入应用及源码包。AV1/VP9 同样通过真实三帧试编码进入菜单，支持 MP4/MKV + AAC。AV1 使用 `cpu-used=6`，VP9 使用 `deadline=good,cpu-used=4`，均启用行并行，在现有码率设置下折中速度与画质。
 
-编码能力在本次应用启动内缓存，重复打开导出不再启动试编码进程；更换运行库或显卡驱动后重启应用重新探测。导出进度只在显示数值变化时触发界面刷新，原尺寸源帧和合成输出复用缓冲，避免每帧反复分配。聚焦控件采用现有灰阶描边，鼠标和键盘焦点行为保持一致。
+编码能力在本次应用启动内缓存，重复打开导出不再创建原生试编码会话；更换运行库或显卡驱动后重启应用重新探测。导出进度只在显示数值变化时触发界面刷新，原尺寸源帧和合成输出复用缓冲，避免每帧反复分配。聚焦控件采用现有灰阶描边，鼠标和键盘焦点行为保持一致。
 
 Microsoft 文档说明系统 H.264 MFT 的输入、参数与平台支持；FFmpeg 官方明确 LGPL/GPL 构建边界及对应源码义务。MIT 不改变第三方义务，也不自动授予编码专利的商业授权。当前公开发行门槛仍见 [发行验收报告](DISTRIBUTION_VALIDATION.md)，历史安装包验收不覆盖本次新增编码运行库。
 
@@ -38,9 +38,9 @@ AV1/VP9 的四种编码器/封装组合由 `cargo test -p dinuosi-core --locked 
 
 ## 平台验证边界
 
-媒体工具按本平台原生文件名定位，三平台均从锁定源码构建配套运行库。Linux 当前提供软件 H.264，未接入 VAAPI/NVENC；macOS 的硬件/软件系统后端必须通过本机探测。Windows 安装包链路保持原样，Unix 安装、签名/公证与实机发行验收另行处理。
+媒体动态库按本平台原生库名称定位，三平台均从锁定源码构建配套运行库。Linux 当前提供软件 H.264，未接入 VAAPI/NVENC；macOS 的硬件/软件系统后端必须通过本机探测。Windows 安装包链路保持原样，Unix 安装、签名/公证与实机发行验收另行处理。
 
-`.github/workflows/export-platforms.yml` 在 Windows 2022、Ubuntu 24.04、macOS 14 上执行共享模块、媒体/导出回归，并构建桌面程序、运行 GPUI 事件测试和真实窗口启动检查。Unix 不再复制系统 FFmpeg，使用 `prepare-media-unix.py` 原生构建的受控运行库。可按平台手动重跑，便于保留失败证据并独立验证修复。
+`.github/workflows/export-platforms.yml` 在 Windows 2022、Ubuntu 24.04、macOS 14 ARM 和 macOS 15 Intel 上执行共享模块、媒体/导出回归，并构建桌面程序、运行 GPUI 事件测试和真实窗口启动检查。Unix 不再复制系统 FFmpeg，使用 `prepare-media-unix.py` 原生构建的受控运行库。可按平台手动重跑，便于保留失败证据并独立验证修复。
 
 每个平台保留源码 SHA、系统/架构、FFmpeg 版本/配置/编码器列表、应用测试日志，以及本平台编码实现的 MP4/MKV 工具试编码样片和 ffprobe 结果。工具试编码与应用时间线验收分开标记；应用失败会使该平台任务失败，未通过探测的系统 H.264 检查明确记为跳过，Unix 软件 OpenH264 必须通过。CI 的 GPUI 事件测试和窗口启动不代替完整实机鼠标、显卡、音频设备、文件选择器、安装包或干净系统验收；macOS 架构以报告记录为准，不能推广到另一架构。
 

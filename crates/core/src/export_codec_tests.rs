@@ -18,27 +18,16 @@ fn encoder_arguments_match_the_selected_implementation() {
         !cfg!(target_os = "windows")
     );
     for (encoder, expected) in [
-        (Encoder::Av1, vec!["-cpu-used", "6", "-row-mt", "1"]),
-        (
-            Encoder::Vp9,
-            vec!["-deadline", "good", "-cpu-used", "4", "-row-mt", "1"],
-        ),
-        (Encoder::Mpeg4, vec![]),
-        (
-            Encoder::H264MediaFoundationHardware,
-            vec!["-hw_encoding", "1"],
-        ),
-        (Encoder::H264MediaFoundation, vec!["-hw_encoding", "0"]),
-        (Encoder::H264VideoToolboxHardware, vec!["-allow_sw", "0"]),
-        (
-            Encoder::H264VideoToolbox,
-            vec!["-allow_sw", "1", "-require_sw", "1"],
-        ),
-        (Encoder::H264OpenH264, vec![]),
+        (Encoder::Av1, "cpu-used=6:row-mt=1"),
+        (Encoder::Vp9, "deadline=good:cpu-used=4:row-mt=1"),
+        (Encoder::Mpeg4, ""),
+        (Encoder::H264MediaFoundationHardware, "hw_encoding=1"),
+        (Encoder::H264MediaFoundation, "hw_encoding=0"),
+        (Encoder::H264VideoToolboxHardware, "allow_sw=0"),
+        (Encoder::H264VideoToolbox, "allow_sw=1:require_sw=1"),
+        (Encoder::H264OpenH264, ""),
     ] {
-        let mut command = std::process::Command::new("ffmpeg");
-        encoder.configure(&mut command);
-        assert_eq!(command.get_args().collect::<Vec<_>>(), expected);
+        assert_eq!(encoder.options(), expected);
     }
 }
 

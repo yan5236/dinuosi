@@ -26,3 +26,4 @@ if [ -f ffbuild/config.mak ]; then make -r clean; fi
 # 本机默认保留单路编译；CI 显式指定两路，实时构建日志由工作流同时显示并留档。
 make -r -j "${DINUOSI_BUILD_JOBS:-1}"
 make -r install
+python "$(dirname "$0")/build-media-library.py" --prefix "$work/runtime/ffmpeg"

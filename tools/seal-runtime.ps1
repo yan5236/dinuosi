@@ -19,6 +19,10 @@ foreach ($key in 'ffmpeg','ffmpegSignature','ffmpegKey','zlib','lame','aom','vpx
     Copy-Item -LiteralPath "$work/downloads/$($entry.file)" -Destination $source -Force
 }
 Copy-Item "$root/distribution/ffmpeg-msvc-locale.patch", "$root/distribution/zlib-msvc.patch", "$root/distribution/inputs.lock.json", "$root/tools/build-ffmpeg.sh", "$root/tools/build-codecs.sh", "$root/tools/prepare-media.ps1", "$root/tools/seal-runtime.ps1", "$root/tools/rebuild-runtime.ps1" -Destination $source -Force
+Copy-Item "$root/tools/build-media-library.py" -Destination $source -Force
+Copy-Item "$root/LICENSE" -Destination "$source/Dinuosi-MIT.txt" -Force
+New-Item -ItemType Directory -Force "$source/media-native" | Out-Null
+Copy-Item "$root/crates/media/native/*" -Destination "$source/media-native" -Force
 $vcRoot = Split-Path (Split-Path (Split-Path $VcVars -Parent) -Parent) -Parent
 $compilerRoot = Get-ChildItem (Join-Path $vcRoot 'Tools/MSVC') -Directory | Sort-Object Name -Descending | Select-Object -First 1
 $record = [ordered]@{
@@ -30,6 +34,7 @@ $record = [ordered]@{
     msysVersion = (& "$MsysRoot/usr/bin/bash.exe" --version | Select-Object -First 1)
     os = (Get-CimInstance Win32_OperatingSystem).Version
     files = @()
+    bridgeInputs = @(@('tools/build-media-library.py') + @(Get-ChildItem "$root/crates/media/native" -File | ForEach-Object { "crates/media/native/$($_.Name)" }) | ForEach-Object { @{path=$_;sha256=(Get-FileHash (Join-Path $root $_)).Hash.ToLowerInvariant()} })
 }
 foreach ($file in Get-ChildItem "$work/runtime/ffmpeg/bin" -File | Where-Object {$_.Extension -in '.exe','.dll'}) {
     $record.files += @{name=$file.Name; sha256=(Get-FileHash $file.FullName).Hash.ToLowerInvariant();bytes=$file.Length}
@@ -62,8 +67,9 @@ build tools to use Dinuosi. The recorded toolchain and configure line are in
 runtime-manifest.json. Build from sources again; matching version text alone
 is not accepted as reconstruction evidence.
 
-No object code is linked from FFmpeg into the Dinuosi application.
-FFmpeg is a replaceable standalone program, using replaceable libav DLLs.
+The MIT Dinuosi media bridge dynamically links to replaceable libav DLLs.
+The Rust application loads that bridge from its adjacent runtime directory.
+Bridge sources and build-media-library.py are included in this archive.
 H.264 Media Foundation encoding calls the codecs installed with Windows or
 its hardware drivers. Windows codec DLLs and GPL encoders such as libx264
 are not copied into the package. Codec availability is checked on the host;

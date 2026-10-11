@@ -68,7 +68,7 @@ def deploy():
 def build():
     """验证源码哈希和官方签名后原生构建 LGPL FFmpeg、BSD 编码器与 zlib/LAME；只写项目缓存。
 
-    Linux/macOS 用相对加载路径定位配套共享库，编码库静态进入独立 FFmpeg；不链接至主程序。
+    Linux/macOS 用相对加载路径定位配套共享库，编码库静态进入 libav；宿主通过固定桥接 ABI 调用。
     完成真实版本/许可检查后记录哈希清单并部署，失败不会更新清单。
     """
     lock = json.loads(LOCK.read_text())
@@ -148,13 +148,15 @@ def build():
         # ELF 的 $ORIGIN 在 configure/make 多层展开中会丢失，部署后统一写入可迁移的相对加载路径。
         for path in sorted(runtime.iterdir()):
             run(["patchelf", "--set-rpath", "$ORIGIN", path], ROOT)
+    run([sys.executable, ROOT / "tools/build-media-library.py", "--prefix", install, "--output", runtime], ROOT)
     version = subprocess.check_output([str(runtime / "ffmpeg"), "-version"], text=True)
     assert version.startswith(f"ffmpeg version {lock['ffmpegVersion']}")
     license_text = subprocess.check_output([str(runtime / "ffmpeg"), "-L"], text=True, stderr=subprocess.STDOUT)
     assert "GNU Lesser General Public" in license_text
     assert "--enable-gpl" not in version and "--enable-nonfree" not in version
     manifest = {"platform": platform.platform(), "ffmpegVersion": lock["ffmpegVersion"], "configuration": version,
-        "build_inputs": {str(path.relative_to(ROOT)): digest(path) for path in (LOCK, Path(__file__).resolve())},
+        "build_inputs": {str(path.relative_to(ROOT)): digest(path) for path in (
+            LOCK, Path(__file__).resolve(), ROOT / "tools/build-media-library.py", *sorted((ROOT / "crates/media/native").iterdir()))},
         "files": [{"name": path.name, "sha256": digest(path)} for path in sorted(runtime.iterdir()) if path.is_file()]}
     (WORK / "runtime-manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
     deploy()

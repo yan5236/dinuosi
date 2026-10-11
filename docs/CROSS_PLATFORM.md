@@ -4,13 +4,15 @@
 
 ## 运行边界
 
-主程序和媒体工具均使用本平台原生程序。Core 从当前程序旁 `runtime/ffmpeg/` 定位 `ffmpeg` / `ffprobe`，Windows 加 `.exe`；不回退到 PATH，不在运行时下载组件。Unix 共享库以相对 rpath 加载，媒体子进程移除外部动态库搜索/注入环境变量。运行库迁移到中文或空格目录、缺失工具与缺失共享库均纳入真实测试。
+Core 通过 `dinuosi-media` 从当前程序旁 `runtime/ffmpeg/` 加载原生桥接动态库（Windows DLL、Linux SO、macOS dylib），直接调用 libavformat/libavcodec/libavfilter/libswscale 完成探测、解码、编码与封装。不依赖 FFmpeg/ffprobe CLI，不回退到 PATH，不在运行时下载组件。桥接 ABI 固定为 1 并校验 FFmpeg 8 的 libav 主版本；Unix 依赖按绝对路径预加载且以相对 rpath 解析，缺少相邻库时拒绝系统替代品。Windows DLL 搜索限制为库所在目录和系统目录。
+
+FFmpeg/ffprobe 仍由源码构建，供测试生成夹具、独立探测与输出对照。真实迁移测试在中文空格路径移除两者后，要求探测、寻址、视频播放和带 AAC 的时间线导出仍成功；移除桥接库或 libav 后则必须失败。
 
 H.264：Windows 使用 Media Foundation 硬件/软件；macOS 使用 VideoToolbox 硬件/软件，并保留 OpenH264 软件路径；Linux 使用 OpenH264 软件。AV1、VP9 和 MPEG-4 共用既有实现。系统后端只在本平台探测，每种实现实际编码三帧后才进入界面；硬件失败不阻止软件能力探测，不能把未探测成功的硬件计为通过。
 
 FFmpeg 固定 8.0.3，继续禁止 GPL、nonfree、version3、网络协议及任意系统 FFmpeg。OpenH264 2.6.0 来源和 SHA-256 记录在输入锁的 `unixInputs` 中，仅用于 Unix 构建；许可与专利原文必须随对应源码和运行库保留。自行编译 OpenH264 不等于获得 Cisco 预编译二进制的专利许可承诺，公开发行仍需按现有发行约束审核。
 
-当前阶段继续使用后台 FFmpeg 进程及 BGRA/PCM 管道。直接调用 libavformat/libavcodec 的迁移在三平台媒体基线通过后进行；该阶段需独立验证 ABI、资源所有权、线程和取消，不以仅替换链接方式判定完成。
+`crates/media` 是唯一允许 unsafe 的 Rust FFI 边界，Core/Desktop 继续禁止 unsafe。原生解码与编码上下文独占，Drop 在库与取消句柄存活期间释放资源；BGRA 和 PCM 使用有界缓冲。视频按播放时钟输出，导出复用原生顺序解码。取消监视器只设置原子标志，原生 IO 和处理边界检查取消；不并发释放上下文。系统编码器卡在驱动内部时，进程内取消不能保证强制抢占，十秒能力探测期限属于协作取消。能力探测在独立线程执行，避免 Windows GUI STA COM 环境影响 Media Foundation。
 
 Windows 用户数据位置保持 `%LOCALAPPDATA%/Dinuosi`；macOS 新默认是 `~/Library/Application Support/Dinuosi`，已有旧目录且新目录不存在时保留旧列表；Linux 使用绝对 `XDG_DATA_HOME` 或 `~/.local/share/Dinuosi`。`DINUOSI_DATA_DIR` 保留开发隔离用途。项目中的素材路径仍是本机引用，不自动转换为另一台电脑的路径。
 
@@ -18,7 +20,7 @@ Windows 用户数据位置保持 `%LOCALAPPDATA%/Dinuosi`；macOS 新默认是 `
 
 各窗口保留自绘灰阶控制。Linux 请求客户端装饰并调用窗口管理器拖动；GPUI 在无合成器的 X11 环境可能回退系统装饰。macOS 的 GPUI 0.2.2 没有独立隐藏系统彩色按钮的接口，暂用其公开位置选项移出窗口，保留调整窗口大小的原生样式。此限制在代码中标注，升级到提供隐藏接口的 GPUI 后替换。
 
-素材预览与时间线播放都只把 Core 解码/混音准备放到后台。Rodio/CPAL 音频设备在拥有它的前台线程创建、持有和释放；macOS 设备句柄不可跨线程传递。迟到或取消的后台解码结果在打开音频设备之前丢弃，失败继续回收本次解码进程。
+素材预览与时间线播放都只把 Core 解码/混音准备放到后台。Rodio/CPAL 音频设备在拥有它的前台线程创建、持有和释放；macOS 设备句柄不可跨线程传递。迟到或取消的后台解码结果在打开音频设备之前丢弃，失败继续释放本次原生解码会话。
 
 ## 从源码运行
 

@@ -1418,6 +1418,7 @@ dependencies = [
 name = "dinuosi-core"
 version = "0.1.0"
 dependencies = [
+ "dinuosi-media",
  "rustysynth",
  "serde",
  "serde_json",
@@ -1445,6 +1446,13 @@ version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "dinuosi-media"
+version = "0.1.0"
+dependencies = [
+ "libloading",
 ]
 
 [[package]]

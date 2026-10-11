@@ -130,7 +130,7 @@ def verify():
     run("ffmpeg-encoders", [str(ffmpeg), "-encoders"])
     outcomes = {}
     for name, args in [
-        ("core-tests", ["cargo", "test", "-p", "dinuosi-core", "-p", "dinuosi-command", "-p", "dinuosi-icons", "--locked", "--", "--test-threads=1"]),
+        ("core-tests", ["cargo", "test", "-p", "dinuosi-core", "-p", "dinuosi-media", "-p", "dinuosi-command", "-p", "dinuosi-icons", "--locked", "--", "--test-threads=1"]),
         ("application-media-and-export", ["cargo", "test", "-p", "dinuosi-core", "--locked",
             "--", "--ignored", "--nocapture", "--test-threads=1", "--skip", "real_midi_preview_samples"]),
     ]:
