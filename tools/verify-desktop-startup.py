@@ -13,10 +13,33 @@ EVIDENCE = ROOT / ".local/ci-export"
 def window_id(process):
     """从本机窗口系统查询指定进程的真实窗口，返回标识；未创建窗口或查询失败抛出异常。
 
-    Linux 需 X11 工具，macOS 只选择可见的主窗口，Windows 使用进程主窗口句柄；不模拟 GPUI。
+    Linux 需 X11 工具，macOS 和 Windows 只选择可见且至少 640×480 的主窗口，排除 GPUI 辅助窗口。
     """
     if sys.platform == "win32":
-        args = ["powershell", "-NoProfile", "-Command", f"(Get-Process -Id {process.pid}).MainWindowHandle"]
+        import ctypes
+        from ctypes import wintypes
+        user32 = ctypes.WinDLL("user32")
+        user32.GetWindowThreadProcessId.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.DWORD)]
+        user32.GetWindowRect.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.RECT)]
+        user32.IsWindowVisible.argtypes = [wintypes.HWND]
+        matches = []
+
+        @ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+        def visit(handle, _):
+            """枚举本次进程的可见顶层窗口，按真实尺寸排除小型辅助窗口；返回 True 继续枚举。"""
+            owner = wintypes.DWORD()
+            bounds = wintypes.RECT()
+            user32.GetWindowThreadProcessId(handle, ctypes.byref(owner))
+            user32.GetWindowRect(handle, ctypes.byref(bounds))
+            if (owner.value == process.pid and user32.IsWindowVisible(handle)
+                    and bounds.right - bounds.left >= 640 and bounds.bottom - bounds.top >= 480):
+                matches.append(handle)
+            return True
+
+        user32.EnumWindows(visit, 0)
+        if not matches:
+            raise RuntimeError("主窗口未创建")
+        return str(matches[0])
     elif sys.platform == "darwin":
         source = '''import Cocoa
 let windows = CGWindowListCopyWindowInfo([.optionAll, .excludeDesktopElements], kCGNullWindowID) as! [[String: Any]]
@@ -63,7 +86,8 @@ def verify_linux_drag(identifier):
 def verify():
     """以独立数据目录启动当前 debug 程序，验证八秒后仍运行且存在真实窗口，并尝试保存屏幕证据。
 
-    截图权限不足时在报告中明确记录；窗口不存在仍失败。仅终止本次创建的进程，不操作用户软件。
+    Windows 用 PrintWindow 只截取本次主窗口；截图不可用时明确记录，窗口不存在仍失败。
+    仅终止本次创建的进程，不操作用户软件。
     """
     EVIDENCE.mkdir(parents=True, exist_ok=True)
     env = os.environ.copy()
@@ -87,18 +111,34 @@ def verify():
                 args = ["import", "-window", identifier, str(screenshot)]
             else:
                 script = """$ErrorActionPreference = 'Stop'
-Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
-$bounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
-$bitmap = [System.Drawing.Bitmap]::new($bounds.Width, $bounds.Height)
+Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public static class CaptureWindow {
+    [StructLayout(LayoutKind.Sequential)]
+    public struct Rect { public int Left, Top, Right, Bottom; }
+    [DllImport("user32.dll")]
+    public static extern bool GetWindowRect(IntPtr window, out Rect rect);
+    [DllImport("user32.dll")]
+    public static extern bool PrintWindow(IntPtr window, IntPtr dc, uint flags);
+}
+'@
+$rect = [CaptureWindow+Rect]::new()
+$window = [IntPtr]::new([long]$args[1])
+if (-not [CaptureWindow]::GetWindowRect($window, [ref]$rect)) { throw 'Window bounds unavailable' }
+$bitmap = [System.Drawing.Bitmap]::new($rect.Right - $rect.Left, $rect.Bottom - $rect.Top)
 $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
-$graphics.CopyFromScreen($bounds.Location, [System.Drawing.Point]::Empty, $bounds.Size)
+$dc = $graphics.GetHdc()
+try {
+    if (-not [CaptureWindow]::PrintWindow($window, $dc, 2)) { throw 'Window capture unavailable' }
+} finally { $graphics.ReleaseHdc($dc) }
 $bitmap.Save($args[0], [System.Drawing.Imaging.ImageFormat]::Png)
 $graphics.Dispose()
 $bitmap.Dispose()"""
                 script_path = EVIDENCE / "capture.ps1"
                 script_path.write_text(script, encoding="utf-8")
-                args = ["powershell", "-NoProfile", "-File", str(script_path), str(screenshot)]
+                args = ["powershell", "-NoProfile", "-File", str(script_path), str(screenshot), identifier]
             result = subprocess.run(args, capture_output=True, timeout=60)
             report = {"window_id": identifier, "running": process.poll() is None,
                 "window_drag": drag,
