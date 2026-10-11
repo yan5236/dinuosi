@@ -29,7 +29,7 @@ cargo run -p dinuosi-desktop --locked
 
 `assets/audio/FluidR3_GM.sf2` 约 141.5 MiB，编译时嵌入程序。它不进入 Git，首次编译前必须准备，否则 `include_bytes!` 会因文件缺失失败。音源说明和原始许可见 [assets/audio](../assets/audio/README.md)。
 
-脚本将媒体工具部署到 `target/debug`、`target/release` 及各自的 `deps` 测试程序目录。运行时已构建后，重新部署无需再次编译 FFmpeg：
+脚本将桥接动态库、配套 libav 和测试工具部署到 `target/debug`、`target/release` 及各自的 `deps` 测试程序目录。运行时已构建后，重新部署无需再次编译 FFmpeg：
 
 ```powershell
 ./tools/prepare-media.ps1 -MsysRoot $msysRoot
