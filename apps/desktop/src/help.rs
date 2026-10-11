@@ -5,8 +5,8 @@ use crate::{
     view::Desktop,
 };
 use gpui::{
-    App, Bounds, Context, Div, Render, TitlebarOptions, Window, WindowBounds, WindowDecorations,
-    WindowOptions, div, prelude::*, px, rgb, size,
+    App, Bounds, Context, Div, Render, Window, WindowBounds, WindowDecorations, WindowOptions, div,
+    prelude::*, px, rgb, size,
 };
 
 pub const SOURCE_URL: &str = "https://github.com/yan5236/dinuosi";
@@ -22,11 +22,7 @@ pub(crate) fn auxiliary_options(title: &str, width: f32, height: f32, cx: &App) 
         window_min_size: Some(size(px(width), px(height))),
         is_resizable: false,
         window_decorations: cfg!(target_os = "linux").then_some(WindowDecorations::Client),
-        titlebar: Some(TitlebarOptions {
-            title: Some(format!("Dinuosi - {title}").into()),
-            appears_transparent: true,
-            ..Default::default()
-        }),
+        titlebar: Some(crate::windows::titlebar(format!("Dinuosi - {title}"))),
         ..Default::default()
     }
 }

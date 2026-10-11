@@ -3,8 +3,8 @@
 use crate::view::Desktop;
 use dinuosi_core::{ProjectEntry, ProjectStore};
 use gpui::{
-    App, AppContext, Bounds, Global, TitlebarOptions, Window, WindowBounds, WindowDecorations,
-    WindowHandle, WindowOptions, px, size,
+    App, AppContext, Bounds, Global, SharedString, TitlebarOptions, Window, WindowBounds,
+    WindowDecorations, WindowHandle, WindowOptions, point, px, size,
 };
 
 struct WindowRole {
@@ -57,12 +57,19 @@ pub(crate) fn options(editor: bool, cx: &App) -> WindowOptions {
         }),
         is_resizable: editor,
         window_decorations: cfg!(target_os = "linux").then_some(WindowDecorations::Client),
-        titlebar: Some(TitlebarOptions {
-            title: Some("Dinuosi".into()),
-            appears_transparent: true,
-            ..Default::default()
-        }),
+        titlebar: Some(titlebar("Dinuosi")),
         ..Default::default()
+    }
+}
+
+/// 返回自绘标题栏共用的原生配置，保留系统标题、窗口拖动及可调整大小的能力。
+/// macOS 系统按钮移出窗口，避免与既有灰阶控件重复；只生成配置，不操作窗口或项目。
+pub(crate) fn titlebar(title: impl Into<SharedString>) -> TitlebarOptions {
+    // shortcut: GPUI 0.2.2 没有独立隐藏 macOS 系统按钮的接口；上游提供该接口后替换移出窗口的方式。
+    TitlebarOptions {
+        title: Some(title.into()),
+        appears_transparent: true,
+        traffic_light_position: cfg!(target_os = "macos").then_some(point(px(-100.0), px(12.0))),
     }
 }
 
