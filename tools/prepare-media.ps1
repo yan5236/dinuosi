@@ -1,8 +1,44 @@
 # 下载、构建和部署经锁定的媒体工具；只改变项目缓存、忽略的音源及 target 目录。
-param([switch]$Build, [string]$MsysRoot, [string]$VcVars)
+param([switch]$Build, [switch]$DeployOnly, [string]$MsysRoot, [string]$VcVars)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 $work = Join-Path $root '.local/distribution'
+
+# 将已有 DLL 部署到四个默认 Cargo 程序目录，CLI 仅部署到 deps 测试目录。
+# 复制前检查桥接库、libav 和测试工具完整性；缺失时抛错，不下载、不编译、不修改源媒体。
+# 应用目录中旧的 ffmpeg.exe/ffprobe.exe 会移除，避免将测试工具误认为应用媒体依赖。
+function Deploy-MediaRuntime {
+    $source = Join-Path $work 'runtime/ffmpeg/bin'
+    foreach ($name in 'dinuosi_media.dll', 'avcodec-62.dll', 'avformat-62.dll', 'avfilter-11.dll',
+        'avutil-60.dll', 'swresample-6.dll', 'swscale-9.dll', 'ffmpeg.exe', 'ffprobe.exe') {
+        if (!(Test-Path -LiteralPath (Join-Path $source $name) -PathType Leaf)) {
+            throw "媒体运行时缺少 $name；首次准备请加 -Build，已有 FFmpeg 缺桥接库时见 BUILDING.md"
+        }
+    }
+    foreach ($profile in 'debug', 'debug/deps', 'release', 'release/deps') {
+        $destination = Join-Path $root "target/$profile/runtime/ffmpeg"
+        New-Item -ItemType Directory -Force $destination | Out-Null
+        $testing = $profile.EndsWith('/deps')
+        Get-ChildItem -LiteralPath $source -File | Where-Object {
+            $_.Extension -eq '.dll' -or ($testing -and $_.Extension -eq '.exe')
+        } |
+            Copy-Item -Destination $destination -Force
+        if (!$testing) {
+            foreach ($name in 'ffmpeg.exe', 'ffprobe.exe') {
+                $tool = Join-Path $destination $name
+                if (Test-Path -LiteralPath $tool -PathType Leaf) { Remove-Item -LiteralPath $tool }
+            }
+        }
+    }
+}
+
+if ($DeployOnly) {
+    if ($Build) { throw '-DeployOnly 与 -Build 不能同时使用' }
+    Deploy-MediaRuntime
+    Write-Output '已有媒体运行时已部署；无需下载或重新编译。已启动的软件请完全退出后重启。'
+    exit
+}
+
 $lock = Get-Content (Join-Path $root 'distribution/inputs.lock.json') -Raw | ConvertFrom-Json
 New-Item -ItemType Directory -Force "$work/downloads", "$work/sources", "$work/build" | Out-Null
 
@@ -74,11 +110,5 @@ set PATH=%VCToolsInstallDir%bin\Hostx64\x64;$MsysRoot\usr\bin;%PATH%
     & (Join-Path $PSScriptRoot 'seal-runtime.ps1') -MsysRoot $MsysRoot -VcVars $VcVars
 }
 
-if (!(Test-Path "$work/runtime/ffmpeg/bin/ffmpeg.exe")) { throw '首次准备请加 -Build 构建受控运行时' }
-foreach ($profile in 'debug', 'debug/deps', 'release', 'release/deps') {
-    $destination = Join-Path $root "target/$profile/runtime/ffmpeg"
-    New-Item -ItemType Directory -Force $destination | Out-Null
-    Get-ChildItem "$work/runtime/ffmpeg/bin" -File | Where-Object { $_.Extension -in '.exe', '.dll' } |
-        Copy-Item -Destination $destination -Force
-}
+Deploy-MediaRuntime
 Write-Output '锁定音源、媒体运行时和安装工具准备完成。'
