@@ -23,6 +23,12 @@ fn timeline_tooltips_are_immediate_and_describe_actions(cx: &mut TestAppContext)
     let directory = std::env::temp_dir().join(format!("dinuosi-tooltip-{}", std::process::id()));
     std::fs::create_dir_all(&directory).unwrap();
     let store = ProjectStore::new(directory.join("recent.json"));
+    store
+        .save_preferences(&dinuosi_core::Preferences {
+            language: "zh-CN".into(),
+            ..Default::default()
+        })
+        .unwrap();
     let entry = store.create("提示验证", &directory).unwrap();
     let (desktop, cx) = cx
         .add_window_view(|window, cx| Desktop::new(store.clone(), Some(entry.clone()), window, cx));

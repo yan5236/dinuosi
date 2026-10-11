@@ -3,10 +3,13 @@ use gpui::{
     EntityInputHandler, Modifiers, MouseButton, TestAppContext, VisualTestContext, point, size,
 };
 
-/// 验证标题栏鼠标命中没有阻止操作系统默认行为，保留拖动、最小化和关闭。
+/// 验证窗口控件布局及鼠标默认行为；Linux 测试窗口未实现系统拖动，该项由原生 CI 检查。
 fn assert_native_mouse_default(cx: &mut VisualTestContext, selectors: &[&'static str]) {
     for selector in selectors {
         let position = cx.debug_bounds(selector).expect("缺少原生命中区").center();
+        if cfg!(target_os = "linux") && *selector == "title-drag" {
+            continue;
+        }
         cx.simulate_mouse_down(position, MouseButton::Left, Modifiers::none());
         assert!(
             !cx.update(|window, _| window.default_prevented()),

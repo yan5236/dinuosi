@@ -83,7 +83,7 @@ impl RenderOnce for Tooltip {
         let anchor = bounds.get();
         let run = TextRun {
             len: self.text.len(),
-            font: gpui::font("Microsoft YaHei UI"),
+            font: gpui::font(crate::ui::UI_FONT),
             color: rgb(TEXT).into(),
             background_color: None,
             underline: None,

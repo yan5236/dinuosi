@@ -100,3 +100,63 @@ impl Source for Pcm {
         None
     }
 }
+
+/// 在线程间传递真实无声视频解码器，再于拥有线程连接播放器并读取帧；无需音频设备。
+/// 覆盖后台准备/前台接管及 Drop 清理，素材只写独立临时目录，需显式准备配套媒体工具。
+#[test]
+#[ignore = "需要准备应用配套 FFmpeg 和 ffprobe"]
+fn prepared_decoder_moves_to_playback_without_moving_device_streams() {
+    use dinuosi_core::media;
+    let root = std::env::temp_dir().join(format!(
+        "dinuosi-playback-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    std::fs::create_dir(&root).unwrap();
+    let path = root.join("silent.mp4");
+    assert!(
+        media::command("ffmpeg")
+            .args([
+                "-v",
+                "error",
+                "-f",
+                "lavfi",
+                "-i",
+                "color=c=red:s=64x64:d=1",
+                "-an",
+                "-c:v",
+                "mpeg4"
+            ])
+            .arg(&path)
+            .status()
+            .unwrap()
+            .success()
+    );
+    let source = media::probe(&path).unwrap();
+    assert!(!source.has_audio);
+    let decoder = std::thread::spawn(move || Decoder::start(&source, 0.0, 1.0))
+        .join()
+        .unwrap()
+        .unwrap();
+    let player = Playback::start(decoder, 0.0, 1.0).unwrap();
+    assert!(player._stream.is_none());
+    let deadline = Instant::now() + Duration::from_secs(5);
+    let frame = loop {
+        if let Some(frame) = player.frames.lock().unwrap().take() {
+            break frame;
+        }
+        assert!(Instant::now() < deadline, "真实视频帧未送达");
+        std::thread::sleep(Duration::from_millis(10));
+    };
+    assert_eq!(
+        frame.len(),
+        (media::FRAME_WIDTH * media::FRAME_HEIGHT * 4) as usize
+    );
+    assert!(frame.as_chunks::<4>().0.iter().any(|pixel| pixel[2] > 200));
+    drop(player);
+    assert!(path.is_file(), "释放播放器不能移除源文件");
+    std::fs::remove_dir_all(root).unwrap();
+}

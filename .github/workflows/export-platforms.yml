@@ -95,16 +95,38 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential cmake nasm pkg-config gnupg patchelf libasound2-dev libudev-dev libssl-dev libfontconfig1-dev libwayland-dev libxkbcommon-dev libxkbcommon-x11-dev libxcb1-dev libxcb-shape0-dev libxcb-xfixes0-dev libx11-dev libxi-dev libxrandr-dev libxcursor-dev libxinerama-dev libxrender-dev libvulkan-dev mesa-vulkan-drivers fonts-noto-cjk fonts-noto-core xvfb openbox x11-utils imagemagick
+          sudo apt-get install -y build-essential cmake nasm pkg-config gnupg patchelf libasound2-dev libudev-dev libssl-dev libfontconfig1-dev libwayland-dev libxkbcommon-dev libxkbcommon-x11-dev libxcb1-dev libxcb-shape0-dev libxcb-xfixes0-dev libx11-dev libxi-dev libxrandr-dev libxcursor-dev libxinerama-dev libxrender-dev libvulkan-dev mesa-vulkan-drivers fonts-noto-cjk fonts-noto-core xvfb openbox x11-utils xdotool imagemagick
       - name: Install macOS media build dependencies
         if: runner.os == 'macOS'
         run: brew install cmake nasm pkg-config gnupg
-      - name: Build controlled Unix runtime and prepare soundfont
+      - name: Restore controlled Unix runtime
         if: runner.os != 'Windows'
+        id: unix-cache
+        uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          key: ${{ matrix.os }}-${{ runner.arch }}-runtime-${{ hashFiles('distribution/inputs.lock.json', 'tools/prepare-media-unix.py', 'tools/verify-export-platform.py') }}
+          path: |
+            .local/distribution/unix/runtime/
+            .local/distribution/unix/runtime-manifest.json
+            assets/audio/FluidR3_GM.sf2
+      - name: Validate and deploy restored Unix runtime
+        if: runner.os != 'Windows' && steps.unix-cache.outputs.cache-hit == 'true'
+        run: python tools/prepare-media-unix.py --deploy
+      - name: Build controlled Unix runtime and prepare soundfont
+        if: runner.os != 'Windows' && steps.unix-cache.outputs.cache-hit != 'true'
         run: |
           mkdir -p .local/ci-export
           set -o pipefail
           python tools/prepare-media-unix.py 2>&1 | tee .local/ci-export/prepare.log
+      - name: Cache successfully built Unix runtime
+        if: runner.os != 'Windows' && steps.unix-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          key: ${{ steps.unix-cache.outputs.cache-primary-key }}
+          path: |
+            .local/distribution/unix/runtime/
+            .local/distribution/unix/runtime-manifest.json
+            assets/audio/FluidR3_GM.sf2
       - name: Verify platform tooling boundaries
         run: python tools/test-platform-tools.py
       - name: Verify application exports and report tool capabilities

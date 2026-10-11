@@ -24,12 +24,33 @@ guard let window = windows.first(where: { ($0[kCGWindowOwnerPID as String] as? I
 print(window[kCGWindowNumber as String]!)'''
         args = ["swift", "-e", source, str(process.pid)]
     else:
-        output = subprocess.check_output(["xwininfo", "-name", "Dinuosi"], text=True)
-        return next(line.split()[3] for line in output.splitlines() if "Window id:" in line)
+        output = subprocess.check_output(["xdotool", "search", "--onlyvisible", "--pid", str(process.pid)], text=True)
+        return output.splitlines()[0]
     identifier = subprocess.check_output(args, text=True, timeout=60).strip()
     if not identifier or identifier == "0":
         raise RuntimeError("主窗口未创建")
     return identifier
+
+
+def verify_linux_drag(identifier):
+    """用 X11 原生鼠标事件拖动自绘标题空白区，并断言窗口实际移动 80×40 像素。
+
+    只操作本次启动的验收窗口；不改变大小或项目，返回前后位置用于独立证据。
+    """
+    def geometry():
+        """读取验收窗口的 X11 几何字段，查询失败即终止，避免仅凭鼠标事件成功判定拖动通过。"""
+        raw = subprocess.check_output(["xdotool", "getwindowgeometry", "--shell", identifier], text=True)
+        return {key: int(value) for key, value in (line.split("=", 1) for line in raw.splitlines())}
+    initial = geometry()
+    x, y = initial["X"] + initial["WIDTH"] // 2, initial["Y"] + 18
+    for args in (["mousemove", "--sync", str(x), str(y)], ["mousedown", "1"],
+                 ["mousemove", "--sync", str(x + 80), str(y + 40)], ["mouseup", "1"]):
+        subprocess.run(["xdotool", *args], check=True)
+        time.sleep(0.3)
+    moved = geometry()
+    assert abs(moved["X"] - initial["X"] - 80) <= 2, f"标题拖动 X 未生效：{initial} -> {moved}"
+    assert abs(moved["Y"] - initial["Y"] - 40) <= 2, f"标题拖动 Y 未生效：{initial} -> {moved}"
+    return {"initial": initial, "moved": moved}
 
 
 def verify():
@@ -51,6 +72,7 @@ def verify():
             if process.poll() is not None:
                 raise RuntimeError(f"桌面提前退出：{process.returncode}")
             identifier = window_id(process)
+            drag = verify_linux_drag(identifier) if sys.platform == "linux" else None
             screenshot = EVIDENCE / "desktop-startup.png"
             if sys.platform == "darwin":
                 args = ["screencapture", "-x", "-l", identifier, str(screenshot)]
@@ -72,6 +94,7 @@ $bitmap.Dispose()"""
                 args = ["powershell", "-NoProfile", "-File", str(script_path), str(screenshot)]
             result = subprocess.run(args, capture_output=True, timeout=60)
             report = {"window_id": identifier, "running": process.poll() is None,
+                "window_drag": drag,
                 "screenshot": "captured" if result.returncode == 0 and screenshot.exists() else "unavailable",
                 "screenshot_error": result.stderr.decode(errors="replace")}
             (EVIDENCE / "desktop-startup.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
