@@ -1,6 +1,5 @@
 //! 核心解码器的桌面音频设备适配与播放时钟，不在桌面端调用 FFmpeg。
 
-use crate::media::Media;
 use dinuosi_core::media_stream::Decoder;
 use rodio::{OutputStream, OutputStreamBuilder, Sink, Source};
 use std::{
@@ -19,21 +18,18 @@ pub struct Playback {
 }
 
 impl Playback {
-    /// 从指定秒数启动持续解码；视频帧以 24fps 输出，音频以立体声 48kHz 连接默认设备。
-    /// 初始化失败返回错误并通过 Drop 清理已启动进程；长文件不整段加载到内存。
-    pub fn start(media: &Media, offset: f64, end: f64, volume: f32) -> Result<Self, String> {
+    /// 在拥有播放器的前台线程连接已后台准备的解码器与默认音频设备；输入 offset 为源位置。
+    /// macOS 设备流不可跨线程传递，创建、保存及释放均留在同一线程；失败时自动回收解码进程。
+    pub fn start(mut decoder: Decoder, offset: f64, volume: f32) -> Result<Self, String> {
         let mut player = Self {
             decoder: None,
-            frames: Arc::new(Mutex::new(None)),
+            frames: decoder.frames.clone(),
             sink: None,
             _stream: None,
             started: Instant::now(),
             offset,
-            error: Arc::new(Mutex::new(None)),
+            error: decoder.error.clone(),
         };
-        let mut decoder = Decoder::start(&media.source, offset, end)?;
-        player.frames = decoder.frames.clone();
-        player.error = decoder.error.clone();
         if let Some(audio) = decoder.take_audio() {
             let stream = OutputStreamBuilder::open_default_stream()
                 .map_err(|e| format!("无法打开音频设备：{e}"))?;

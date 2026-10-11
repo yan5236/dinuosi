@@ -16,6 +16,8 @@ Windows 用户数据位置保持 `%LOCALAPPDATA%/Dinuosi`；macOS 新默认是 `
 
 字体保持 Windows 原样，macOS 使用系统字体与 Menlo，Linux 使用 Noto Sans 和 DejaVu Sans Mono；中文依赖系统 CJK 字体。macOS 默认常用快捷键使用 Command，保留旧 Ctrl 兼容和已有用户覆盖；Ctrl+H 保持项目管理用途，系统 Command+H/Q/W 保留。
 
+素材预览与时间线播放都只把 Core 解码/混音准备放到后台。Rodio/CPAL 音频设备在拥有它的前台线程创建、持有和释放；macOS 设备句柄不可跨线程传递。迟到或取消的后台解码结果在打开音频设备之前丢弃，失败继续回收本次解码进程。
+
 ## 从源码运行
 
 Windows 沿用 [开发指南](DEVELOPMENT.md) 的 MSVC 准备和打包链路。

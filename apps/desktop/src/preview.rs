@@ -158,8 +158,8 @@ impl Desktop {
         self.session.timer = None;
     }
 
-    /// 启动或暂停真实素材播放；初始化在后台完成，切换素材后的迟到结果立即销毁。
-    /// 到达选区末尾时从选区起点重播；设备/解码错误显示实际原因。
+    /// 启动或暂停真实素材播放；解码器在后台准备，音频设备在前台创建，迟到的解码器立即销毁。
+    /// 到达选区末尾时从起点重播；切换/取消不打开设备，设备和解码错误保留原反馈。
     pub(crate) fn play_preview(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.session.player.is_some() || self.session.starting {
             self.stop_preview();
@@ -182,22 +182,22 @@ impl Desktop {
         }
         let position = self.session.position;
         let end = self.session.trim_end;
-        let volume = self.volume;
         self.session.starting = true;
         self.session.revision += 1;
         let revision = self.session.revision;
         cx.spawn_in(window, async move |this, cx| {
             let result = cx
-                .background_spawn(async move { Playback::start(&media, position, end, volume) })
+                .background_spawn(async move {
+                    dinuosi_core::media_stream::Decoder::start(&media.source, position, end)
+                })
                 .await;
             let _ = this.update_in(cx, |this, window, cx| {
                 if this.session.revision != revision {
                     return;
                 }
                 this.session.starting = false;
-                match result {
+                match result.and_then(|decoder| Playback::start(decoder, position, this.volume)) {
                     Ok(player) => {
-                        player.volume(this.volume);
                         this.session.player = Some(player);
                         this.start_preview_timer(window, cx);
                     }
