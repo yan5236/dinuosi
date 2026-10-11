@@ -6,6 +6,7 @@ on:
     branches: [main]
     paths:
       - 'crates/core/**'
+      - 'apps/desktop/**'
       - 'tools/**'
       - 'distribution/**'
       - '.github/workflows/export-platforms.yml'
@@ -27,6 +28,8 @@ jobs:
       CARGO_BUILD_JOBS: '2'
       DINUOSI_BUILD_JOBS: '2'
       PYTHONUTF8: '1'
+      CARGO_PROFILE_DEV_DEBUG: '0'
+      CARGO_PROFILE_TEST_DEBUG: '0'
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
@@ -82,17 +85,38 @@ jobs:
             target/debug/deps/runtime/ffmpeg/
             assets/audio/FluidR3_GM.sf2
             .local/distribution/runtime-manifest.json
-      - name: Install Linux diagnostic tools
+      - name: Install Linux desktop and media build dependencies
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y ffmpeg
-      - name: Install macOS diagnostic tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake nasm pkg-config gnupg libasound2-dev libudev-dev libssl-dev libfontconfig1-dev libwayland-dev libxkbcommon-dev libxkbcommon-x11-dev libxcb1-dev libxcb-shape0-dev libxcb-xfixes0-dev libx11-dev libxi-dev libxrandr-dev libxcursor-dev libxinerama-dev libxrender-dev libvulkan-dev mesa-vulkan-drivers fonts-noto-cjk fonts-noto-core xvfb openbox x11-utils imagemagick
+      - name: Install macOS media build dependencies
         if: runner.os == 'macOS'
-        run: brew install ffmpeg
-      - name: Prepare locked soundfont on Unix
+        run: brew install cmake nasm pkg-config gnupg
+      - name: Build controlled Unix runtime and prepare soundfont
         if: runner.os != 'Windows'
-        run: python tools/verify-export-platform.py prepare-font
+        run: |
+          mkdir -p .local/ci-export
+          set -o pipefail
+          python tools/prepare-media-unix.py 2>&1 | tee .local/ci-export/prepare.log
+      - name: Verify platform tooling boundaries
+        run: python tools/test-platform-tools.py
       - name: Verify application exports and report tool capabilities
         run: python tools/verify-export-platform.py verify
+      - name: Verify desktop build and event tests
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo build -p dinuosi-desktop --locked 2>&1 | tee .local/ci-export/desktop-build.log
+          cargo test -p dinuosi-desktop --locked -- --test-threads=1 2>&1 | tee .local/ci-export/desktop-tests.log
+          cargo clippy --workspace --all-targets --locked -- -D warnings
+          cargo fmt --all -- --check
+      - name: Start native desktop on Linux virtual display
+        if: runner.os == 'Linux'
+        run: xvfb-run -a -s '-screen 0 1440x900x24' python tools/verify-desktop-startup.py
+      - name: Start native desktop on Windows or macOS
+        if: runner.os != 'Linux'
+        run: python tools/verify-desktop-startup.py
       - name: Preserve platform evidence even on failure
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -104,3 +128,4 @@ jobs:
             .local/export-qa/
             .local/export-codecs-qa/
             .local/distribution/runtime-manifest.json
+            .local/distribution/unix/runtime-manifest.json

@@ -152,7 +152,7 @@ impl Desktop {
                                         .top(px(17.0))
                                         .left(px(4.0))
                                         .text_size(px(10.0))
-                                        .font_family("Consolas")
+                                        .font_family(crate::ui::MONO_FONT)
                                         .text_color(rgb(MUTED))
                                         .whitespace_nowrap()
                                         .child(tick.label),

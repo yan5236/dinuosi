@@ -18,13 +18,7 @@ pub fn capabilities() -> Result<Vec<Encoder>, String> {
 fn probe() -> Result<Vec<Encoder>, String> {
     let mut available = Vec::new();
     let mut last_error = String::new();
-    for encoder in [
-        Encoder::H264MediaFoundationHardware,
-        Encoder::H264MediaFoundation,
-        Encoder::Av1,
-        Encoder::Vp9,
-        Encoder::Mpeg4,
-    ] {
+    for encoder in Encoder::candidates() {
         let mut command = media::command("ffmpeg");
         command
             .args([

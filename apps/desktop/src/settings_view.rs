@@ -297,7 +297,7 @@ impl Render for Settings {
             .bg(rgb(BACKGROUND))
             .text_color(rgb(TEXT))
             .text_size(px(14.0))
-            .font_family("Microsoft YaHei UI")
+            .font_family(crate::ui::UI_FONT)
             .on_mouse_down(
                 gpui::MouseButton::Left,
                 cx.listener(|this, _, _, cx| {

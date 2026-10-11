@@ -267,7 +267,7 @@ impl Desktop {
             .border_color(rgb(LINE))
             .child(
                 div()
-                    .font_family("Consolas")
+                    .font_family(crate::ui::MONO_FONT)
                     .text_size(px(10.0))
                     .child(format!(
                         "{} / {}",

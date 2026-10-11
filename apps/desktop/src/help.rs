@@ -132,7 +132,7 @@ impl Render for About {
             .flex_col()
             .bg(rgb(BACKGROUND))
             .text_color(rgb(TEXT))
-            .font_family("Microsoft YaHei UI")
+            .font_family(crate::ui::UI_FONT)
             .text_size(px(14.0))
             .child(div().absolute().size_0().track_focus(&self.focus))
             .on_key_down(|event, window, cx| {

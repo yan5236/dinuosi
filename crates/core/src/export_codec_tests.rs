@@ -4,6 +4,19 @@ use super::*;
 /// 验证不同编码实现使用各自参数，软件 AV1/VP9 不接收 Windows MFT 的专用开关。
 #[test]
 fn encoder_arguments_match_the_selected_implementation() {
+    let candidates = Encoder::candidates();
+    assert_eq!(
+        candidates.contains(&Encoder::H264MediaFoundation),
+        cfg!(target_os = "windows")
+    );
+    assert_eq!(
+        candidates.contains(&Encoder::H264VideoToolbox),
+        cfg!(target_os = "macos")
+    );
+    assert_eq!(
+        candidates.contains(&Encoder::H264OpenH264),
+        !cfg!(target_os = "windows")
+    );
     for (encoder, expected) in [
         (Encoder::Av1, vec!["-cpu-used", "6", "-row-mt", "1"]),
         (
@@ -16,6 +29,12 @@ fn encoder_arguments_match_the_selected_implementation() {
             vec!["-hw_encoding", "1"],
         ),
         (Encoder::H264MediaFoundation, vec!["-hw_encoding", "0"]),
+        (Encoder::H264VideoToolboxHardware, vec!["-allow_sw", "0"]),
+        (
+            Encoder::H264VideoToolbox,
+            vec!["-allow_sw", "1", "-require_sw", "1"],
+        ),
+        (Encoder::H264OpenH264, vec![]),
     ] {
         let mut command = std::process::Command::new("ffmpeg");
         encoder.configure(&mut command);

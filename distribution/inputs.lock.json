@@ -61,5 +61,12 @@
       "sha256": "ddfe36cab873794038ae2c1210557ad34857a4b6bdc515785d1da9e175b1da1e"
     }
   },
-  "lameVersion": "3.100"
+  "lameVersion": "3.100",
+  "unixInputs": {
+    "openh264": {
+      "file": "openh264-2.6.0.tar.gz",
+      "url": "https://codeload.github.com/cisco/openh264/tar.gz/refs/tags/v2.6.0",
+      "sha256": "558544ad358283a7ab2930d69a9ceddf913f4a51ee9bf1bfb9e377322af81a69"
+    }
+  }
 }

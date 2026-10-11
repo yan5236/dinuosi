@@ -32,7 +32,7 @@ pub struct Media {
 }
 
 /// 构造应用配套目录中的媒体子进程，不读取 PATH，也不依赖启动时的工作目录。
-/// 参数逐项传递，不经 shell；工具或 DLL 缺失由调用方的启动/退出错误报告。
+/// 按本机可执行文件后缀定位工具，参数逐项传递且不经 shell；缺失工具或配套库由调用方报告。
 /// 仅当操作系统无法定位本进程时终止，避免猜测路径而运行未经选择的工具。
 pub fn command(program: &str) -> Command {
     let executable = std::env::current_exe().expect("无法定位应用程序路径");
@@ -40,14 +40,14 @@ pub fn command(program: &str) -> Command {
     let mut command = Command::new(
         root.join("runtime")
             .join("ffmpeg")
-            .join(format!("{program}.exe")),
+            .join(format!("{program}{}", std::env::consts::EXE_SUFFIX)),
     );
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
         command.creation_flags(0x08000000);
     }
-    // 同时固定 DLL 搜索的工作目录与 PATH，配套 DLL 缺失时不能借用用户环境中的另一版。
+    // 固定工作目录；Unix 运行库通过相对 rpath 部署，不继承用户注入的动态库搜索路径。
     let runtime = root.join("runtime/ffmpeg");
     command.current_dir(runtime);
     if let Some(windows) = std::env::var_os("SystemRoot") {
@@ -58,6 +58,16 @@ pub fn command(program: &str) -> Command {
         command.env("PATH", "");
     }
     command.stdin(Stdio::null());
+    #[cfg(unix)]
+    for variable in [
+        "LD_LIBRARY_PATH",
+        "LD_PRELOAD",
+        "DYLD_LIBRARY_PATH",
+        "DYLD_FALLBACK_LIBRARY_PATH",
+        "DYLD_INSERT_LIBRARIES",
+    ] {
+        command.env_remove(variable);
+    }
     command
 }
 

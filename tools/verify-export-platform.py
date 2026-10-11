@@ -1,4 +1,4 @@
-"""CI 导出诊断：Windows 使用交付运行库；Unix 工具仅用于环境对照，不属于发行包。"""
+"""CI 平台诊断：三平台均使用锁定源码构建的配套运行库，保留真实导出与部署证据。"""
 import hashlib
 import json
 import os
@@ -67,15 +67,24 @@ def validate_streams(probe, codec):
 
 
 def tool_exports(ffmpeg, ffprobe):
-    """独立试编码应用当前五种实现的 MP4/MKV，保存样片、探测与失败诊断。
+    """独立试编码当前平台各实现的 MP4/MKV，保存样片、探测与失败诊断。
 
     这是媒体工具环境对照，不调用应用合成器，也不把未接入的系统 H.264 后端算作支持。
     返回每个实现/封装的验证状态；未知编码器及无 GPU 是明确失败，其他组合继续执行。
     """
     outcomes = {}
-    for label, encoder, codec, options in [
+    h264 = [
         ("h264-hardware", "h264_mf", "h264", ["-hw_encoding", "1"]),
         ("h264-software", "h264_mf", "h264", ["-hw_encoding", "0"]),
+    ] if sys.platform == "win32" else [
+        ("h264-openh264", "libopenh264", "h264", []),
+    ]
+    if sys.platform == "darwin":
+        h264 = [
+            ("h264-hardware", "h264_videotoolbox", "h264", ["-allow_sw", "0"]),
+            ("h264-software", "h264_videotoolbox", "h264", ["-allow_sw", "1", "-require_sw", "1"]),
+        ] + h264
+    for label, encoder, codec, options in h264 + [
         ("av1", "libaom-av1", "av1", ["-cpu-used", "6", "-row-mt", "1"]),
         ("vp9", "libvpx-vp9", "vp9", ["-deadline", "good", "-cpu-used", "4", "-row-mt", "1"]),
         ("mpeg4", "mpeg4", "mpeg4", []),
@@ -87,7 +96,7 @@ def tool_exports(ffmpeg, ffprobe):
                 "-filter_threads", "1", "-f", "rawvideo", "-pixel_format", "bgra",
                 "-video_size", "320x240", "-framerate", "24", "-i", "pipe:0",
                 "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000:duration=1",
-                "-c:v", encoder, "-pix_fmt", "nv12" if codec == "h264" else "yuv420p",
+                "-c:v", encoder, "-pix_fmt", "nv12" if encoder in ("h264_mf", "h264_videotoolbox") else "yuv420p",
                 "-b:v", "3000k", "-threads", "2", *options,
                 "-c:a", "aac", "-b:a", "192k", "-ac", "2", "-t", "1", str(output)],
                 data=bytes([0, 0, 255, 255]) * (320 * 240 * 24), timeout=120)
@@ -104,31 +113,26 @@ def tool_exports(ffmpeg, ffprobe):
 
 
 def verify():
-    """运行当前 Core 原样测试与真实导出回归，再生成区分应用/工具的 JSON 和 CI 摘要。
+    """运行共享模块测试、媒体回归及真实导出，再生成区分应用/工具的 JSON 和 CI 摘要。
 
-    Unix 只部署平台原生文件名，保留当前 .exe 定位缺口；应用测试失败时返回非零。
-    不构建桌面界面、安装包或发布产物，工具编码失败单独记录，不能代表应用通过。
+    三平台都要求配套受控运行库存在，不复制系统 FFmpeg；失败返回非零，保留全部独立检查结果。
+    桌面构建与事件测试由工作流另行执行；工具试编码不能代表应用时间线或实机 GPU 验收。
     """
     runtime = ROOT / "target/debug/deps/runtime/ffmpeg"
     if sys.platform == "win32":
         ffmpeg, ffprobe = runtime / "ffmpeg.exe", runtime / "ffprobe.exe"
-        origin = "locked Windows distribution runtime"
+        origin = "locked source-built Windows runtime"
     else:
-        runtime.mkdir(parents=True, exist_ok=True)
-        for tool in ("ffmpeg", "ffprobe"):
-            shutil.copy2(shutil.which(tool), runtime / tool)
         ffmpeg, ffprobe = runtime / "ffmpeg", runtime / "ffprobe"
-        origin = "system diagnostic tools only; NOT a distribution runtime"
+        origin = "locked source-built Unix runtime"
     run("ffmpeg-version", [str(ffmpeg), "-version"])
     run("ffmpeg-configuration", [str(ffmpeg), "-buildconf"])
     run("ffmpeg-encoders", [str(ffmpeg), "-encoders"])
     outcomes = {}
     for name, args in [
-        ("core-tests", ["cargo", "test", "-p", "dinuosi-core", "--locked", "--", "--test-threads=1"]),
-        ("application-timeline", ["cargo", "test", "-p", "dinuosi-core", "--locked",
-            "real_timeline_export_and_failure_boundaries", "--", "--ignored", "--nocapture"]),
-        ("application-av1-vp9", ["cargo", "test", "-p", "dinuosi-core", "--locked",
-            "real_av1_vp9_exports", "--", "--ignored", "--nocapture"]),
+        ("core-tests", ["cargo", "test", "-p", "dinuosi-core", "-p", "dinuosi-command", "-p", "dinuosi-icons", "--locked", "--", "--test-threads=1"]),
+        ("application-media-and-export", ["cargo", "test", "-p", "dinuosi-core", "--locked",
+            "--", "--ignored", "--nocapture", "--test-threads=1", "--skip", "real_midi_preview_samples"]),
     ]:
         code, _ = run(name, args)
         outcomes[name] = "passed" if code == 0 else "failed"
@@ -140,7 +144,7 @@ def verify():
     summary = f"## {platform.system()} / {platform.machine()}\n\nRuntime: {origin}\n\n"
     summary += "| Check | Result |\n| --- | --- |\n"
     summary += "".join(f"| {name} | {value} |\n" for name, value in {**outcomes, **tools}.items())
-    summary += "\nTool checks are not application or release certification. No desktop/GPU acceptance.\n"
+    summary += "\nTool checks are not application or release certification. Physical GPU acceptance remains separate.\n"
     (EVIDENCE / "summary.md").write_text(summary, encoding="utf-8")
     if path := os.environ.get("GITHUB_STEP_SUMMARY"):
         with open(path, "a", encoding="utf-8") as target:

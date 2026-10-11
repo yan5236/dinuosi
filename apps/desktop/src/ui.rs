@@ -12,6 +12,25 @@ pub const LINE: u32 = 0x414145;
 pub const TEXT: u32 = 0xd7d7da;
 pub const MUTED: u32 = 0x929297;
 pub const DISABLED: u32 = 0x69696f;
+pub const UI_FONT: &str = if cfg!(target_os = "windows") {
+    "Microsoft YaHei UI"
+} else if cfg!(target_os = "macos") {
+    ".SystemUIFont"
+} else {
+    "Noto Sans"
+};
+pub const BRAND_FONT: &str = if cfg!(target_os = "windows") {
+    "Segoe UI"
+} else {
+    UI_FONT
+};
+pub const MONO_FONT: &str = if cfg!(target_os = "windows") {
+    "Consolas"
+} else if cfg!(target_os = "macos") {
+    "Menlo"
+} else {
+    "DejaVu Sans Mono"
+};
 
 /// 构造品牌组合，Logo 本身充当首字母 D；输入为逻辑像素高度。
 /// 返回原生元素，不附加宣传语、版本副标题或重复的字母 D。
@@ -25,7 +44,7 @@ pub fn brand(height: f32) -> Div {
             div()
                 .ml(px(-height * 0.09))
                 .text_size(px(height * 0.48))
-                .font_family("Segoe UI")
+                .font_family(BRAND_FONT)
                 .font_weight(FontWeight::SEMIBOLD)
                 .child("inuosi"),
         )
@@ -184,7 +203,7 @@ impl Render for Hint {
             .bg(rgb(0x37373b))
             .border_1()
             .border_color(rgb(0x515158))
-            .font_family("Microsoft YaHei UI")
+            .font_family(UI_FONT)
             .text_size(px(12.0))
             .text_color(rgb(TEXT))
             .child(self.0.clone())

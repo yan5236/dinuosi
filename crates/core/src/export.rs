@@ -49,6 +49,9 @@ impl Container {
 pub enum Encoder {
     H264MediaFoundationHardware,
     H264MediaFoundation,
+    H264VideoToolboxHardware,
+    H264VideoToolbox,
+    H264OpenH264,
     Av1,
     Vp9,
     Mpeg4,
@@ -58,30 +61,38 @@ impl Encoder {
     pub fn id(self) -> &'static str {
         match self {
             Self::H264MediaFoundationHardware | Self::H264MediaFoundation => "h264_mf",
+            Self::H264VideoToolboxHardware | Self::H264VideoToolbox => "h264_videotoolbox",
+            Self::H264OpenH264 => "libopenh264",
             Self::Av1 => "libaom-av1",
             Self::Vp9 => "libvpx-vp9",
             Self::Mpeg4 => "mpeg4",
         }
     }
-    /// 返回设置控件的编码器名称，明确区分编码格式与 Windows 实现。
+    /// 返回设置控件的编码器名称，明确区分编码格式、平台实现及软硬件路径。
     pub fn label(self) -> &'static str {
         match self {
             Self::H264MediaFoundationHardware => "H.264 (Windows hardware)",
             Self::H264MediaFoundation => "H.264 (Windows software)",
+            Self::H264VideoToolboxHardware => "H.264 (macOS hardware)",
+            Self::H264VideoToolbox => "H.264 (macOS software)",
+            Self::H264OpenH264 => "H.264 (OpenH264 software)",
             Self::Av1 => "AV1",
             Self::Vp9 => "VP9",
             Self::Mpeg4 => "MPEG-4",
         }
     }
-    /// 返回当前编码实现支持的 4:2:0 输入格式；Media Foundation 使用通用的 NV12。
+    /// 返回编码实现支持的 4:2:0 输入格式；系统后端使用 NV12，OpenH264 使用 YUV420P。
     pub(crate) fn pixel_format(self) -> &'static str {
         match self {
-            Self::H264MediaFoundationHardware | Self::H264MediaFoundation => "nv12",
-            Self::Av1 | Self::Vp9 | Self::Mpeg4 => "yuv420p",
+            Self::H264MediaFoundationHardware
+            | Self::H264MediaFoundation
+            | Self::H264VideoToolboxHardware
+            | Self::H264VideoToolbox => "nv12",
+            Self::H264OpenH264 | Self::Av1 | Self::Vp9 | Self::Mpeg4 => "yuv420p",
         }
     }
     /// 追加选中实现的专用参数，能力探测和真实导出共用；不启动进程。
-    /// Windows 区分硬件与软件 MFT；AV1/VP9 使用质量与速度折中预设、行并行，避免默认慢速编码。
+    /// 系统 H.264 后端显式区分硬件与软件；AV1/VP9 使用速度预设和行并行，不改变许可边界。
     pub(crate) fn configure(self, command: &mut std::process::Command) {
         match self {
             Self::H264MediaFoundationHardware | Self::H264MediaFoundation => {
@@ -100,8 +111,32 @@ impl Encoder {
             Self::Vp9 => {
                 command.args(["-deadline", "good", "-cpu-used", "4", "-row-mt", "1"]);
             }
-            Self::Mpeg4 => {}
+            Self::H264VideoToolboxHardware => {
+                command.args(["-allow_sw", "0"]);
+            }
+            Self::H264VideoToolbox => {
+                command.args(["-allow_sw", "1", "-require_sw", "1"]);
+            }
+            Self::H264OpenH264 | Self::Mpeg4 => {}
         }
+    }
+
+    /// 返回当前操作系统应探测的编码实现，硬件优先且保留软件路径；不启动进程或假定驱动可用。
+    /// Windows 沿用 Media Foundation，macOS 使用 VideoToolbox 并保留 OpenH264，Linux 使用 OpenH264。
+    pub fn candidates() -> Vec<Self> {
+        let mut encoders = if cfg!(target_os = "windows") {
+            vec![Self::H264MediaFoundationHardware, Self::H264MediaFoundation]
+        } else if cfg!(target_os = "macos") {
+            vec![
+                Self::H264VideoToolboxHardware,
+                Self::H264VideoToolbox,
+                Self::H264OpenH264,
+            ]
+        } else {
+            vec![Self::H264OpenH264]
+        };
+        encoders.extend([Self::Av1, Self::Vp9, Self::Mpeg4]);
+        encoders
     }
 }
 

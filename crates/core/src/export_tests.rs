@@ -358,21 +358,23 @@ fn real_timeline_export_and_failure_boundaries() {
     let available = capabilities().unwrap();
     println!("应用试编码成功的实现：{available:?}");
     assert!(available.contains(&Encoder::Mpeg4));
-    for encoder in [
-        Encoder::H264MediaFoundationHardware,
-        Encoder::H264MediaFoundation,
-    ] {
-        let suffix = if encoder == Encoder::H264MediaFoundationHardware {
-            "-hardware"
-        } else {
-            ""
-        };
+    if cfg!(unix) {
+        assert!(
+            available.contains(&Encoder::H264OpenH264),
+            "受控 Unix 运行库必须提供软件 H.264"
+        );
+    }
+    for encoder in Encoder::candidates()
+        .into_iter()
+        .filter(|encoder| encoder.id().contains("264"))
+    {
+        let suffix = format!("-{}", encoder.label());
         if available.contains(&encoder) {
             let mut h264 = settings.clone();
             h264.encoder = encoder;
             h264.width = 320;
             h264.height = 240;
-            let h264_output = root.join(format!("h264{suffix}.mp4"));
+            let h264_output = root.join(format!("{}.mp4", encoder.label()));
             export(&timeline, &sources, &h264, &h264_output, &cancel, |_| {}).unwrap();
             let probe = media::command("ffprobe")
                 .args([

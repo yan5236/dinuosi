@@ -15,5 +15,8 @@
   "Cancel": "Cancel",
   "Close": "Close",
   "H.264 (Windows hardware)": "H.264 (Windows hardware)",
-  "H.264 (Windows software)": "H.264 (Windows software)"
+  "H.264 (Windows software)": "H.264 (Windows software)",
+  "H.264 (macOS hardware)": "H.264 (macOS hardware)",
+  "H.264 (macOS software)": "H.264 (macOS software)",
+  "H.264 (OpenH264 software)": "H.264 (OpenH264 software)"
 }

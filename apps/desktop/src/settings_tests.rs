@@ -22,6 +22,15 @@ fn shortcut_registry_respects_overrides_and_conflicts() {
     let mut data = Preferences::default();
     shortcuts::validate(&data).unwrap();
     assert_eq!(
+        shortcuts::normalize("cmd-n").is_ok(),
+        cfg!(target_os = "macos")
+    );
+    assert!(shortcuts::normalize("cmd-w").is_err());
+    assert_eq!(
+        shortcuts::resolve(&Keystroke::parse("cmd-z").unwrap(), &data),
+        cfg!(target_os = "macos").then_some(shortcuts::Command::Undo)
+    );
+    assert_eq!(
         shortcuts::resolve(&Keystroke::parse("ctrl-z").unwrap(), &data),
         Some(shortcuts::Command::Undo)
     );

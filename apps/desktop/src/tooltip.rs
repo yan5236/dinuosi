@@ -198,7 +198,7 @@ impl RenderOnce for Tooltip {
                                             .py(px(6.0))
                                             .rounded(px(4.0))
                                             .bg(rgb(COLOR))
-                                            .font_family("Microsoft YaHei UI")
+                                            .font_family(crate::ui::UI_FONT)
                                             .text_size(px(12.0))
                                             .text_color(rgb(TEXT))
                                             .whitespace_nowrap()

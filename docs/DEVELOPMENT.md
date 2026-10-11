@@ -11,7 +11,7 @@
 - MSYS2，媒体构建需要 Bash、make、patch、GPG、ar 和 tar。
 - Python 3，用于收集第三方许可与执行许可策略检查。
 
-GPUI 固定为 0.2.2。其他平台的桌面界面与发行包尚未验证；Core 和导出的三平台 CI 结果见 [导出平台验证](EXPORT_PLATFORM_VALIDATION.md)。上游系统依赖可参考 [GPUI 文档](https://docs.rs/gpui/0.2.2/gpui/)。
+GPUI 固定为 0.2.2。Linux/macOS 原生构建、运行库准备和当前验证边界见 [跨平台支持](CROSS_PLATFORM.md)；三平台 CI 结果见 [导出平台验证](EXPORT_PLATFORM_VALIDATION.md)。上游系统依赖可参考 [GPUI 文档](https://docs.rs/gpui/0.2.2/gpui/)。
 
 ## 首次准备与运行
 

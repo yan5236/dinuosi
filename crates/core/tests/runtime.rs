@@ -27,9 +27,9 @@ fn installed_runtime_child() {
 }
 
 /// 在中文空格路径复制真实测试程序与 runtime，改变工作目录并在 PATH 放置另一份工具。
-/// 实际解码后移除配套工具/DLL确认失败，只改变子进程环境；全部断言通过后清理临时目录，失败保留现场。
+/// 实际解码后移除配套工具和动态库确认失败，只改变子进程环境；通过后清理临时目录，失败保留现场。
 #[test]
-#[ignore = "需要 tools/prepare-media.ps1 准备固定运行时"]
+#[ignore = "需要准备本平台固定媒体运行时"]
 fn relocated_runtime_ignores_path_and_reports_missing_files() {
     let exe = std::env::current_exe().unwrap();
     let source = exe.parent().unwrap().join("runtime/ffmpeg");
@@ -43,7 +43,7 @@ fn relocated_runtime_ignores_path_and_reports_missing_files() {
         let entry = entry.unwrap();
         fs::copy(entry.path(), runtime.join(entry.file_name())).unwrap();
     }
-    let child = app.join("验收.exe");
+    let child = app.join(format!("验收{}", std::env::consts::EXE_SUFFIX));
     fs::copy(exe, &child).unwrap();
     // PATH 中提供可启动的探测器，配套文件缺失仍必须失败，不能静默借用它。
     for entry in fs::read_dir(&source).unwrap() {
@@ -85,14 +85,18 @@ fn relocated_runtime_ignores_path_and_reports_missing_files() {
         );
     };
     run("complete");
-    fs::rename(runtime.join("ffprobe.exe"), runtime.join("ffprobe.hidden")).unwrap();
+    let probe = runtime.join(format!("ffprobe{}", std::env::consts::EXE_SUFFIX));
+    fs::rename(&probe, runtime.join("ffprobe.hidden")).unwrap();
     run("missing");
-    fs::rename(runtime.join("ffprobe.hidden"), runtime.join("ffprobe.exe")).unwrap();
-    fs::rename(
-        runtime.join("avcodec-62.dll"),
-        runtime.join("avcodec.hidden"),
-    )
-    .unwrap();
+    fs::rename(runtime.join("ffprobe.hidden"), &probe).unwrap();
+    let codec = if cfg!(target_os = "windows") {
+        "avcodec-62.dll"
+    } else if cfg!(target_os = "macos") {
+        "libavcodec.62.dylib"
+    } else {
+        "libavcodec.so.62"
+    };
+    fs::rename(runtime.join(codec), runtime.join("avcodec.hidden")).unwrap();
     run("dll");
     fs::remove_dir_all(root).unwrap();
 }

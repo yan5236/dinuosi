@@ -93,13 +93,40 @@ pub const SHORTCUTS: &[Shortcut] = &[
     },
 ];
 
-/// 读取用户覆盖；空列表表示明确取消绑定，缺省项继承注册表默认值。
+/// 读取用户覆盖；空列表取消绑定，缺省项继承默认值，macOS 的常用操作使用 Command。
+/// 项目管理沿用 Ctrl+H，避免占用 macOS 的隐藏应用组合；用户已保存的按键原样保留。
 pub fn bindings(shortcut: &Shortcut, preferences: &Preferences) -> Vec<String> {
     preferences
         .shortcuts
         .get(shortcut.id)
         .cloned()
-        .unwrap_or_else(|| shortcut.defaults.iter().map(|s| (*s).into()).collect())
+        .unwrap_or_else(|| {
+            shortcut
+                .defaults
+                .iter()
+                .map(|key| {
+                    if cfg!(target_os = "macos") && shortcut.command != Command::Home {
+                        key.replacen("ctrl-", "cmd-", 1)
+                    } else {
+                        (*key).into()
+                    }
+                })
+                .collect()
+        })
+}
+
+/// 收集参与实际匹配和冲突校验的全部绑定；macOS 仅对未覆盖操作保留旧 Ctrl 别名。
+/// 与界面显示的首选 Command 绑定分开，保证保存覆盖时不会产生隐式冲突或抢占其他操作。
+fn effective_bindings(shortcut: &Shortcut, preferences: &Preferences) -> Vec<String> {
+    let mut keys = bindings(shortcut, preferences);
+    if cfg!(target_os = "macos") && !preferences.shortcuts.contains_key(shortcut.id) {
+        for key in shortcut.defaults {
+            if !keys.iter().any(|existing| existing == key) {
+                keys.push((*key).to_owned());
+            }
+        }
+    }
+    keys
 }
 
 /// 规范化按键，禁止占用输入导航键或系统关闭组合；不接受只有修饰键的绑定。
@@ -108,7 +135,8 @@ pub fn normalize(value: &str) -> Result<String, String> {
     if matches!(
         stroke.key.as_str(),
         "escape" | "tab" | "enter" | "shift" | "control" | "alt" | ""
-    ) || stroke.modifiers.platform
+    ) || (stroke.modifiers.platform
+        && (!cfg!(target_os = "macos") || matches!(stroke.key.as_str(), "q" | "w" | "h")))
         || (stroke.modifiers.alt && stroke.key == "f4")
     {
         return Err("该按键保留用于窗口或输入操作".into());
@@ -120,7 +148,7 @@ pub fn normalize(value: &str) -> Result<String, String> {
 pub fn validate(preferences: &Preferences) -> Result<(), String> {
     let mut used = std::collections::BTreeMap::new();
     for item in SHORTCUTS {
-        for key in bindings(item, preferences) {
+        for key in effective_bindings(item, preferences) {
             let key = normalize(&key)?;
             if let Some(label) = used.insert(key, item.label) {
                 return Err(format!("“{label}”与“{}”的快捷键冲突", item.label));
@@ -130,12 +158,12 @@ pub fn validate(preferences: &Preferences) -> Result<(), String> {
     Ok(())
 }
 
-/// 按完全相同的按键和修饰键查找动作，避免 Ctrl+Shift 等额外修饰键触发普通操作。
+/// 精确匹配按键和修饰键，macOS 的未覆盖默认操作兼容原 Ctrl 绑定；用户覆盖不增加别名。
 pub fn resolve(stroke: &Keystroke, preferences: &Preferences) -> Option<Command> {
     SHORTCUTS
         .iter()
         .find(|item| {
-            bindings(item, preferences).iter().any(|key| {
+            effective_bindings(item, preferences).iter().any(|key| {
                 Keystroke::parse(key)
                     .is_ok_and(|key| key.key == stroke.key && key.modifiers == stroke.modifiers)
             })
@@ -153,6 +181,7 @@ pub fn label(keys: &[String]) -> String {
             s.split('-')
                 .map(|part| match part {
                     "ctrl" => "Ctrl".into(),
+                    "cmd" => "Cmd".into(),
                     "shift" => "Shift".into(),
                     "alt" => "Alt".into(),
                     "space" => "Space".into(),
