@@ -25,14 +25,36 @@ jobs:
     timeout-minutes: 90
     env:
       CARGO_BUILD_JOBS: '2'
+      DINUOSI_BUILD_JOBS: '2'
       PYTHONUTF8: '1'
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.12'
-      - name: Install Windows build tools
+      - name: Restore controlled Windows runtime
         if: runner.os == 'Windows'
+        id: runtime-cache
+        uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          key: windows-2022-x64-runtime-${{ hashFiles('distribution/**', 'tools/build*.sh', 'tools/prepare-media.ps1', 'tools/seal-runtime.ps1', '.github/workflows/export-platforms.yml') }}
+          path: |
+            target/debug/deps/runtime/ffmpeg/
+            assets/audio/FluidR3_GM.sf2
+            .local/distribution/runtime-manifest.json
+      - name: Validate restored Windows runtime
+        if: runner.os == 'Windows' && steps.runtime-cache.outputs.cache-hit == 'true'
+        shell: pwsh
+        run: |
+          $lock = Get-Content distribution/inputs.lock.json -Raw | ConvertFrom-Json
+          $manifest = Get-Content .local/distribution/runtime-manifest.json -Raw | ConvertFrom-Json
+          if ((Get-FileHash assets/audio/FluidR3_GM.sf2).Hash.ToLowerInvariant() -ne $lock.soundfontSha256) { throw 'Cached soundfont hash mismatch' }
+          if ($manifest.ffmpegVersion -ne $lock.ffmpegVersion) { throw 'Cached runtime version mismatch' }
+          foreach ($file in $manifest.files) {
+            if ((Get-FileHash "target/debug/deps/runtime/ffmpeg/$($file.name)").Hash.ToLowerInvariant() -ne $file.sha256) { throw "Cached runtime hash mismatch: $($file.name)" }
+          }
+      - name: Install Windows build tools
+        if: runner.os == 'Windows' && steps.runtime-cache.outputs.cache-hit != 'true'
         id: msys
         uses: msys2/setup-msys2@ec48f7c5447b3140e2b088413ae3a55687bccb6e # v2
         with:
@@ -40,12 +62,26 @@ jobs:
           path-type: inherit
           install: make patch gnupg binutils tar pkgconf diffutils
       - name: Rebuild controlled Windows runtime
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && steps.runtime-cache.outputs.cache-hit != 'true'
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force .local/ci-export | Out-Null
           $vs = & "${env:ProgramFiles(x86)}/Microsoft Visual Studio/Installer/vswhere.exe" -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
-          ./tools/prepare-media.ps1 -Build -MsysRoot '${{ steps.msys.outputs.msys2-location }}' -VcVars "$vs/VC/Auxiliary/Build/vcvars64.bat" *> .local/ci-export/prepare.log
+          try {
+            ./tools/prepare-media.ps1 -Build -MsysRoot '${{ steps.msys.outputs.msys2-location }}' -VcVars "$vs/VC/Auxiliary/Build/vcvars64.bat" 2>&1 | Tee-Object -FilePath .local/ci-export/prepare.log
+          } catch {
+            $_ | Out-String | Add-Content .local/ci-export/prepare.log
+            throw
+          }
+      - name: Cache successfully built Windows runtime
+        if: runner.os == 'Windows' && steps.runtime-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          key: ${{ steps.runtime-cache.outputs.cache-primary-key }}
+          path: |
+            target/debug/deps/runtime/ffmpeg/
+            assets/audio/FluidR3_GM.sf2
+            .local/distribution/runtime-manifest.json
       - name: Install Linux diagnostic tools
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y ffmpeg

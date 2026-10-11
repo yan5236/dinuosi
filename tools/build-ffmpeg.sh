@@ -23,5 +23,6 @@ if [ -f ffbuild/config.mak ]; then make -r clean; fi
   --extra-cflags="-I$(cygpath -m "$work/sources/zlib-1.3.1") -I$(cygpath -m "$work/build/lame/include") -I$(cygpath -m "$work/build/codecs/include")" \
   --extra-ldflags="-LIBPATH:$(cygpath -m "$work/sources/zlib-1.3.1") -LIBPATH:$(cygpath -m "$work/build/lame") -LIBPATH:$(cygpath -m "$work/build/codecs")" \
   --prefix="$work/runtime/ffmpeg"
-make -r -j 1
+# 本机默认保留单路编译；CI 显式指定两路，实时构建日志由工作流同时显示并留档。
+make -r -j "${DINUOSI_BUILD_JOBS:-1}"
 make -r install
