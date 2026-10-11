@@ -21,6 +21,7 @@ pub(crate) const SOURCES: &[(&str, &str, &str)] = catalogs!(
     "manager",
     "dialogs",
     "editor",
+    "export",
     "library",
     "inspector",
     "timeline",
@@ -30,6 +31,7 @@ pub(crate) const SOURCES: &[(&str, &str, &str)] = catalogs!(
     "errors-project",
     "errors-media",
     "errors-timeline",
+    "errors-export",
 );
 
 /// 首次查询解析所有编译内嵌的 JSON，之后借用静态缓存；资源格式错误属于构建缺陷并由测试拦截。
@@ -152,7 +154,12 @@ fn translate_error(message: &str, locale: &str, depth: usize) -> String {
     if depth >= 8 {
         return message.to_owned();
     }
-    for module in ["errors-project", "errors-media", "errors-timeline"] {
+    for module in [
+        "errors-project",
+        "errors-media",
+        "errors-timeline",
+        "errors-export",
+    ] {
         for (template, translated) in &catalogs()[module][usize::from(locale == "zh-CN")] {
             if let Some(values) = capture(template, message) {
                 let values: Vec<_> = values

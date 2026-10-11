@@ -19,6 +19,31 @@ impl Decoder {
     /// 读取给定素材的秒级区间，视频输出固定 24fps BGRA，音频输出立体声 48kHz PCM。
     /// MIDI 通过内置采样库输出相同 PCM；拒绝离线和越界区间，失败清理进程。
     pub fn start(media: &Media, offset: f64, end: f64) -> Result<Self, String> {
+        Self::start_inner(media, offset, end, None)
+    }
+
+    /// 为后台导出建立可取消、低并发的流式解码；取消标志同时传入 MIDI 入点合成。
+    /// 保留普通播放入口行为，导出 FFmpeg 音视频解码与滤镜各限制一个线程。
+    pub(crate) fn start_cancellable(
+        media: &Media,
+        offset: f64,
+        end: f64,
+        cancel: &std::sync::atomic::AtomicBool,
+    ) -> Result<Self, String> {
+        Self::start_inner(media, offset, end, Some(cancel))
+    }
+
+    /// 共用媒体区间校验与进程生命周期，导出模式在初始化及 MIDI 寻址时检查取消。
+    /// cancel 为 None 时保持既有播放解码参数；失败释放已经启动的进程。
+    fn start_inner(
+        media: &Media,
+        offset: f64,
+        end: f64,
+        cancel: Option<&std::sync::atomic::AtomicBool>,
+    ) -> Result<Self, String> {
+        if cancel.is_some_and(|cancel| cancel.load(std::sync::atomic::Ordering::Relaxed)) {
+            return Err("导出已取消".into());
+        }
         if media.offline || !media.path.is_file() {
             return Err("媒体离线".into());
         }
@@ -42,9 +67,13 @@ impl Decoder {
                 &media.path,
                 offset,
                 end,
+                cancel,
             )?))));
         } else if media.has_audio {
             let mut command = media::command("ffmpeg");
+            if cancel.is_some() {
+                command.args(["-threads", "1", "-filter_threads", "1"]);
+            }
             command
                 .args(["-v", "error", "-ss", &format!("{offset:.6}"), "-i"])
                 .arg(&media.path)
@@ -77,6 +106,9 @@ impl Decoder {
         }
         if media.kind == MediaKind::Video {
             let mut command = media::command("ffmpeg");
+            if cancel.is_some() {
+                command.args(["-threads", "1", "-filter_threads", "1"]);
+            }
             command
                 .args(["-v", "error", "-re", "-ss", &format!("{offset:.6}"), "-i"])
                 .arg(&media.path);
@@ -114,17 +146,29 @@ impl Decoder {
         self.audio.take()
     }
 
+    /// 返回当前解码进程的共享取消句柄，供后台导出监视器在管道阻塞时终止进程。
+    /// 句柄不能代替 Decoder 的清理职责；仅用于取消本次已启动的解码。
+    pub(crate) fn cancellation_processes(&self) -> Vec<Arc<Mutex<Child>>> {
+        self.processes.clone()
+    }
+
     /// 在调用方消费到音频 EOF 后等待进程和错误读取线程，确认完整解码是否成功。
-    /// 必须先消费管道；成功退出时容忍可恢复坏包日志，进程失败仍返回详细错误，MIDI 直接成功。
+    /// 必须先消费管道；轮询等待不持锁阻塞导出取消，成功容忍可恢复坏包日志，失败返回详细错误。
     pub fn finish(mut self) -> Result<(), String> {
         let mut failed = false;
         for process in &mut self.processes {
-            failed |= !process
-                .lock()
-                .unwrap()
-                .wait()
-                .map_err(|e| format!("等待音频解码失败：{e}"))?
-                .success();
+            let status = loop {
+                if let Some(status) = process
+                    .lock()
+                    .unwrap()
+                    .try_wait()
+                    .map_err(|e| format!("等待音频解码失败：{e}"))?
+                {
+                    break status;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            };
+            failed |= !status.success();
         }
         for reader in self.error_readers.drain(..) {
             let _ = reader.join();

@@ -6,8 +6,8 @@ $work = Join-Path $root '.local/distribution'
 $ffmpeg = "$work/runtime/ffmpeg/bin/ffmpeg.exe"
 $configuration = (& $ffmpeg -buildconf 2>&1 | Out-String)
 if ($LASTEXITCODE -ne 0) { throw 'FFmpeg 无法运行' }
-foreach ($flag in '--disable-gpl', '--disable-nonfree', '--disable-version3', '--disable-autodetect', '--enable-libmp3lame') {
-    if (!$configuration.Contains($flag)) { throw "缺少许可构建约束：$flag" }
+foreach ($flag in '--disable-gpl', '--disable-nonfree', '--disable-version3', '--disable-autodetect', '--enable-libmp3lame', '--enable-mediafoundation') {
+    if (!$configuration.Contains($flag)) { throw "缺少受控运行时构建约束：$flag" }
 }
 $license = (& $ffmpeg -L 2>&1 | Out-String)
 if (!$license.Contains('Lesser General Public License')) { throw '产物不是 LGPL FFmpeg' }
@@ -40,8 +40,10 @@ Copy-Item "$work/runtime-manifest.json" -Destination $source -Force
 $instructions = @"
 Dinuosi FFmpeg 8.0.3 corresponding source
 
-FFmpeg is LGPL-2.1-or-later; zlib is zlib licensed; libmp3lame is LGPL-2.0-or-later. LAME is unmodified and only its static encoding/decoding library is linked, not its frontend programs. The MSVC locale/UTF-8 patch
-is the only change to FFmpeg source. A zlib MSVC header compatibility patch is also included. Both original archives and patches are included.
+FFmpeg is LGPL-2.1-or-later; zlib is zlib licensed; libmp3lame is LGPL-2.0-or-later. LAME is unmodified and only its static encoding/decoding library is linked, not its frontend programs. The FFmpeg patch fixes MSVC locale/UTF-8 handling
+and includes the D3D11 type declarations required by Media Foundation even
+when D3D11 decoding autodetection is disabled. A zlib MSVC header compatibility
+patch is also included. Both original archives and patches are included.
 The patch does not change media algorithms or enable GPL functionality.
 
 Use tools/prepare-media.ps1 -Build with MSYS2, MSVC x64 and NASM 2.16.03.
@@ -59,6 +61,10 @@ is not accepted as reconstruction evidence.
 
 No object code is linked from FFmpeg into the Dinuosi application.
 FFmpeg is a replaceable standalone program, using replaceable libav DLLs.
+H.264 Media Foundation encoding calls the codecs installed with Windows or
+its hardware drivers. Windows codec DLLs and GPL encoders such as libx264
+are not copied into the package. Codec availability is checked on the host;
+this build configuration does not grant codec patent or commercial licenses.
 "@
 [IO.File]::WriteAllText("$source/BUILDING.txt", $instructions, [Text.UTF8Encoding]::new($false))
 Copy-Item "$work/sources/ffmpeg-8.0.3/COPYING.LGPLv2.1", "$work/sources/ffmpeg-8.0.3/LICENSE.md" -Destination $source -Force

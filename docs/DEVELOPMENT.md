@@ -43,7 +43,7 @@ Core 通过后台子进程调用 `ffprobe.exe` 探测媒体，调用 `ffmpeg.exe
 
 工具固定定位到当前程序旁的 `runtime/ffmpeg/`，并使用配套 libav DLL，不回退到 PATH。媒体工具或 DLL 缺失会报告错误。这里使用的是 FFmpeg 的命令行接口，Dinuosi 自身的用户 CLI 尚未实现。
 
-FFmpeg 当前固定为 8.0.3，构建禁用 GPL、nonfree、version3、外部库自动探测和网络协议，仅加入 zlib 与 LGPL LAME。它作为独立工具随包部署，FFmpeg 代码不链接进 Dinuosi 主程序。MIDI 使用 RustySynth 与 FluidR3 音源合成，不经过 FFmpeg。
+FFmpeg 当前固定为 8.0.3，构建禁用 GPL、nonfree、version3、外部库自动探测和网络协议，仅加入 zlib 与 LGPL LAME；显式启用 Media Foundation，以 Windows 已安装的编码器导出 H.264。它作为独立工具随包部署，FFmpeg 代码不链接进 Dinuosi 主程序。MIDI 使用 RustySynth 与 FluidR3 音源合成，不经过 FFmpeg。升级此前未启用 Media Foundation 的运行库需重新 `-Build`，仅复制旧运行库不会增加 H.264 能力。导出流程、限制和验证见 [EXPORT.md](EXPORT.md)。
 
 `.cargo/config.toml` 为 Windows MSVC 目标启用静态 C 运行库链接，使主程序无需用户另装 Visual C++ Redistributable。该文件是共享构建配置，不是本机 Cargo 缓存。
 
@@ -59,8 +59,10 @@ python ./tools/test-license-policy.py
 常规测试默认忽略需要真实媒体工具的回归。完成媒体准备后，显式执行 Core 的这些检查：
 
 ```powershell
-cargo test -p dinuosi-core --locked -- --ignored --nocapture
+cargo test -p dinuosi-core --locked -- --ignored --nocapture --skip real_midi_preview_samples
 ```
+
+`real_midi_preview_samples` 另需 `DINUOSI_VERIFY_MIDI` 指向实际 MIDI 素材；可选 `DINUOSI_VERIFY_OUTPUT` 指向已存在的试听输出目录。未指定素材时不要将该外部输入检查计作通过。
 
 仅验证非 GUI 模块可运行：
 

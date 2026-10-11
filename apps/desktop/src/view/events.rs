@@ -9,6 +9,10 @@ impl Desktop {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if self.export_dialog.is_some() {
+            self.export_key(event, window, cx);
+            return;
+        }
         if self.preview_fullscreen {
             self.fullscreen_preview_key(event, window, cx);
             return;

@@ -24,6 +24,7 @@ pub struct Desktop {
     pub(crate) settings_window: Option<gpui::WindowHandle<crate::settings::Settings>>,
     pub(crate) about_window: Option<gpui::WindowHandle<crate::help::About>>,
     pub(crate) dialog: Option<Dialog>,
+    pub(crate) export_dialog: Option<crate::export_dialog::ExportDialog>,
     pub(crate) notice: Option<String>,
     pub(crate) busy: bool,
     pub(crate) zoom: f32,
@@ -109,6 +110,7 @@ impl Desktop {
             settings_window: None,
             about_window: None,
             dialog: None,
+            export_dialog: None,
             notice: preferences_error,
             busy: true,
             zoom: 1.0,
@@ -394,6 +396,9 @@ impl Render for Desktop {
             .when(self.dialog.is_some(), |s| s.child(self.dialog_view(cx)))
             .when(self.timeline.marker_dialog.is_some(), |s| {
                 s.child(self.marker_dialog_view(cx))
+            })
+            .when(self.export_dialog.is_some(), |s| {
+                s.child(self.export_view(cx))
             })
             .children(self.notice.clone().map(|notice| {
                 div()

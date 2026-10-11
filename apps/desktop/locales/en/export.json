@@ -1,0 +1,19 @@
+{
+  "Resolution": "Resolution",
+  "Frame rate": "Frame rate",
+  "Bitrate": "Bitrate",
+  "Container": "Container",
+  "Encoder": "Encoder",
+  "File name": "File name",
+  "Output folder": "Output folder",
+  "Checking encoders…": "Checking encoders…",
+  "Unavailable": "Unavailable",
+  "Exporting": "Exporting",
+  "Cancelling…": "Cancelling…",
+  "Cancelled": "Cancelled",
+  "Completed": "Completed",
+  "Cancel": "Cancel",
+  "Close": "Close",
+  "H.264 (Windows hardware)": "H.264 (Windows hardware)",
+  "H.264 (Windows software)": "H.264 (Windows software)"
+}

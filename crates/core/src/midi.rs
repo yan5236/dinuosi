@@ -51,9 +51,18 @@ pub(crate) struct MidiPcm {
 
 impl MidiPcm {
     /// 初始化采样合成并寻址到 offset 秒，区间结束于 end 秒；共享内置音源，不需要用户配置。
-    /// 以固定小缓冲预渲染至寻址点，保留延音、控制器及音符包络；不缓存整段音频或写入源文件。
+    /// 以固定小缓冲预渲染至寻址点，保留延音、控制器及音符包络；导出可在每个寻址块取消。
+    /// cancel 为 None 时维持播放语义；不缓存整段音频或写入源文件，取消返回固定导出状态。
     /// ponytail: 寻址成本随起点增长；若长 MIDI 寻址成为瓶颈再增加音频缓存或状态快照。
-    pub(crate) fn start(path: &Path, offset: f64, end: f64) -> Result<Self, String> {
+    pub(crate) fn start(
+        path: &Path,
+        offset: f64,
+        end: f64,
+        cancel: Option<&std::sync::atomic::AtomicBool>,
+    ) -> Result<Self, String> {
+        if cancel.is_some_and(|cancel| cancel.load(std::sync::atomic::Ordering::Relaxed)) {
+            return Err("导出已取消".into());
+        }
         let midi = read(path)?;
         if !offset.is_finite()
             || !end.is_finite()
@@ -88,6 +97,9 @@ impl MidiPcm {
         };
         let mut skip = (offset * RATE as f64).round() as usize;
         while skip > 0 {
+            if cancel.is_some_and(|cancel| cancel.load(std::sync::atomic::Ordering::Relaxed)) {
+                return Err("导出已取消".into());
+            }
             let count = skip.min(BLOCK);
             pcm.sequencer
                 .render(&mut pcm.left[..count], &mut pcm.right[..count]);

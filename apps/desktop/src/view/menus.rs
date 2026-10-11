@@ -1,7 +1,7 @@
 //! 工作区标题栏与文件菜单，保持原有文字入口和灰阶样式。
 use super::*;
 impl Desktop {
-    /// 构造剪辑标题栏；品牌导航创建独立管理窗口，系统命中区保留原生拖动与窗口控制。
+    /// 构造剪辑标题栏；品牌导航创建独立管理窗口，导出打开后台编码表单，系统命中区保留拖动与窗口控制。
     pub(crate) fn editor_titlebar(
         &self,
         height: f32,
@@ -84,12 +84,7 @@ impl Desktop {
                     26.0,
                 )
                 .mr(px(18.0))
-                .on_click(cx.listener(|this, _, _, cx| {
-                    this.inform(
-                        crate::i18n::t("editor", "Export is not available yet", cx),
-                        cx,
-                    )
-                })),
+                .on_click(cx.listener(|this, _, window, cx| this.open_export(window, cx))),
             )
             .child(ui::window_controls(window, true))
     }

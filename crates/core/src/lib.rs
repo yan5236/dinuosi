@@ -1,6 +1,10 @@
 //! 不依赖 GUI 的项目领域模型、媒体处理及版本化项目存储。
 
 pub mod composite;
+pub mod export;
+mod export_capabilities;
+mod export_process;
+mod export_render;
 pub mod keyframes;
 pub mod language;
 pub mod media;

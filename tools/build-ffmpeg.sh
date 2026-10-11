@@ -15,9 +15,9 @@ if [ -f ffbuild/config.mak ]; then make -r clean; fi
   --toolchain=msvc --cc=cl.exe --cxx=cl.exe --arch=x86_64 --target-os=win32 \
   --disable-autodetect --disable-gpl --disable-nonfree --disable-version3 \
   --enable-shared --disable-static --disable-ffplay --disable-doc --disable-debug \
-  --enable-zlib --enable-libmp3lame --disable-network \
+  --enable-zlib --enable-libmp3lame --enable-mediafoundation --disable-network \
   --extra-cflags="-I$(cygpath -m "$work/sources/zlib-1.3.1") -I$(cygpath -m "$work/build/lame/include")" \
   --extra-ldflags="-LIBPATH:$(cygpath -m "$work/sources/zlib-1.3.1") -LIBPATH:$(cygpath -m "$work/build/lame")" \
   --prefix="$work/runtime/ffmpeg"
-make -r -j 4
+make -r -j 1
 make -r install

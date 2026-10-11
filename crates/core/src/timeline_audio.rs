@@ -26,10 +26,37 @@ impl TimelineAudio {
     /// 在后台为时间线剩余音频建立流式解码；所有时间转为交错立体声 48kHz 样本。
     /// 静音轨道、始终静音和离线素材跳过；音量动画排序后以游标消费，失败清理解码器。
     pub fn start(t: &Timeline, offset: f64, sources: &[Media]) -> Result<Self, String> {
+        Self::start_inner(t, offset, sources, None, |_| {})
+    }
+
+    /// 建立导出混音，逐片段检查取消且在解码器启动后立即登记其进程。
+    /// register 只登记共享取消句柄；MIDI 长入点合成也可以中断，既有播放入口不受影响。
+    pub(crate) fn start_cancellable(
+        t: &Timeline,
+        offset: f64,
+        sources: &[Media],
+        cancel: &std::sync::atomic::AtomicBool,
+        register: impl Fn(&Decoder),
+    ) -> Result<Self, String> {
+        Self::start_inner(t, offset, sources, Some(cancel), register)
+    }
+
+    /// 共用轨道、裁剪与音量动画初始化；导出模式低并发解码并逐层登记取消句柄。
+    /// 任一失败释放已启动的层与进程；缺少可播放音频的片段维持既有跳过语义。
+    fn start_inner(
+        t: &Timeline,
+        offset: f64,
+        sources: &[Media],
+        cancel: Option<&std::sync::atomic::AtomicBool>,
+        register: impl Fn(&Decoder),
+    ) -> Result<Self, String> {
         let fps = t.fps as f64;
         let sample = |seconds: f64| (seconds.max(0.0) * 96000.0).round() as u64;
         let mut layers = Vec::new();
         for c in &t.clips {
+            if cancel.is_some_and(|cancel| cancel.load(std::sync::atomic::Ordering::Relaxed)) {
+                return Err("导出已取消".into());
+            }
             if t.tracks[c.track].muted
                 || (c.gain == 0.0
                     && !c.keyframes.iter().any(|k| {
@@ -43,7 +70,13 @@ impl TimelineAudio {
                 .iter()
                 .find(|m| m.path == c.source)
                 .cloned()
-                .or_else(|| crate::media::probe(&c.source).ok())
+                .or_else(|| {
+                    if cancel.is_none() {
+                        crate::media::probe(&c.source).ok()
+                    } else {
+                        None
+                    }
+                })
                 .filter(|m| m.has_audio && !m.offline)
             else {
                 continue;
@@ -55,7 +88,11 @@ impl TimelineAudio {
             }
             let mut audio = m.clone();
             audio.kind = MediaKind::Audio;
-            let mut decoder = Decoder::start(&audio, source_in, source_end)?;
+            let mut decoder = match cancel {
+                Some(cancel) => Decoder::start_cancellable(&audio, source_in, source_end, cancel)?,
+                None => Decoder::start(&audio, source_in, source_end)?,
+            };
+            register(&decoder);
             if let Some(pcm) = decoder.take_audio() {
                 let mut keys: Vec<_> = c
                     .keyframes
@@ -88,6 +125,23 @@ impl TimelineAudio {
         self.layers
             .iter()
             .find_map(|l| l.decoder.error.lock().unwrap().take())
+    }
+
+    /// 在混音消费结束后排空片段剩余 PCM 并确认解码成功，避免末尾 stderr 发布竞态。
+    /// 必须由后台调用；每 4096 样本检查取消，异常不发布带损坏或缺失音频的导出文件。
+    pub(crate) fn finish_cancellable(
+        self,
+        cancel: &std::sync::atomic::AtomicBool,
+    ) -> Result<(), String> {
+        for mut layer in self.layers {
+            for (index, _) in layer.pcm.by_ref().enumerate() {
+                if index % 4096 == 0 && cancel.load(std::sync::atomic::Ordering::Relaxed) {
+                    return Err("导出已取消".into());
+                }
+            }
+            layer.decoder.finish()?;
+        }
+        Ok(())
     }
 }
 impl Iterator for TimelineAudio {

@@ -2,6 +2,22 @@
 
 以下记录从 README 迁入，描述对应日期和版本的验证范围，不代表当前版本的完整能力或本次重新验证结果。最新 Windows 发行验收见 [DISTRIBUTION_VALIDATION.md](DISTRIBUTION_VALIDATION.md)。文中的截图、日志和测试项目保存在本机忽略目录，不随仓库提供。
 
+## 时间线视频导出（2026-10-11）
+
+在独立 `codex/video-export` 分支实现，源项目 `main` 未切换。运行库仍为受控 LGPL FFmpeg 8.0.3；显式启用 Media Foundation，禁用 GPL/nonfree/version3，未引入 libx264 或系统 PATH 回退。补丁只增加缺失的 MF D3D11 类型头声明，保留此前 MSVC locale/UTF-8 兼容修改；独立源码、补丁、构建参数、产物哈希已封存。
+
+- 工作区常规测试：86 passed，0 failed；13 个需要显式输入/媒体运行库的检查未计入常规通过数。
+- 显式 Core 媒体回归：12 passed，0 failed；包含新多轨导出、缓存、H.264 解码、音量关键帧、混音、波形、运行库隔离及 MIDI 寻址。旧 MIDI 检查第一次因缺少 `DINUOSI_VERIFY_MIDI` 中断，随后明确指定源项目已有钢琴验收文件，起点/中段采样通过；所有试听输出在本任务 E 盘目录。
+- 最新 Desktop 回归：43 passed，0 failed，包含导出下拉鼠标事件、参数不改写项目、运行时键盘取消、文件名校验以及真实波形。严格工作区全目标 Clippy、格式、差异和许可策略检查通过；保留既有 `proc-macro-error2` 未来 Rust 兼容性提示。
+- 普通桌面构建通过。实际编码器试编码：Windows 软件 `H264 Encoder MFT`、本机 NVIDIA 硬件 `NVIDIA H.264 Encoder MFT` 与原生 MPEG-4，均输出 1280×720、30fps、1s、48kHz AAC 立体声 MP4；MP4/MKV/MOV 容器检查通过，产品只提供 MP4/MKV。
+- 真正时间线导出：硬件/软件 H.264 均输出 320×240、24fps、1s、H.264+AAC，MPEG-4 输出 128×128、24fps、1s。以解码像素和 PCM RMS 验证源裁剪、轨道叠加、画面变换/透明度关键帧、比例黑边、音量动画、源音轨、隐藏与静音、独立音频及 MIDI。取消、损坏/离线素材、音频单独导出、MKV 与已有文件无覆盖边界通过。
+
+Computer Use 确认普通程序原生窗口存在，但窗口截图持续超时；备用窗口截取返回黑帧，前台校验不通过。实体窗口鼠标、原生输出目录选择器、后台进度可视性与真实桌面响应仍未完成验收，不能以 GPUI 事件测试代替它们。全屏截图请求因可能涉及任务之外的私人内容被自动审批拒绝，未取得或保存全屏图像。
+
+大型下载、解压源码、FFmpeg/Cargo 构建缓存、日志、音源及媒体全部位于 `E:\codex-build\Dinuosi-video-export-65f1\`；本机 `.local` 与音源通过链接访问，托管工作树仍保留少量源码。Cargo jobs=1、测试 threads=1、FFmpeg make jobs=1，重负载串行，任务进程 TEMP/TMP 指定 E 盘，不改全局环境。C 盘空间不足中断的构建缓存已安全迁移；桌面中断遗留的零字节 `ivi.o` 在定位 LNK1136 后仅重编该对象，后续链接通过。
+
+可保留证据在 E 盘 `local/export-qa/`：三个时间线样片、对应 ffprobe JSON、源文件与可打开项目；编码器试编码结果在 `local/distribution/qa/encoders/mf-1417983d0a7e4a3d99d4256f5f9c97fd/`。日志为 `local/workspace-tests.log`、`desktop-tests.log`、`core-media-regressions.log`、`clippy.log`、`desktop-build.log`。生成视频、运行库、音源、临时验收启动器和日志不进入 Git。未生成新安装包、未验证干净系统/Windows N/其他 GPU、未公开发布或推送；此前发行门槛仍保留。
+
 ## 初始化验证（2026-10-02）
 
 Windows / Rust 1.98.0：格式检查、Clippy 全工作区全目标严格检查、3 项测试、桌面构建均通过。全部 89 枚图标及完整 Logo Kit 复制前后哈希一致，图标 XML/viewBox 校验通过。

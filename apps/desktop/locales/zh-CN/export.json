@@ -1,0 +1,19 @@
+{
+  "Resolution": "分辨率",
+  "Frame rate": "帧率",
+  "Bitrate": "码率",
+  "Container": "封装格式",
+  "Encoder": "编码器",
+  "File name": "文件名",
+  "Output folder": "输出文件夹",
+  "Checking encoders…": "检测编码器…",
+  "Unavailable": "不可用",
+  "Exporting": "正在导出",
+  "Cancelling…": "正在取消…",
+  "Cancelled": "已取消",
+  "Completed": "导出完成",
+  "Cancel": "取消",
+  "Close": "关闭",
+  "H.264 (Windows hardware)": "H.264（Windows 硬件）",
+  "H.264 (Windows software)": "H.264（Windows 软件）"
+}

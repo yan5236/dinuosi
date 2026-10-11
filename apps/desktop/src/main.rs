@@ -4,6 +4,9 @@ mod assets;
 mod audio_inspector;
 mod dialogs;
 mod editor;
+mod export_controls;
+mod export_dialog;
+mod export_view;
 mod help;
 mod i18n;
 mod input;
@@ -53,6 +56,8 @@ mod windows;
 mod audio_track_tests;
 #[cfg(test)]
 mod editor_media_tests;
+#[cfg(test)]
+mod export_tests;
 #[cfg(test)]
 mod i18n_tests;
 #[cfg(test)]

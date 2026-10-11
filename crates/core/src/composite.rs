@@ -49,8 +49,79 @@ fn blend_mapped(
     source_extent: (f64, f64),
     output_size: (u32, u32),
 ) -> Result<(), String> {
-    let len = (FRAME_WIDTH * FRAME_HEIGHT * 4) as usize;
-    if output.len() != len || source.len() != len || canvas.0 == 0 || canvas.1 == 0 {
+    blend_region(
+        output,
+        source,
+        t,
+        canvas,
+        source_extent,
+        ((FRAME_WIDTH, FRAME_HEIGHT), (FRAME_WIDTH, FRAME_HEIGHT)),
+        output_size,
+    )
+}
+
+/// 将任意尺寸 BGRA 素材按预览相同的项目像素变换合成至完整输出画布。
+/// source_extent 是源缓冲在项目中的覆盖尺寸；输出比例不同时居中适配项目画布并保留黑边。
+/// 输出尺寸可以独立于项目尺寸，错误不越界采样，不将非同宽高比的项目强行拉伸。
+pub fn blend_pixels(
+    output: &mut [u8],
+    output_size: (u32, u32),
+    source: &[u8],
+    source_size: (u32, u32),
+    t: &Transform,
+    canvas: (u32, u32),
+    source_extent: (f64, f64),
+) -> Result<(), String> {
+    let fit = (output_size.0 as f64 / canvas.0.max(1) as f64)
+        .min(output_size.1 as f64 / canvas.1.max(1) as f64);
+    let region = (
+        (canvas.0 as f64 * fit).round() as u32,
+        (canvas.1 as f64 * fit).round() as u32,
+    );
+    blend_region(
+        output,
+        source,
+        t,
+        canvas,
+        source_extent,
+        (output_size, source_size),
+        region,
+    )
+}
+
+/// 在输出中心矩形内使用统一逆变换算法采样；预览补边和原尺寸导出共用透明度与旋转语义。
+/// sizes 分别为输出和源缓冲尺寸，region 为有效项目矩形；拒绝无效长度和矩形。
+fn blend_region(
+    output: &mut [u8],
+    source: &[u8],
+    t: &Transform,
+    canvas: (u32, u32),
+    source_extent: (f64, f64),
+    sizes: ((u32, u32), (u32, u32)),
+    region: (u32, u32),
+) -> Result<(), String> {
+    let (output_size, source_size) = sizes;
+    if (output_size.0 as usize)
+        .checked_mul(output_size.1 as usize)
+        .and_then(|pixels| pixels.checked_mul(4))
+        != Some(output.len())
+        || (source_size.0 as usize)
+            .checked_mul(source_size.1 as usize)
+            .and_then(|pixels| pixels.checked_mul(4))
+            != Some(source.len())
+        || source_size.0 == 0
+        || source_size.1 == 0
+        || canvas.0 == 0
+        || canvas.1 == 0
+        || region.0 == 0
+        || region.1 == 0
+        || region.0 > output_size.0
+        || region.1 > output_size.1
+        || !source_extent.0.is_finite()
+        || source_extent.0 <= 0.0
+        || !source_extent.1.is_finite()
+        || source_extent.1 <= 0.0
+    {
         return Err("预览像素尺寸无效".into());
     }
     if t.scale <= 0.0 {
@@ -59,27 +130,27 @@ fn blend_mapped(
     let angle = t.rotation.to_radians();
     let (sin, cos) = angle.sin_cos();
     let scale = t.scale / 100.0;
-    let left = (FRAME_WIDTH - output_size.0) / 2;
-    let top = (FRAME_HEIGHT - output_size.1) / 2;
-    for y in top..top + output_size.1 {
-        for x in left..left + output_size.0 {
-            let dx = (x as f64 + 0.5 - left as f64 - output_size.0 as f64 / 2.0) * canvas.0 as f64
-                / output_size.0 as f64
+    let left = (output_size.0 - region.0) / 2;
+    let top = (output_size.1 - region.1) / 2;
+    for y in top..top + region.1 {
+        for x in left..left + region.0 {
+            let dx = (x as f64 + 0.5 - left as f64 - region.0 as f64 / 2.0) * canvas.0 as f64
+                / region.0 as f64
                 - t.x;
-            let dy = (y as f64 + 0.5 - top as f64 - output_size.1 as f64 / 2.0) * canvas.1 as f64
-                / output_size.1 as f64
+            let dy = (y as f64 + 0.5 - top as f64 - region.1 as f64 / 2.0) * canvas.1 as f64
+                / region.1 as f64
                 - t.y;
-            let sx = ((dx * cos + dy * sin) / scale * FRAME_WIDTH as f64 / source_extent.0
-                + FRAME_WIDTH as f64 / 2.0)
+            let sx = ((dx * cos + dy * sin) / scale * source_size.0 as f64 / source_extent.0
+                + source_size.0 as f64 / 2.0)
                 .floor() as i32;
-            let sy = ((-dx * sin + dy * cos) / scale * FRAME_HEIGHT as f64 / source_extent.1
-                + FRAME_HEIGHT as f64 / 2.0)
+            let sy = ((-dx * sin + dy * cos) / scale * source_size.1 as f64 / source_extent.1
+                + source_size.1 as f64 / 2.0)
                 .floor() as i32;
-            if sx < 0 || sy < 0 || sx >= FRAME_WIDTH as i32 || sy >= FRAME_HEIGHT as i32 {
+            if sx < 0 || sy < 0 || sx >= source_size.0 as i32 || sy >= source_size.1 as i32 {
                 continue;
             }
-            let i = ((y * FRAME_WIDTH + x) * 4) as usize;
-            let j = ((sy as u32 * FRAME_WIDTH + sx as u32) * 4) as usize;
+            let i = ((y * output_size.0 + x) * 4) as usize;
+            let j = ((sy as u32 * source_size.0 + sx as u32) * 4) as usize;
             if source[j + 3] == 0 || t.opacity == 0.0 {
                 output[i + 3] = 255;
                 continue;

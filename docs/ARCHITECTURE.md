@@ -26,7 +26,7 @@ assets/brand → 编译嵌入 Desktop
 
 ## 下一阶段
 
-当前已先按界面任务接入素材导入与预览，时间线已由 Core 的 `timeline.rs` 定义整数帧/帧率、稳定 UUID、轨道、片段、变换和历史；`timeline_file.rs` 将其显式映射为可选 V1 字段，旧项目缺失时创建空轨道。插入、移动、裁边、分割、删除和参数修改都通过核心接口，桌面在一次编辑事务完成时保存并记录一条历史。后续再实现导出。
+当前已先按界面任务接入素材导入与预览，时间线已由 Core 的 `timeline.rs` 定义整数帧/帧率、稳定 UUID、轨道、片段、变换和历史；`timeline_file.rs` 将其显式映射为可选 V1 字段，旧项目缺失时创建空轨道。插入、移动、裁边、分割、删除和参数修改都通过核心接口，桌面在一次编辑事务完成时保存并记录一条历史。导出边界见下文及 [导出实现与验证](EXPORT.md)。
 
 项目保存需独立定义 `ProjectFormatV1`、版本标识和迁移入口，不能把当前内部模型直接当作磁盘格式。EditorSession 和 Preferences 必须与 ProjectState 分离。
 
@@ -115,3 +115,11 @@ Core 的媒体进程只定位本进程目录下的 runtime/ffmpeg，不回退 PA
 NSIS 安装和便携版使用同一文件清单。安装仅写当前用户的应用目录、开始菜单和卸载登记，卸载按清单删除文件并非递归移除目录，保留未知文件及用户数据。关于窗口通过本地文件提供第三方声明，不联网。
 
 Windows 静态 C 运行库代码按 Visual Studio/Build Tools 的再分发条款分别管理，不因 FFmpeg 的 LGPL 改变其许可；不把 Windows 系统 DLL 打入安装包。公开发布前核对适用条款和主程序许可，不能把内部验收结果视为法律意见。
+
+## 时间线导出
+
+Core `export.rs` 提供无 GUI 的能力检测、参数校验与阻塞导出接口；`export_render.rs` 顺序解码原显示尺寸 BGRA，并复用 `composite::blend_pixels` 的轨道混合、画布适配与变换。画面使用片段源入点、隐藏轨道及画面关键帧；声音复用 `TimelineAudio`，保留空隙、源选区、静音、增益和音量关键帧（包含 MIDI）。不同输出帧率按输出时间选取当前项目帧，关键帧仍按时间插值，不改写项目。
+
+Desktop `export_dialog.rs` 管理唯一模态任务，`export_view.rs` 绘制项目预览和任务状态，`export_controls.rs` 处理参数与下拉交互。后台处理不可变时间线快照，主线程只轮询原子进度；参数及文件夹选择不写入项目。取消或窗口销毁终止本次解码/编码进程。`export_process.rs` 持续排空诊断并回收子进程；专属临时目录保存 PCM 和待发布视频，成功后无覆盖发布，失败清理。参与导出的离线源会失败，已有输出保持原样。
+
+受控 FFmpeg 显式启用 LGPL Media Foundation 模块，通过 Windows 编码器提供 H.264；不启用 GPL/nonfree/version3，不加入 libx264 或系统 PATH 的 FFmpeg。能力检测分别实际试编码 H.264 Windows 硬件、软件及 FFmpeg 原生 MPEG-4，仅成功的实现进入选项；有可用硬件时优先选择硬件以降低 CPU 占用。MP4/MKV 均配 AAC，系统或硬件实现是否可用由本机检测与实际编码结果决定。
