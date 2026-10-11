@@ -22,6 +22,14 @@ Move-Item -LiteralPath $source -Destination "$source.withheld"
 try { Assert-Rejected 'ffmpeg-8\.0\.3\.tar\.xz' }
 finally { Move-Item -LiteralPath "$source.withheld" -Destination $source }
 
+# 新编码器必须同时交付版权许可与专利授权；分别缺失时拒绝生成任何安装程序。
+foreach ($codecNotice in 'AOM-LICENSE.txt','VPX-PATENTS.txt') {
+    $source=Join-Path $work "source-bundle/$codecNotice"
+    Move-Item -LiteralPath $source -Destination "$source.withheld"
+    try { Assert-Rejected ([regex]::Escape($codecNotice)) }
+    finally { Move-Item -LiteralPath "$source.withheld" -Destination $source }
+}
+
 $dependencies=Get-Content "$work/licenses/rust-dependencies.json" -Raw|ConvertFrom-Json
 $notice=Join-Path $work "licenses/$($dependencies[0].notices[0].file)"
 Move-Item -LiteralPath $notice -Destination "$notice.withheld"
@@ -45,4 +53,4 @@ try {
     [IO.File]::WriteAllText($audit,($data|ConvertTo-Json -Depth 6),[Text.UTF8Encoding]::new($false))
     Assert-Rejected 'Cargo 依赖输入已变更'
 } finally { [IO.File]::WriteAllText($audit,$original,[Text.UTF8Encoding]::new($false)) }
-Write-Output '缺失源码/许可、运行时校验失败与过期审计四项拒绝边界通过。'
+Write-Output '缺失源码/许可/编码库声明、运行时校验失败与过期审计六项拒绝边界通过。'

@@ -5,6 +5,16 @@
   "soundfontSha256": "74594e8f4250680adf590507a306655a299935343583256f3b722c48a1bc1cb0",
   "ffmpegSigningKey": "FCF986EA15E6E293A5644F10B4322F04D67658D8",
   "inputs": {
+    "aom": {
+      "file": "aom-3.13.1.tar.gz",
+      "url": "https://aomedia.googlesource.com/aom/+archive/refs/tags/v3.13.1.tar.gz",
+      "sha256": "8cee6a70531e4055e696a8c0b47fafb1d3bdcef3dacc6315c6fe00feb3270ef9"
+    },
+    "vpx": {
+      "file": "libvpx-1.15.2.tar.gz",
+      "url": "https://codeload.github.com/webmproject/libvpx/tar.gz/refs/tags/v1.15.2",
+      "sha256": "26fcd3db88045dee380e581862a6ef106f49b74b6396ee95c2993a260b4636aa"
+    },
     "ffmpegSignature": {
       "file": "ffmpeg-8.0.3.tar.xz.asc",
       "url": "https://ffmpeg.org/releases/ffmpeg-8.0.3.tar.xz.asc",

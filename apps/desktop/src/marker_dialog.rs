@@ -287,7 +287,7 @@ impl Desktop {
                                     34.0,
                                 )
                                 .track_focus(&draft.cancel_focus)
-                                .focus(|s| s.border_color(rgb(TEXT)))
+                                .focus(|s| s.border_color(rgb(0x64646a)))
                                 .on_click(cx.listener(
                                     |this, _, window, cx| this.cancel_marker_edit(window, cx),
                                 )),
@@ -300,7 +300,7 @@ impl Desktop {
                                     34.0,
                                 )
                                 .track_focus(&draft.submit_focus)
-                                .focus(|s| s.border_color(rgb(TEXT)))
+                                .focus(|s| s.border_color(rgb(0x64646a)))
                                 .on_click(cx.listener(
                                     |this, _, window, cx| this.submit_marker_edit(window, cx),
                                 )),

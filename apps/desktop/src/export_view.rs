@@ -123,7 +123,7 @@ impl Desktop {
                                             .id("export-folder")
                                             .debug_selector(|| "export-folder".into())
                                             .track_focus(&d.focus[6])
-                                            .focus(|s| s.border_color(rgb(TEXT)))
+                                            .focus(|s| s.border_color(rgb(0x64646a)))
                                             .flex()
                                             .items_center()
                                             .gap(px(8.0))
@@ -202,7 +202,7 @@ impl Desktop {
                                     32.0,
                                 )
                                 .track_focus(&d.focus[7])
-                                .focus(|s| s.border_color(rgb(TEXT)))
+                                .focus(|s| s.border_color(rgb(0x64646a)))
                                 .on_click(
                                     cx.listener(|this, _, window, cx| {
                                         this.close_export(window, cx)
@@ -217,7 +217,7 @@ impl Desktop {
                                     32.0,
                                 )
                                 .track_focus(&d.focus[8])
-                                .focus(|s| s.border_color(rgb(TEXT)))
+                                .focus(|s| s.border_color(rgb(0x64646a)))
                                 .when(!available, |s| s.opacity(0.4))
                                 .on_click(
                                     cx.listener(|this, _, window, cx| {

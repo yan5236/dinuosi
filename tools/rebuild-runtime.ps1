@@ -8,12 +8,16 @@ if((Test-Path -LiteralPath $work) -and (Get-ChildItem -LiteralPath $work -Force 
 }
 $lock=Get-Content "$source/inputs.lock.json" -Raw|ConvertFrom-Json
 New-Item -ItemType Directory -Force "$work/sources","$work/build/nasm/nasm-2.16.03" | Out-Null
-foreach($key in 'ffmpeg','zlib','lame'){
+foreach($key in 'ffmpeg','zlib','lame','aom','vpx'){
     $inputRecord=$lock.inputs.$key
     $archive=Join-Path $source $inputRecord.file
     if((Get-FileHash $archive).Hash.ToLowerInvariant() -ne $inputRecord.sha256){throw "源码校验失败：$key"}
     $archivePosix = & "$MsysRoot/usr/bin/cygpath.exe" -u $archive
     $sourcesPosix = & "$MsysRoot/usr/bin/cygpath.exe" -u "$work/sources"
+    if ($key -eq 'aom') {
+        New-Item -ItemType Directory -Force "$work/sources/aom-3.13.1" | Out-Null
+        $sourcesPosix += '/aom-3.13.1'
+    }
     & "$MsysRoot/usr/bin/bash.exe" --noprofile --norc -c "export PATH=/usr/bin:`$PATH; tar -xf '$archivePosix' -C '$sourcesPosix'"
     if($LASTEXITCODE -ne 0){throw "源码提取失败：$key"}
 }

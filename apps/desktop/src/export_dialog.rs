@@ -160,7 +160,7 @@ impl Desktop {
         cx.notify();
     }
 
-    /// 校验文件名与目录后对当前时间线快照编码；后台只更新原子进度，界面定时读取且防止重复提交。
+    /// 校验文件名与目录后对当前时间线快照编码；后台只更新原子进度，界面仅在进度改变时刷新。
     /// 核心负责临时文件、取消清理及无覆盖发布；失败保留参数，成功显示完成状态而不修改项目。
     pub(crate) fn submit_export(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(dialog) = &mut self.export_dialog else {
@@ -188,6 +188,8 @@ impl Desktop {
         dialog.focus[7].focus(window);
         let cancel = dialog.cancel.clone();
         let progress = dialog.progress.clone();
+        let poll_token = cancel.clone();
+        let poll_progress = progress.clone();
         let settings = dialog.settings.clone();
         let timeline = self.timeline.model.clone();
         let media = self
@@ -230,17 +232,23 @@ impl Desktop {
         })
         .detach();
         cx.spawn_in(window, async move |this, cx| {
+            let mut displayed = 0;
             loop {
                 cx.background_executor()
                     .timer(Duration::from_millis(100))
                     .await;
+                let current = poll_progress.load(Ordering::Relaxed);
                 let keep = this.update_in(cx, |this, _, cx| {
-                    let keep = this.export_dialog.as_ref().is_some_and(|d| d.running);
-                    if keep {
+                    let keep = this
+                        .export_dialog
+                        .as_ref()
+                        .is_some_and(|d| d.running && Arc::ptr_eq(&d.cancel, &poll_token));
+                    if keep && current != displayed {
                         cx.notify();
                     }
                     keep
                 });
+                displayed = current;
                 if !matches!(keep, Ok(true)) {
                     break;
                 }

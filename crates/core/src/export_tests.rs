@@ -99,7 +99,7 @@ fn cancelled_midi_seek_stops_before_initialization() {
 }
 
 #[path = "export_test_support.rs"]
-mod support;
+pub(super) mod support;
 use support::{fixture, rms, save_gui_fixture, timeline, verify_video_audio};
 
 /// 真实输出并通过 ffprobe、像素与 PCM 断言多轨/裁剪/动画，验证取消、缺源及已有文件保护。

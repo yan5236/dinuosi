@@ -6,7 +6,7 @@ $work = Join-Path $root '.local/distribution'
 $ffmpeg = "$work/runtime/ffmpeg/bin/ffmpeg.exe"
 $configuration = (& $ffmpeg -buildconf 2>&1 | Out-String)
 if ($LASTEXITCODE -ne 0) { throw 'FFmpeg 无法运行' }
-foreach ($flag in '--disable-gpl', '--disable-nonfree', '--disable-version3', '--disable-autodetect', '--enable-libmp3lame', '--enable-mediafoundation') {
+foreach ($flag in '--disable-gpl', '--disable-nonfree', '--disable-version3', '--disable-autodetect', '--enable-libmp3lame', '--enable-mediafoundation', '--enable-libaom', '--enable-libvpx') {
     if (!$configuration.Contains($flag)) { throw "缺少受控运行时构建约束：$flag" }
 }
 $license = (& $ffmpeg -L 2>&1 | Out-String)
@@ -14,11 +14,11 @@ if (!$license.Contains('Lesser General Public License')) { throw '产物不是 L
 $source = "$work/source-bundle"
 New-Item -ItemType Directory -Force $source | Out-Null
 $lock = Get-Content "$root/distribution/inputs.lock.json" -Raw | ConvertFrom-Json
-foreach ($key in 'ffmpeg','ffmpegSignature','ffmpegKey','zlib','lame') {
+foreach ($key in 'ffmpeg','ffmpegSignature','ffmpegKey','zlib','lame','aom','vpx') {
     $entry = $lock.inputs.$key
     Copy-Item -LiteralPath "$work/downloads/$($entry.file)" -Destination $source -Force
 }
-Copy-Item "$root/distribution/ffmpeg-msvc-locale.patch", "$root/distribution/zlib-msvc.patch", "$root/distribution/inputs.lock.json", "$root/tools/build-ffmpeg.sh", "$root/tools/prepare-media.ps1", "$root/tools/seal-runtime.ps1", "$root/tools/rebuild-runtime.ps1" -Destination $source -Force
+Copy-Item "$root/distribution/ffmpeg-msvc-locale.patch", "$root/distribution/zlib-msvc.patch", "$root/distribution/inputs.lock.json", "$root/tools/build-ffmpeg.sh", "$root/tools/build-codecs.sh", "$root/tools/prepare-media.ps1", "$root/tools/seal-runtime.ps1", "$root/tools/rebuild-runtime.ps1" -Destination $source -Force
 $vcRoot = Split-Path (Split-Path (Split-Path $VcVars -Parent) -Parent) -Parent
 $compilerRoot = Get-ChildItem (Join-Path $vcRoot 'Tools/MSVC') -Directory | Sort-Object Name -Descending | Select-Object -First 1
 $record = [ordered]@{
@@ -45,6 +45,9 @@ and includes the D3D11 type declarations required by Media Foundation even
 when D3D11 decoding autodetection is disabled. A zlib MSVC header compatibility
 patch is also included. Both original archives and patches are included.
 The patch does not change media algorithms or enable GPL functionality.
+libaom 3.13.1 is BSD-2-Clause and libvpx 1.15.2 is BSD-3-Clause.
+Their original LICENSE and PATENTS files accompany this bundle and the application.
+Both libraries are linked into the separate FFmpeg runtime, never into Dinuosi.
 
 Use tools/prepare-media.ps1 -Build with MSYS2, MSVC x64 and NASM 2.16.03.
 This bundle's scripts retain their original repository paths: reconstruct a
@@ -71,4 +74,15 @@ Copy-Item "$work/sources/ffmpeg-8.0.3/COPYING.LGPLv2.1", "$work/sources/ffmpeg-8
 Copy-Item "$work/sources/zlib-1.3.1/README" -Destination "$source/zlib-README.txt" -Force
 Copy-Item "$work/sources/lame-3.100/COPYING" -Destination "$source/LAME-LGPL-2.0.txt" -Force
 Copy-Item "$work/sources/lame-3.100/LICENSE" -Destination "$source/LAME-usage.txt" -Force
+foreach ($codec in @{directory='aom-3.13.1';name='AOM'}, @{directory='libvpx-1.15.2';name='VPX'}) {
+    foreach ($notice in 'LICENSE','PATENTS') {
+        Copy-Item "$work/sources/$($codec.directory)/$notice" -Destination "$source/$($codec.name)-$notice.txt" -Force
+    }
+}
+# AV1 编码实际链接的 fastfeat/vector 与汇编宏分别保留 BSD/MIT/ISC 原文，不以顶层 BSD 替代。
+foreach ($dependency in 'fastfeat','vector','x86inc') {
+    Copy-Item "$work/sources/aom-3.13.1/third_party/$dependency/LICENSE" -Destination "$source/AOM-$dependency-LICENSE.txt" -Force
+}
+# VPX 汇编宏的完整 ISC 声明位于源码开头；保留原始文件也覆盖版权和许可条件。
+Copy-Item "$work/sources/libvpx-1.15.2/third_party/x86inc/x86inc.asm" -Destination "$source/VPX-x86inc-ISC.txt" -Force
 Write-Output 'LGPL 运行时已封存。'

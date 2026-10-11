@@ -49,6 +49,8 @@ impl Container {
 pub enum Encoder {
     H264MediaFoundationHardware,
     H264MediaFoundation,
+    Av1,
+    Vp9,
     Mpeg4,
 }
 impl Encoder {
@@ -56,6 +58,8 @@ impl Encoder {
     pub fn id(self) -> &'static str {
         match self {
             Self::H264MediaFoundationHardware | Self::H264MediaFoundation => "h264_mf",
+            Self::Av1 => "libaom-av1",
+            Self::Vp9 => "libvpx-vp9",
             Self::Mpeg4 => "mpeg4",
         }
     }
@@ -64,6 +68,8 @@ impl Encoder {
         match self {
             Self::H264MediaFoundationHardware => "H.264 (Windows hardware)",
             Self::H264MediaFoundation => "H.264 (Windows software)",
+            Self::Av1 => "AV1",
+            Self::Vp9 => "VP9",
             Self::Mpeg4 => "MPEG-4",
         }
     }
@@ -71,21 +77,30 @@ impl Encoder {
     pub(crate) fn pixel_format(self) -> &'static str {
         match self {
             Self::H264MediaFoundationHardware | Self::H264MediaFoundation => "nv12",
-            Self::Mpeg4 => "yuv420p",
+            Self::Av1 | Self::Vp9 | Self::Mpeg4 => "yuv420p",
         }
     }
-    /// 将选中 Media Foundation 模式显式追加至输出参数，探测和真实导出共用。
-    /// 硬件仅枚举硬件 MFT，软件仅使用同步软件 MFT；不启动进程，也不为 MPEG-4 添加私有参数。
+    /// 追加选中实现的专用参数，能力探测和真实导出共用；不启动进程。
+    /// Windows 区分硬件与软件 MFT；AV1/VP9 使用质量与速度折中预设、行并行，避免默认慢速编码。
     pub(crate) fn configure(self, command: &mut std::process::Command) {
-        if self != Self::Mpeg4 {
-            command.args([
-                "-hw_encoding",
-                if self == Self::H264MediaFoundationHardware {
-                    "1"
-                } else {
-                    "0"
-                },
-            ]);
+        match self {
+            Self::H264MediaFoundationHardware | Self::H264MediaFoundation => {
+                command.args([
+                    "-hw_encoding",
+                    if self == Self::H264MediaFoundationHardware {
+                        "1"
+                    } else {
+                        "0"
+                    },
+                ]);
+            }
+            Self::Av1 => {
+                command.args(["-cpu-used", "6", "-row-mt", "1"]);
+            }
+            Self::Vp9 => {
+                command.args(["-deadline", "good", "-cpu-used", "4", "-row-mt", "1"]);
+            }
+            Self::Mpeg4 => {}
         }
     }
 }
@@ -345,7 +360,7 @@ fn run(
             settings,
             processes,
         )?;
-        if let Err(error) = stdin.write_all(&pixels) {
+        if let Err(error) = stdin.write_all(pixels) {
             drop(stdin);
             return Err(encoder
                 .finish()
@@ -412,3 +427,7 @@ fn check_cancel(cancel: &AtomicBool) -> Result<(), String> {
 #[cfg(test)]
 #[path = "export_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "export_codec_tests.rs"]
+mod codec_tests;

@@ -3,7 +3,11 @@
 set -euo pipefail
 root=$(cd "$(dirname "$0")/.." && pwd)
 work="${DINUOSI_BUILD_ROOT:-$root/.local/distribution}"
+mkdir -p "$work/build/tmp"
+export TMPDIR="$work/build/tmp"
 export PATH="$work/build/nasm/nasm-2.16.03:$PATH"
+"$(dirname "$0")/build-codecs.sh"
+export PKG_CONFIG_PATH="$work/build/codecs/pkgconfig"
 mkdir -p "$work/build/ffmpeg" "$work/runtime/ffmpeg"
 mkdir -p "$work/build/lame/include/lame"
 cp "$work/sources/lame-3.100/include/lame.h" "$work/build/lame/include/lame/lame.h"
@@ -15,9 +19,9 @@ if [ -f ffbuild/config.mak ]; then make -r clean; fi
   --toolchain=msvc --cc=cl.exe --cxx=cl.exe --arch=x86_64 --target-os=win32 \
   --disable-autodetect --disable-gpl --disable-nonfree --disable-version3 \
   --enable-shared --disable-static --disable-ffplay --disable-doc --disable-debug \
-  --enable-zlib --enable-libmp3lame --enable-mediafoundation --disable-network \
-  --extra-cflags="-I$(cygpath -m "$work/sources/zlib-1.3.1") -I$(cygpath -m "$work/build/lame/include")" \
-  --extra-ldflags="-LIBPATH:$(cygpath -m "$work/sources/zlib-1.3.1") -LIBPATH:$(cygpath -m "$work/build/lame")" \
+  --enable-zlib --enable-libmp3lame --enable-mediafoundation --enable-libaom --enable-libvpx --disable-network \
+  --extra-cflags="-I$(cygpath -m "$work/sources/zlib-1.3.1") -I$(cygpath -m "$work/build/lame/include") -I$(cygpath -m "$work/build/codecs/include")" \
+  --extra-ldflags="-LIBPATH:$(cygpath -m "$work/sources/zlib-1.3.1") -LIBPATH:$(cygpath -m "$work/build/lame") -LIBPATH:$(cygpath -m "$work/build/codecs")" \
   --prefix="$work/runtime/ffmpeg"
 make -r -j 1
 make -r install

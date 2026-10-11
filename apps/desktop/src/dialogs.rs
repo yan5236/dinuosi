@@ -326,7 +326,7 @@ impl Desktop {
                                         .border_color(rgb(LINE))
                                         .cursor_pointer()
                                         .hover(|s| s.border_color(rgb(MUTED)))
-                                        .focus(|s| s.border_color(rgb(TEXT)))
+                                        .focus(|s| s.border_color(rgb(0x64646a)))
                                         .child(
                                             svg()
                                                 .path(Icon::Folder.path())
@@ -447,7 +447,7 @@ impl Desktop {
                                     34.0,
                                 )
                                 .track_focus(&dialog.cancel_focus)
-                                .focus(|s| s.border_color(rgb(TEXT)))
+                                .focus(|s| s.border_color(rgb(0x64646a)))
                                 .on_click(
                                     cx.listener(|this, _, window, cx| {
                                         this.cancel_dialog(window, cx)
@@ -466,7 +466,7 @@ impl Desktop {
                                     34.0,
                                 )
                                 .track_focus(&dialog.submit_focus)
-                                .focus(|s| s.border_color(rgb(TEXT)))
+                                .focus(|s| s.border_color(rgb(0x64646a)))
                                 .on_click(
                                     cx.listener(|this, _, window, cx| {
                                         this.submit_dialog(window, cx)

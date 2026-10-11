@@ -75,12 +75,11 @@ impl Source {
     }
 
     /// 顺序读取到目标项目源帧，低帧率素材尾端重复最后有效画面，与预览尾帧语义一致。
-    /// EOF 时必须先确认进程成功；首帧为空、部分帧或真实解码错误均终止导出。
+    /// 复用原尺寸像素缓冲；EOF 时先确认进程成功并保留尾帧，部分帧或真实解码错误终止导出。
     fn read(&mut self, index: i64) -> Result<&[u8], String> {
         let target = if self.image { 0 } else { index };
         while self.index < target {
-            let mut bytes = vec![0; self.pixels.len()];
-            match self.reader.read(&mut bytes[..1]) {
+            match self.reader.read(&mut self.pixels[..1]) {
                 Ok(0) => {
                     self.process.finish()?;
                     if self.index < 0 {
@@ -91,11 +90,10 @@ impl Source {
                 }
                 Ok(_) => self
                     .reader
-                    .read_exact(&mut bytes[1..])
+                    .read_exact(&mut self.pixels[1..])
                     .map_err(|e| format!("素材画面不完整：{e}"))?,
                 Err(e) => return Err(format!("读取导出画面失败：{e}")),
             }
-            self.pixels = bytes;
             self.index += 1;
         }
         Ok(&self.pixels)
@@ -104,6 +102,7 @@ impl Source {
 
 pub struct Renderer {
     sources: BTreeMap<String, Source>,
+    output: Vec<u8>,
 }
 
 impl Renderer {
@@ -111,11 +110,12 @@ impl Renderer {
     pub fn new() -> Self {
         Self {
             sources: BTreeMap::new(),
+            output: Vec::new(),
         }
     }
 
     /// 在指定项目帧合成完整导出画面，保持轨道顺序、隐藏、入点和所有画面关键帧。
-    /// 输出黑色不透明底，图片保持原始尺寸；素材缺失或解码失败返回错误，不静默跳过。
+    /// 复用输出缓冲并重置为黑色不透明底，返回切片在下一次渲染前有效；失败返回错误，不静默跳过。
     pub fn render(
         &mut self,
         timeline: &Timeline,
@@ -123,7 +123,7 @@ impl Renderer {
         media: &[Media],
         settings: &ExportSettings,
         processes: &ProcessList,
-    ) -> Result<Vec<u8>, String> {
+    ) -> Result<&[u8], String> {
         self.sources.retain(|id, _| {
             timeline.clips.iter().any(|clip| {
                 clip.id == *id
@@ -131,9 +131,11 @@ impl Renderer {
                     && frame < (clip.start + clip.duration) as f64
             })
         });
-        let mut output = vec![0; settings.width as usize * settings.height as usize * 4];
+        self.output
+            .resize(settings.width as usize * settings.height as usize * 4, 0);
+        let output = &mut self.output;
         for pixel in output.as_chunks_mut::<4>().0 {
-            pixel[3] = 255;
+            pixel.copy_from_slice(&[0, 0, 0, 255]);
         }
         for track in (0..timeline.tracks.len())
             .rev()
@@ -159,7 +161,7 @@ impl Renderer {
                 let size = source.size;
                 let pixels = source.read((frame - clip.start as f64).floor() as i64)?;
                 composite::blend_pixels(
-                    &mut output,
+                    output,
                     (settings.width, settings.height),
                     pixels,
                     size,
@@ -173,5 +175,45 @@ impl Renderer {
             }
         }
         Ok(output)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{export::Encoder, timeline::Timeline};
+    /// 连续帧复用同一输出分配且清除旧颜色；改变输出尺寸时长度与黑色底保持正确。
+    #[test]
+    fn renderer_reuses_and_clears_output_between_frames() {
+        let mut renderer = Renderer::new();
+        let timeline = Timeline::default();
+        let mut settings = ExportSettings::for_timeline(&timeline, Encoder::Av1);
+        settings.width = 128;
+        settings.height = 128;
+        let processes = ProcessList::default();
+        let first = renderer
+            .render(&timeline, 0.0, &[], &settings, &processes)
+            .unwrap()
+            .as_ptr();
+        renderer.output.fill(12);
+        let frame = renderer
+            .render(&timeline, 1.0, &[], &settings, &processes)
+            .unwrap();
+        assert_eq!(first, frame.as_ptr());
+        assert!(
+            frame
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .all(|p| *p == [0, 0, 0, 255])
+        );
+        settings.width = 64;
+        assert_eq!(
+            renderer
+                .render(&timeline, 2.0, &[], &settings, &processes)
+                .unwrap()
+                .len(),
+            64 * 128 * 4
+        );
     }
 }

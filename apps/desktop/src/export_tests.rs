@@ -53,7 +53,7 @@ fn export_modal_parameters_do_not_edit_project(cx: &mut TestAppContext) {
     desktop.update_in(visual, |v, _, cx| {
         let d = v.export_dialog.as_mut().unwrap();
         d.probing = false;
-        d.encoders = vec![Encoder::Mpeg4];
+        d.encoders = vec![Encoder::Mpeg4, Encoder::Av1, Encoder::Vp9];
         d.settings.encoder = Encoder::Mpeg4;
         cx.notify();
     });
@@ -74,6 +74,21 @@ fn export_modal_parameters_do_not_edit_project(cx: &mut TestAppContext) {
         24
     );
     assert_eq!(store.load_timeline(&entry).unwrap().fps, 30);
+    let button = visual.debug_bounds("export-encoder").unwrap().center();
+    visual.simulate_click(button, Modifiers::none());
+    visual.run_until_parked();
+    let button = visual.debug_bounds("export-encoder-1").unwrap().center();
+    visual.simulate_click(button, Modifiers::none());
+    assert!(desktop.read_with(
+        visual,
+        |v, _| v.export_dialog.as_ref().unwrap().settings.encoder == Encoder::Av1
+    ));
+    visual.simulate_keystrokes("down");
+    assert!(desktop.read_with(
+        visual,
+        |v, _| v.export_dialog.as_ref().unwrap().settings.encoder == Encoder::Vp9
+    ));
+    visual.run_until_parked();
     let button = visual.debug_bounds("export-submit").unwrap().center();
     visual.simulate_click(button, Modifiers::none());
     assert!(desktop.read_with(visual, |v, _| {

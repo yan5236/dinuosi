@@ -7,6 +7,9 @@ if (!$OutputDirectory) { $OutputDirectory = Join-Path $root 'target/distribution
 $OutputDirectory = [IO.Path]::GetFullPath($OutputDirectory)
 $manifest = Get-Content "$work/runtime-manifest.json" -Raw | ConvertFrom-Json
 $lock = Get-Content "$root/distribution/inputs.lock.json" -Raw | ConvertFrom-Json
+foreach ($flag in '--disable-gpl','--disable-nonfree','--disable-version3','--enable-libaom','--enable-libvpx') {
+    if (!$manifest.configuration.Contains($flag)) { throw "运行时构建约束不符：$flag" }
+}
 if ((Get-FileHash "$root/assets/audio/FluidR3_GM.sf2").Hash.ToLowerInvariant() -ne $lock.soundfontSha256) {
     throw '内嵌音源与锁定原始内容不一致'
 }
@@ -37,11 +40,27 @@ foreach ($file in $manifest.files) {
         throw "运行时已变更：$($file.name)"
     }
 }
-foreach ($key in 'ffmpeg','ffmpegSignature','ffmpegKey','zlib','lame') {
+foreach ($key in 'ffmpeg','ffmpegSignature','ffmpegKey','zlib','lame','aom','vpx') {
     $entry = $lock.inputs.$key
     if ((Get-FileHash "$work/source-bundle/$($entry.file)").Hash.ToLowerInvariant() -ne $entry.sha256) {
         throw "对应源码缺失或改变：$key"
     }
+}
+foreach ($codec in @{directory='aom-3.13.1';name='AOM'}, @{directory='libvpx-1.15.2';name='VPX'}) {
+    foreach ($notice in 'LICENSE','PATENTS') {
+        $name = "$($codec.name)-$notice.txt"
+        if ((Get-FileHash "$work/source-bundle/$name").Hash -ne (Get-FileHash "$work/sources/$($codec.directory)/$notice").Hash) {
+            throw "编码库许可原文缺失或改变：$name"
+        }
+    }
+}
+foreach ($dependency in 'fastfeat','vector','x86inc') {
+    if ((Get-FileHash "$work/source-bundle/AOM-$dependency-LICENSE.txt").Hash -ne (Get-FileHash "$work/sources/aom-3.13.1/third_party/$dependency/LICENSE").Hash) {
+        throw "编码库许可原文缺失或改变：AOM-$dependency"
+    }
+}
+if ((Get-FileHash "$work/source-bundle/VPX-x86inc-ISC.txt").Hash -ne (Get-FileHash "$work/sources/libvpx-1.15.2/third_party/x86inc/x86inc.asm").Hash) {
+    throw '编码库许可原文缺失或改变：VPX-x86inc'
 }
 foreach ($name in 'ffmpeg-msvc-locale.patch','zlib-msvc.patch') {
     if ((Get-FileHash "$work/source-bundle/$name").Hash -ne (Get-FileHash "$root/distribution/$name").Hash) {
@@ -63,6 +82,7 @@ Copy-Item -LiteralPath "$work/sources/ffmpeg-8.0.3/COPYING.LGPLv2.1" -Destinatio
 Copy-Item -LiteralPath "$work/sources/lame-3.100/COPYING" -Destination "$stage/licenses/LAME-LGPL-2.0.txt"
 Copy-Item -LiteralPath "$work/sources/lame-3.100/LICENSE" -Destination "$stage/licenses/LAME-usage.txt"
 Copy-Item -LiteralPath "$work/sources/zlib-1.3.1/README" -Destination "$stage/licenses/zlib.txt"
+Copy-Item "$work/source-bundle/AOM-*.txt", "$work/source-bundle/VPX-*.txt" -Destination "$stage/licenses"
 Copy-Item -LiteralPath "$work/build/nsis/nsis-3.13/COPYING" -Destination "$stage/licenses/NSIS.txt"
 Copy-Item -LiteralPath "$work/runtime-manifest.json", "$work/license-audit.json" -Destination "$stage/licenses"
 $sourceName = "Dinuosi-$version-ffmpeg-8.0.3-sources.zip"
@@ -70,6 +90,8 @@ $notes = @"
 Dinuosi $version - internal Windows x64 acceptance build
 
 Dinuosi: MIT. The full license text is included in LICENSE at the application root.
+AV1: libaom 3.13.1, BSD-2-Clause. VP9: libvpx 1.15.2, BSD-3-Clause.
+Original codec licenses and patent grants are included in AOM-*.txt and VPX-*.txt.
 
 This software uses FFmpeg 8.0.3 under LGPL-2.1-or-later, as a separately
 replaceable executable and libav DLLs. Corresponding source and build patches
@@ -88,7 +110,7 @@ Rights to supplied icons and brand assets require owner confirmation before
 public publication.
 Clean Windows and Windows 11 installation have not been established merely
 by a successful test on the development machine. This is an unsigned test
-build; no public release, code-signing or video export is included.
+build; no public release or code-signing is included.
 
 Five legacy crates omit standalone license files in their original publications; their original license declarations, full published sources and the referenced standard license texts are preserved. This omission requires explicit public-release review; no copyright holder or year has been fabricated.
 
@@ -104,7 +126,7 @@ foreach ($entry in $dependencies) {
     foreach ($notice in $entry.notices) { $notes += "`n" + (Get-Content "$work/licenses/$($notice.file)" -Raw) }
 }
 [IO.File]::WriteAllText("$stage/licenses/THIRD_PARTY_NOTICES.txt",$notes,[Text.UTF8Encoding]::new($false))
-[IO.File]::WriteAllText("$stage/licenses/SOURCE.txt","Corresponding FFmpeg/zlib/LAME source: $sourceName (delivered alongside this package).`n",[Text.UTF8Encoding]::new($false))
+[IO.File]::WriteAllText("$stage/licenses/SOURCE.txt","Corresponding FFmpeg/zlib/LAME/libaom/libvpx source: $sourceName (delivered alongside this package).`n",[Text.UTF8Encoding]::new($false))
 $files = Get-ChildItem $stage -File -Recurse
 $inventory = @($files | ForEach-Object { @{path=[IO.Path]::GetRelativePath($stage,$_.FullName).Replace('\','/'); sha256=(Get-FileHash $_.FullName).Hash.ToLowerInvariant();bytes=$_.Length} })
 [IO.File]::WriteAllText("$stage/package-files.json",($inventory|ConvertTo-Json -Depth 4),[Text.UTF8Encoding]::new($false))

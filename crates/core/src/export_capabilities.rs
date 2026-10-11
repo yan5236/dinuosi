@@ -4,16 +4,25 @@ use crate::{
     export_process::{Process, ProcessList},
     media,
 };
-use std::{io::Write, process::Stdio};
+use std::{io::Write, process::Stdio, sync::OnceLock};
+
+/// 返回本次应用启动内缓存的真实编码能力，避免反复打开弹窗重复启动编码进程。
+/// 首次调用阻塞探测，应由调用方放入后台；运行库或驱动变更后需重启应用重新探测。
+pub fn capabilities() -> Result<Vec<Encoder>, String> {
+    static AVAILABLE: OnceLock<Result<Vec<Encoder>, String>> = OnceLock::new();
+    AVAILABLE.get_or_init(probe).clone()
+}
 
 /// 对受控运行库逐个执行真实三帧编码，只有成功初始化并输出的实现才成为可选编码器。
-/// 每个探测最多十秒，不使用系统 PATH 或 GPL 外部编码库；应由调用方放入后台。
-pub fn capabilities() -> Result<Vec<Encoder>, String> {
+/// 每个探测最多十秒，不使用系统 PATH 或 GPL 外部编码库；诊断通过错误返回。
+fn probe() -> Result<Vec<Encoder>, String> {
     let mut available = Vec::new();
     let mut last_error = String::new();
     for encoder in [
         Encoder::H264MediaFoundationHardware,
         Encoder::H264MediaFoundation,
+        Encoder::Av1,
+        Encoder::Vp9,
         Encoder::Mpeg4,
     ] {
         let mut command = media::command("ffmpeg");

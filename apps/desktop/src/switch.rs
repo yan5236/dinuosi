@@ -51,7 +51,7 @@ impl RenderOnce for Switch {
             .rounded(px(16.0))
             .border_1()
             .border_color(gpui::transparent_black())
-            .focus(|s| s.border_color(rgb(TEXT)))
+            .focus(|s| s.border_color(rgb(0x64646a)))
             .cursor_pointer()
             .hover(|s| s.bg(rgb(0x333337)))
             .active(|s| s.bg(rgb(LINE)))

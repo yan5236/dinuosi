@@ -12,7 +12,11 @@
 
 ## 编码与许可边界
 
-主程序仍为 MIT。H.264 是编码格式，libx264 是其具体实现；本项目不捆绑 libx264，也不启用 FFmpeg GPL/nonfree/version3。受控构建通过 `--enable-mediafoundation` 启用 FFmpeg 的 LGPL 模块，调用 Windows 已安装的 H.264 Media Foundation 编码器。主程序仅以受控子进程交互，不回退到系统 PATH。能力检测分别实际试编码 Windows 硬件 H.264、Windows 软件 H.264 与 FFmpeg 原生 MPEG-4，只有成功的实现进入选项；有可用硬件时默认选择它。未加入独立厂商编码库或复制驱动 DLL。
+主程序仍为 MIT。H.264 是编码格式，libx264 是其具体实现；本项目不捆绑 libx264，也不启用 FFmpeg GPL/nonfree/version3。受控构建通过 `--enable-mediafoundation` 启用 FFmpeg 的 LGPL 模块，调用 Windows 已安装的 H.264 Media Foundation 编码器。主程序仅以受控子进程交互，不回退到系统 PATH。能力检测分别实际试编码 Windows 硬件 H.264、Windows 软件 H.264、AV1、VP9 与 FFmpeg 原生 MPEG-4，只有成功的实现进入选项；有可用硬件时默认选择它。未复制驱动 DLL。
+
+AV1 使用 libaom 3.13.1（BSD-2-Clause），VP9 使用 libvpx 1.15.2（BSD-3-Clause）。两库只链接至独立的 LGPL FFmpeg，不链接至 MIT 主程序；不改变主程序许可证。官方 `LICENSE`、`PATENTS` 和固定哈希源码随运行库封存，打包时核对原文并带入应用及源码包。AV1/VP9 同样通过真实三帧试编码进入菜单，支持 MP4/MKV + AAC。AV1 使用 `cpu-used=6`，VP9 使用 `deadline=good,cpu-used=4`，均启用行并行，在现有码率设置下折中速度与画质。
+
+编码能力在本次应用启动内缓存，重复打开导出不再启动试编码进程；更换运行库或显卡驱动后重启应用重新探测。导出进度只在显示数值变化时触发界面刷新，原尺寸源帧和合成输出复用缓冲，避免每帧反复分配。聚焦控件采用现有灰阶描边，鼠标和键盘焦点行为保持一致。
 
 Microsoft 文档说明系统 H.264 MFT 的输入、参数与平台支持；FFmpeg 官方明确 LGPL/GPL 构建边界及对应源码义务。MIT 不改变第三方义务，也不自动授予编码专利的商业授权。当前公开发行门槛仍见 [发行验收报告](DISTRIBUTION_VALIDATION.md)，历史安装包验收不覆盖本次新增编码运行库。
 
@@ -23,7 +27,11 @@ Microsoft 文档说明系统 H.264 MFT 的输入、参数与平台支持；FFmpe
 - [Microsoft H.264 编码器](https://learn.microsoft.com/en-us/windows/win32/medfound/h-264-video-encoder)
 - [Windows N Media Feature Pack](https://support.microsoft.com/en-us/windows/experience/platform-variants/media-feature-pack-for-windows-n)
 - [Microsoft SDK 许可原文](https://github.com/microsoft/win32metadata/blob/main/licenses/sdk_license.txt)
+- [libaom 3.13.1 许可](https://aomedia.googlesource.com/aom/+/refs/tags/v3.13.1/LICENSE) 与 [专利授权](https://aomedia.googlesource.com/aom/+/refs/tags/v3.13.1/PATENTS)
+- [libvpx 1.15.2 许可](https://github.com/webmproject/libvpx/blob/v1.15.2/LICENSE) 与 [专利授权](https://github.com/webmproject/libvpx/blob/v1.15.2/PATENTS)
+- [FFmpeg 编码参数](https://ffmpeg.org/ffmpeg-all.html)
 
 ## 验证
 
 真实媒体回归由 `cargo test -p dinuosi-core --locked export::tests -- --ignored --nocapture` 执行，需在测试程序旁准备当前受控运行库。普通边界与 GPUI 事件回归随工作区测试执行。当前任务的具体运行结果记录于 [验证历史](VALIDATION_HISTORY.md)。
+AV1/VP9 的四种编码器/封装组合由 `cargo test -p dinuosi-core --locked real_av1_vp9_exports -- --ignored --nocapture` 验证，检查真实格式、时长、混合像素和音量动画；能力读取耗时同时输出。

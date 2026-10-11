@@ -43,7 +43,7 @@ Core 通过后台子进程调用 `ffprobe.exe` 探测媒体，调用 `ffmpeg.exe
 
 工具固定定位到当前程序旁的 `runtime/ffmpeg/`，并使用配套 libav DLL，不回退到 PATH。媒体工具或 DLL 缺失会报告错误。这里使用的是 FFmpeg 的命令行接口，Dinuosi 自身的用户 CLI 尚未实现。
 
-FFmpeg 当前固定为 8.0.3，构建禁用 GPL、nonfree、version3、外部库自动探测和网络协议，仅加入 zlib 与 LGPL LAME；显式启用 Media Foundation，以 Windows 已安装的编码器导出 H.264。它作为独立工具随包部署，FFmpeg 代码不链接进 Dinuosi 主程序。MIDI 使用 RustySynth 与 FluidR3 音源合成，不经过 FFmpeg。升级此前未启用 Media Foundation 的运行库需重新 `-Build`，仅复制旧运行库不会增加 H.264 能力。导出流程、限制和验证见 [EXPORT.md](EXPORT.md)。
+FFmpeg 当前固定为 8.0.3，构建禁用 GPL、nonfree、version3、外部库自动探测和网络协议，加入 zlib、LGPL LAME、BSD libaom 3.13.1 与 libvpx 1.15.2；显式启用 Media Foundation，以 Windows 已安装的编码器导出 H.264，并支持软件 AV1/VP9。它作为独立工具随包部署，FFmpeg 和编码库代码不链接进 MIT 主程序。编码库使用 Visual Studio Build Tools 配套 CMake/Ninja、MSBuild 及锁定 NASM 构建（也需安装 CMake 组件）。MIDI 使用 RustySynth 与 FluidR3 音源合成，不经过 FFmpeg。升级旧运行库需重新 `-Build`，仅复制旧运行库不会增加编码能力。导出流程、限制和验证见 [EXPORT.md](EXPORT.md)。
 
 `.cargo/config.toml` 为 Windows MSVC 目标启用静态 C 运行库链接，使主程序无需用户另装 Visual C++ Redistributable。该文件是共享构建配置，不是本机 Cargo 缓存。
 

@@ -154,7 +154,7 @@ impl Desktop {
                             .id(id)
                             .debug_selector(move || id.into())
                             .track_focus(&d.focus[focus])
-                            .focus(|s| s.border_color(rgb(TEXT)))
+                            .focus(|s| s.border_color(rgb(0x64646a)))
                             .flex()
                             .items_center()
                             .justify_between()

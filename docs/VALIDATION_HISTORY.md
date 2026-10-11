@@ -2,6 +2,18 @@
 
 以下记录从 README 迁入，描述对应日期和版本的验证范围，不代表当前版本的完整能力或本次重新验证结果。最新 Windows 发行验收见 [DISTRIBUTION_VALIDATION.md](DISTRIBUTION_VALIDATION.md)。文中的截图、日志和测试项目保存在本机忽略目录，不随仓库提供。
 
+## 导出编码器、焦点与开销优化（2026-10-11）
+
+在现有 `codex/video-export` 分支完成：焦点描边统一使用已有灰阶；加入 AV1/libaom 3.13.1 与 VP9/libvpx 1.15.2，主程序 `LICENSE` 与 Cargo MIT 声明未变。固定源码哈希、BSD 原文、专利授权及内部 BSD/MIT/ISC 声明进入封存与打包检查；受控 FFmpeg 8.0.3 实际配置和 `-L` 确认 LGPL-2.1-or-later，GPL/nonfree/version3 均关闭。
+
+- 全工作区 88 项常规测试、全目标严格 Clippy、格式检查、桌面构建通过。GPUI 回归覆盖鼠标选择 AV1、方向键切换 VP9，参数不写回项目。缓冲回归断言连续帧使用同一输出分配、清除旧色并正确处理尺寸变化。
+- 真实 AV1/VP9 × MP4/MKV 四种组合均通过，输出 128×128、24fps、1s、AAC；ffprobe、实际解码像素和 PCM RMS 验证时长、源裁剪、轨道叠加、透明度及音量动画。导出及校验耗时分别约 581/386/352/351ms，仅代表本机小型合成素材，不是高清性能基准。
+- 本机首次五种编码能力探测约 4.240s；同进程缓存读取约 300ns。导出进度数值变化才请求重绘，原尺寸源帧与输出帧复用缓冲。导出弹窗空闲采样 2s 的进程 CPU 用时约 31ms；未进行剪辑 FPS 前后对比。
+- 新运行库下重跑既有真实导出回归，H.264 硬件/软件、MPEG-4、源音轨/MIDI、裁剪/变换/动画、取消、坏源/缺源、已有文件保护均通过。466 项 Windows Rust 运行依赖许可清单重新收集，阻断项为零；既有五个上游未提供独立许可原文的声明材料及完整源码仍按原约定保留。缺失源码、AOM 版权、VPX 专利声明、Rust 许可、运行库哈希不符及审计过期六项拒绝边界通过。
+- Windows 实际鼠标展开五项编码器菜单并选择 AV1，方向键切换 VP9，窗口截图确认选中值正确；焦点边框像素为 RGB(100,100,106)，与既有灰阶一致。Computer Use 轻量窗口读取持续超时，按项目约定使用备用原生输入与窗口区域截图。
+
+证据位于忽略目录：`.local/export-workspace-tests-2.log`、`export-clippy.log`、`export-existing-new-runtime.log`、`export-av1-vp9-real-2.log`、`export-license-audit.log`、`export-build-input-checks-3.log`、`export-codecs-qa/` 和 `export-followup-qa/`。源码构建成功后已封存并部署到开发/测试程序旁；源码、脚本和回归属于本次差异，生成 DLL/EXE、源码归档、媒体、截图和日志不进入 Git。未生成新安装包、未做独立干净源码重建/干净系统安装/其他 GPU 或高清长片性能测试，未提交或推送。
+
 ## 时间线视频导出（2026-10-11）
 
 在独立 `codex/video-export` 分支实现，源项目 `main` 未切换。运行库仍为受控 LGPL FFmpeg 8.0.3；显式启用 Media Foundation，禁用 GPL/nonfree/version3，未引入 libx264 或系统 PATH 回退。补丁只增加缺失的 MF D3D11 类型头声明，保留此前 MSVC locale/UTF-8 兼容修改；独立源码、补丁、构建参数、产物哈希已封存。

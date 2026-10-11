@@ -2,7 +2,7 @@
 use super::*;
 
 /// 写出按帧切换红/蓝的视频与正弦音频，素材构建仅使用受控内置 MPEG-4 和 PCM 编码。
-pub(super) fn fixture(root: &Path) -> (Media, Media, Media) {
+pub(in crate::export) fn fixture(root: &Path) -> (Media, Media, Media) {
     let video_path = root.join("source.mp4");
     let mut child = media::command("ffmpeg")
         .args(["-threads", "1", "-filter_threads", "1"])
@@ -112,7 +112,7 @@ pub(super) fn fixture(root: &Path) -> (Media, Media, Media) {
 }
 
 /// 构造实际多轨时间线：主视频裁掉红色半段，红图位移旋转半透明，音频延迟并改变增益。
-pub(super) fn timeline(video: &Media, audio: &Media, image: &Media) -> Timeline {
+pub(in crate::export) fn timeline(video: &Media, audio: &Media, image: &Media) -> Timeline {
     let mut timeline = Timeline {
         width: 64,
         height: 64,
@@ -199,7 +199,7 @@ pub(super) fn timeline(video: &Media, audio: &Media, image: &Media) -> Timeline 
 }
 
 /// 解码目标输出为 PCM 并计算指定秒级窗口 RMS，用真实音轨验证延迟、裁剪和音量动画。
-pub(super) fn rms(path: &Path, start: f64, end: f64) -> f64 {
+pub(in crate::export) fn rms(path: &Path, start: f64, end: f64) -> f64 {
     let output = media::command("ffmpeg")
         .args(["-v", "error", "-i"])
         .arg(path)

@@ -122,4 +122,6 @@ Core `export.rs` 提供无 GUI 的能力检测、参数校验与阻塞导出接�
 
 Desktop `export_dialog.rs` 管理唯一模态任务，`export_view.rs` 绘制项目预览和任务状态，`export_controls.rs` 处理参数与下拉交互。后台处理不可变时间线快照，主线程只轮询原子进度；参数及文件夹选择不写入项目。取消或窗口销毁终止本次解码/编码进程。`export_process.rs` 持续排空诊断并回收子进程；专属临时目录保存 PCM 和待发布视频，成功后无覆盖发布，失败清理。参与导出的离线源会失败，已有输出保持原样。
 
-受控 FFmpeg 显式启用 LGPL Media Foundation 模块，通过 Windows 编码器提供 H.264；不启用 GPL/nonfree/version3，不加入 libx264 或系统 PATH 的 FFmpeg。能力检测分别实际试编码 H.264 Windows 硬件、软件及 FFmpeg 原生 MPEG-4，仅成功的实现进入选项；有可用硬件时优先选择硬件以降低 CPU 占用。MP4/MKV 均配 AAC，系统或硬件实现是否可用由本机检测与实际编码结果决定。
+受控 FFmpeg 显式启用 LGPL Media Foundation 模块，通过 Windows 编码器提供 H.264；不启用 GPL/nonfree/version3，不加入 libx264 或系统 PATH 的 FFmpeg。能力检测分别实际试编码 H.264 Windows 硬件、软件、AV1、VP9 及 FFmpeg 原生 MPEG-4，仅成功的实现进入选项；有可用硬件时优先选择硬件以降低 CPU 占用。MP4/MKV 均配 AAC，系统或硬件实现是否可用由本机检测与实际编码结果决定。
+
+AV1/VP9 分别由独立 FFmpeg 中静态链接的 BSD libaom/libvpx 提供，不链接至 MIT 主程序。固定源码、许可及专利原文纳入同一封存/重建/打包链路。能力检测结果在进程内缓存；导出进度变化才刷新界面，源画面和合成输出缓冲在导出会话内复用。
