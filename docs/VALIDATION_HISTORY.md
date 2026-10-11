@@ -2,6 +2,20 @@
 
 以下记录从 README 迁入，描述对应日期和版本的验证范围，不代表当前版本的完整能力或本次重新验证结果。最新 Windows 发行验收见 [DISTRIBUTION_VALIDATION.md](DISTRIBUTION_VALIDATION.md)。文中的截图、日志和测试项目保存在本机忽略目录，不随仓库提供。
 
+## FFmpeg 动态库迁移与四环境复验（2026-10-11）
+
+已将此前桌面跨平台分支快进合并并推送至 `main`（`16e9a01`），随后在独立 `codex/ffmpeg-dynamic-library` 分支完成迁移。验收提交 `59929bb` 的 [最终四环境 CI](https://github.com/yan5236/dinuosi/actions/runs/38121506515) 全部成功：Windows Server 2022 x64、Ubuntu 24.04 x86_64、macOS 14 ARM64 和 macOS 15 Intel。各环境 47 项共享模块、13 项 Core 媒体、43 项桌面事件及 2 项桌面媒体检查通过；桌面构建、严格 Clippy、格式与真实原生窗口启动通过。Linux 原生标题拖动仍实际移动 80×40 像素。
+
+- Core 的探测、寻址、BGRA/PCM 播放、波形、视频编码和 AAC 封装直接调用受控 libav 动态库。原生 ABI 与 unsafe 集中于 `crates/media`；取消、错误传播、上下文所有权和无覆盖发布保持明确边界。MIDI 保持原有 Rust 合成路径。
+- 移除应用旁 FFmpeg/ffprobe CLI 后，中文空格目录中的探测、寻址、19200 个 PCM 样本、视频流和 MPEG-4 + AAC 时间线导出仍成功；移除桥接库或 avcodec 后明确失败。8 种旋转/镜像显示矩阵的 BGRA 与独立 CLI 逐字节一致；非零起始时间戳也与原素材对照通过。可恢复坏包、完全损坏、取消、缺源、裁剪/变换/动画、音量、已有文件保护及 AV1/VP9 × MP4/MKV 均通过。
+- CI 使用锁定源码与相对加载路径准备桥接和 libav；最终四环境精确命中运行库缓存并校验。对应源码与构建脚本哈希进入运行库清单。Windows GUI STA 下 Media Foundation 探测曾导致进程访问异常，改为独立工作线程后，相关回归及完整桌面测试通过。
+- 本机 Windows 90 项常规检查、13 项 Core 媒体、2 项桌面媒体、严格 Clippy/格式及桌面构建通过。真实鼠标播放/暂停 660Hz 合成 WAV，WASAPI 回环幅值为 `0 → 0.0883668362 → 0`，只保存数值。Windows 主窗口识别改为同进程可见且符合尺寸的窗口，排除 GPUI 辅助窗口；屏幕截图失败后改用只截取主窗口的 PrintWindow，本机与最终 Windows CI 截图均已实际查看正常。
+- 本机 Media Foundation 硬件/软件真实时间线导出通过；CI 的 Windows 和 macOS 硬件未通过探测，不计作通过。Windows 软件 H.264、macOS VideoToolbox 软件与 OpenH264、Linux OpenH264 均通过，不能以 runner 软件结果代替实机 GPU 验收。
+
+用户可退出程序后替换接口兼容的 libav 及配套库，启动不强制文件 SHA；动态链接不免除 LGPL 的声明、对应源码、修改/重建材料与替换权利要求。新增桥接源码与构建脚本进入 Windows 对应源码封存和打包校验，旧本机运行库清单已实测被拒绝打包。本轮没有生成新安装包；干净系统安装、签名/公证、真实 Linux/macOS 音频设备与完整实机交互尚未验收。进程内驱动阻塞只能协作取消，不能强制抢占。
+
+源码、脚本及小型回归进入 Git；生成动态库、下载归档、截图、媒体与日志留在忽略目录。证据为 `.local/native-*.log`、`.local/native-playback/` 和 `.local/native-ci/38121506515/`；CI 原始材料位于对应 `export-*` artifacts。需要外部真实 MIDI 输入的旧检查未计入本轮通过数。
+
 ## 桌面跨平台修复与四环境验收（2026-10-11）
 
 功能源码 `0a4b1c4` 的 [统一 CI](https://github.com/yan5236/dinuosi/actions/runs/38116310974) 四个 job 全部成功：Windows Server 2022 x64、Ubuntu 24.04 x86_64、macOS 14.8.9 ARM64、macOS 15.7.9 Intel。每个环境 46 项共享模块、12 项 Core 媒体、43 项桌面事件及 2 项桌面媒体检查通过，桌面构建、严格 Clippy、格式和真实窗口启动通过。软件 H.264、AV1、VP9、MPEG-4 实际导出通过；系统硬件 H.264 均未通过 runner 探测，不计入硬件验收。

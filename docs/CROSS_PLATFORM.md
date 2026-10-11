@@ -6,6 +6,8 @@
 
 Core 通过 `dinuosi-media` 从当前程序旁 `runtime/ffmpeg/` 加载原生桥接动态库（Windows DLL、Linux SO、macOS dylib），直接调用 libavformat/libavcodec/libavfilter/libswscale 完成探测、解码、编码与封装。不依赖 FFmpeg/ffprobe CLI，不回退到 PATH，不在运行时下载组件。桥接 ABI 固定为 1 并校验 FFmpeg 8 的 libav 主版本；Unix 依赖按绝对路径预加载且以相对 rpath 解析，缺少相邻库时拒绝系统替代品。Windows DLL 搜索限制为库所在目录和系统目录。
 
+用户可在退出程序后替换该目录中的接口兼容 libav 及配套库，保留对应平台的库名、主版本和应用所需编解码/滤镜能力。启动时不校验库文件 SHA，也不要求用户库与发行库逐字节一致；构建、缓存和打包的哈希检查仅保证发行材料与对应源码一致。动态链接与可替换性不免除 LGPL：按 [FFmpeg 官方合规要求](https://ffmpeg.org/legal.html)，发行时仍需保留声明、许可及与二进制准确对应的源码、补丁和构建说明，并尊重修改与替换权利；主程序 MIT 不改变这些义务。
+
 FFmpeg/ffprobe 仍由源码构建，供测试生成夹具、独立探测与输出对照。真实迁移测试在中文空格路径移除两者后，要求探测、寻址、视频播放和带 AAC 的时间线导出仍成功；移除桥接库或 libav 后则必须失败。
 
 H.264：Windows 使用 Media Foundation 硬件/软件；macOS 使用 VideoToolbox 硬件/软件，并保留 OpenH264 软件路径；Linux 使用 OpenH264 软件。AV1、VP9 和 MPEG-4 共用既有实现。系统后端只在本平台探测，每种实现实际编码三帧后才进入界面；硬件失败不阻止软件能力探测，不能把未探测成功的硬件计为通过。
