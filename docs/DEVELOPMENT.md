@@ -11,7 +11,7 @@
 - MSYS2，媒体构建需要 Bash、make、patch、GPG、ar 和 tar。
 - Python 3，用于收集第三方许可与执行许可策略检查。
 
-GPUI 固定为 0.2.2。其他平台尚未经过本项目验证；上游系统依赖可参考 [GPUI 文档](https://docs.rs/gpui/0.2.2/gpui/)。
+GPUI 固定为 0.2.2。其他平台的桌面界面与发行包尚未验证；Core 和导出的三平台 CI 结果见 [导出平台验证](EXPORT_PLATFORM_VALIDATION.md)。上游系统依赖可参考 [GPUI 文档](https://docs.rs/gpui/0.2.2/gpui/)。
 
 ## 首次准备与运行
 
@@ -71,6 +71,8 @@ cargo test -p dinuosi-core -p dinuosi-command -p dinuosi-icons --locked
 ```
 
 默认忽略的检查不能计作已通过。历史验证范围见 [历史验证记录](VALIDATION_HISTORY.md)，当前 Windows 内置运行时与安装生命周期的验收证据见 [发行验收报告](DISTRIBUTION_VALIDATION.md)。
+
+导出 CI 的 Windows 首次运行从源码编译，日志实时显示并留档；FFmpeg 使用 `DINUOSI_BUILD_JOBS=2`，本机不指定时仍为单路。成功构建后缓存配套运行库、内嵌音源和运行库清单；键包含输入锁、补丁与构建脚本，命中后逐文件校验哈希，不使用模糊匹配或跨平台缓存。源码/构建配置变化需要重新构建。
 
 ## 生成安装包与便携版
 

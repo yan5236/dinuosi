@@ -2,6 +2,12 @@
 
 以下记录从 README 迁入，描述对应日期和版本的验证范围，不代表当前版本的完整能力或本次重新验证结果。最新 Windows 发行验收见 [DISTRIBUTION_VALIDATION.md](DISTRIBUTION_VALIDATION.md)。文中的截图、日志和测试项目保存在本机忽略目录，不随仓库提供。
 
+## 导出三平台 CI 与主要分支合并（2026-10-11）
+
+当前导出代码提交为 `1c21524`，连同此前 `3d3eef2` 快进合并并推送至 `main`。新增三平台 CI，修正固定素材目录阻止重复运行、瞬时 H.264 探测失败被断言为永久不可用，以及 AOM 动态归档不可复现的输入问题。实测源码 `2be72cb`：本机工作区 88 项、严格 Clippy、格式、完整导出回归通过；CI 三平台各 44 项 Core 常规测试通过，Windows 受控源码重建及真实导出通过，Ubuntu/macOS 应用因 `.exe` 定位缺口失败。H.264 软件通过 Windows CI，硬件在该 runner 找不到 MFT，未计作通过；本机硬件/软件均真实输出通过。
+
+Windows CI 准备/源码构建耗时 25 分 45 秒，原日志重定向导致网页无实时输出。`f004e5d` 改为实时留档、CI 两路 FFmpeg 编译与严格运行库缓存；报告写入时，实时日志版仍在首次重建，缓存命中/加速幅度未完成 CI 验收。平台、编码实现、软件工具对照、证据链接与限制见 [导出平台验证](EXPORT_PLATFORM_VALIDATION.md)。本次未新增 macOS/Linux H.264 后端，未生成或发布安装包。
+
 ## 导出编码器、焦点与开销优化（2026-10-11）
 
 在现有 `codex/video-export` 分支完成：焦点描边统一使用已有灰阶；加入 AV1/libaom 3.13.1 与 VP9/libvpx 1.15.2，主程序 `LICENSE` 与 Cargo MIT 声明未变。固定源码哈希、BSD 原文、专利授权及内部 BSD/MIT/ISC 声明进入封存与打包检查；受控 FFmpeg 8.0.3 实际配置和 `-L` 确认 LGPL-2.1-or-later，GPL/nonfree/version3 均关闭。
