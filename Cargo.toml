@@ -1,5 +1,5 @@
 [workspace]
-members = ["apps/desktop", "crates/core", "crates/command", "crates/icons", "crates/media"]
+members = ["apps/desktop", "crates/core", "crates/command", "crates/icons", "crates/media", "crates/cursor"]
 default-members = ["apps/desktop"]
 resolver = "3"
 
@@ -31,3 +31,10 @@ opt-level = 3
 # 预览逐像素合成也位于实时交互路径，开发运行保留调试信息并优化 Core 运算。
 [profile.dev.package.dinuosi-core]
 opt-level = 3
+
+# 窗口移动和鼠标交互会进入 GPUI 布局、场景和 GPU 提交，开发构建也要满足实时绘制。
+[profile.dev.package.gpui]
+opt-level = 2
+
+[profile.dev.package.dinuosi-desktop]
+opt-level = 2

@@ -54,6 +54,8 @@ python tools/build-media-library.py --prefix .local/distribution/runtime/ffmpeg
 
 `.cargo/config.toml` 为 Windows MSVC 目标启用静态 C 运行库链接，使主程序无需用户另装 Visual C++ Redistributable。该文件是共享构建配置，不是本机 Cargo 缓存。
 
+开发构建保留调试信息，同时优化 Core、MIDI 合成及 GPUI/Desktop 的实时路径。窗口平移会触发 GPUI 内容刷新，波形使用按设备像素和源时间缓存的纹理；刀片使用平台光标，避免将光标移动速度绑定到主界面绘制速度。
+
 Windows Debug/Release 构建通过 Desktop 的 `build.rs` 将 `assets/brand/dinuosi.ico` 嵌入 EXE 的编号 1 图标资源；GPUI 0.2.2 的原生窗口、任务栏和资源管理器共用该图标，无需程序旁放置图片。资源编译失败会终止构建。ICO 来自已确认的 `assets/brand/png/dinuosi-app-icon-1024.png`，含 16/20/24/32/40/48/64/128/256px 透明帧；品牌图更新后用 `python tools/prepare-app-icon.py`（需 Pillow）重新生成并提交 ICO。非 Windows 构建跳过资源编译。
 
 构建后运行 `python tools/verify-windows-icon.py` 验证 Debug，或追加 `target/release/dinuosi.exe` 验证 Release。检查会逐帧比较 EXE 资源与 ICO，并以隔离数据目录启动真实窗口，确认系统窗口类图标与 EXE 品牌图一致；证据保存在 `.local/windows-icon/`。

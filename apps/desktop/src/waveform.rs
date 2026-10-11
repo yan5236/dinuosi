@@ -2,10 +2,18 @@
 
 use crate::{media::MediaKind, view::Desktop};
 use dinuosi_core::waveform::Waveform;
-use gpui::{Bounds, Context, Div, canvas, div, fill, point, prelude::*, px, rgb, size};
+use gpui::{
+    App, AppContext, Bounds, Context, Div, Element, ElementId, Entity, GlobalElementId,
+    InspectorElementId, IntoElement, LayoutId, Pixels, RenderImage, Style, Window, div, prelude::*,
+};
 use std::sync::Arc;
 
 const CYAN: u32 = 0x35cbdc;
+
+#[cfg(test)]
+thread_local! {
+    pub(crate) static RASTERIZATIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
 
 impl Desktop {
     /// 串行后台提取尚未处理的在线音频，导入、重开及离线恢复共用此入口。
@@ -50,43 +58,223 @@ impl Desktop {
     }
 }
 
-/// 在给定源起点与秒数范围绘制青蓝色上下峰值；每个像素查询自身时间区间，保留瞬态。
-/// duration 表示本画布覆盖的源时长，时间线由可见宽度/缩放计算，预览使用完整素材时长。
-/// 缓存缺失时保留空画布；绘制裁切在实际边界内，不生成拉伸位图或额外说明文字。
-pub(crate) fn waveform_view(waveform: Option<Arc<Waveform>>, start: f64, duration: f64) -> Div {
-    div().size_full().overflow_hidden().child(
-        canvas(
-            move |_, _, _| (),
-            move |bounds, _, window, _| {
-                let Some(waveform) = waveform else {
-                    return;
+/// 按源时间和实际设备像素绘制波形；稳定 ID 必须在父元素内唯一，三处调用各自保留缓存。
+/// 源、裁剪、缩放、尺寸或 DPI 改变时重建，播放头、悬停和窗口平移只复用已上传的纹理。
+/// 缓存随元素释放并清理 GPU 图片，不写项目或保留不可见片段的绘制结果。
+pub(crate) fn waveform_view(
+    id: &'static str,
+    waveform: Option<Arc<Waveform>>,
+    start: f64,
+    duration: f64,
+) -> Div {
+    div().size_full().overflow_hidden().child(WaveformElement {
+        id,
+        waveform,
+        start,
+        duration,
+    })
+}
+
+struct WaveformElement {
+    id: &'static str,
+    waveform: Option<Arc<Waveform>>,
+    start: f64,
+    duration: f64,
+}
+
+struct WaveformPaint {
+    waveform: Arc<Waveform>,
+    start: f64,
+    duration: f64,
+    dimensions: (u32, u32),
+    scale: f32,
+    image: Arc<RenderImage>,
+}
+
+impl IntoElement for WaveformElement {
+    type Element = Self;
+
+    /// 直接交给 GPUI 元素生命周期，避免每次 Render 创建新的图片缓存。
+    fn into_element(self) -> Self {
+        self
+    }
+}
+
+impl Element for WaveformElement {
+    type RequestLayoutState = ();
+    type PrepaintState = Option<Arc<RenderImage>>;
+
+    /// 使用调用点的稳定身份，片段由父级片段 ID 隔离，避免三处波形互相覆盖。
+    fn id(&self) -> Option<ElementId> {
+        Some(self.id.into())
+    }
+
+    /// 本元素不需要额外检查器位置，保持与原画布一致。
+    fn source_location(&self) -> Option<&'static std::panic::Location<'static>> {
+        None
+    }
+
+    /// 填满现有容器，不改变波形与选区、片段标签的布局关系。
+    fn request_layout(
+        &mut self,
+        _: Option<&GlobalElementId>,
+        _: Option<&InspectorElementId>,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> (LayoutId, ()) {
+        let mut style = Style::default();
+        style.size.width = gpui::relative(1.0).into();
+        style.size.height = gpui::relative(1.0).into();
+        (window.request_layout(style, [], cx), ())
+    }
+
+    /// 只在缓存键变化时按真实像素生成 BGRA；替换或元素移除时释放旧纹理。
+    fn prepaint(
+        &mut self,
+        id: Option<&GlobalElementId>,
+        _: Option<&InspectorElementId>,
+        bounds: Bounds<Pixels>,
+        _: &mut (),
+        window: &mut Window,
+        cx: &mut App,
+    ) -> Self::PrepaintState {
+        let scale = window.scale_factor();
+        let dimensions = (
+            (f32::from(bounds.size.width) * scale).ceil() as u32,
+            (f32::from(bounds.size.height) * scale).ceil() as u32,
+        );
+        window.with_element_state(
+            id.unwrap(),
+            |cache: Option<Option<Entity<WaveformPaint>>>, window| {
+                let mut cache = cache.flatten();
+                let Some(waveform) = self.waveform.as_ref().filter(|_| {
+                    dimensions.0 > 0
+                        && dimensions.1 > 0
+                        && self.duration > 0.0
+                        && self.duration.is_finite()
+                        && self.start.is_finite()
+                }) else {
+                    return (None, None);
                 };
-                let width = f32::from(bounds.size.width);
-                let height = f32::from(bounds.size.height);
-                if width <= 0.0 || height <= 0.0 || duration <= 0.0 {
-                    return;
+                let valid = cache.as_ref().is_some_and(|cache| {
+                    let cache = cache.read(cx);
+                    Arc::ptr_eq(&cache.waveform, waveform)
+                        && cache.start == self.start
+                        && cache.duration == self.duration
+                        && cache.dimensions == dimensions
+                        && cache.scale == scale
+                });
+                if !valid {
+                    #[cfg(test)]
+                    RASTERIZATIONS.with(|count| count.set(count.get() + 1));
+                    let image = Arc::new(RenderImage::new([image::Frame::new(rasterize(
+                        dimensions,
+                        scale,
+                        self.start,
+                        self.duration,
+                        |start, end| waveform.peak(start, end),
+                    ))]));
+                    cache = Some(cx.new(|_| WaveformPaint {
+                        waveform: waveform.clone(),
+                        start: self.start,
+                        duration: self.duration,
+                        dimensions,
+                        scale,
+                        image,
+                    }));
+                    cx.observe_release_in(cache.as_ref().unwrap(), window, |cache, window, _| {
+                        if let Err(error) = window.drop_image(cache.image.clone()) {
+                            eprintln!("释放波形纹理失败：{error}");
+                        }
+                    })
+                    .detach();
                 }
-                let center = height / 2.0;
-                let scale = (center - 1.0).max(0.0);
-                for x in 0..width.ceil() as usize {
-                    let left = x as f32;
-                    let right = (left + 1.0).min(width);
-                    let peak = waveform.peak(
-                        start + duration * left as f64 / width as f64,
-                        start + duration * right as f64 / width as f64,
-                    );
-                    let top = (center - peak.max * scale).min(center - 0.5).max(0.0);
-                    let bottom = (center - peak.min * scale).max(center + 0.5).min(height);
-                    window.paint_quad(fill(
-                        Bounds::new(
-                            bounds.origin + point(px(left), px(top)),
-                            size(px(right - left), px(bottom - top)),
-                        ),
-                        rgb(CYAN),
-                    ));
-                }
+                let image = cache.as_ref().map(|cache| cache.read(cx).image.clone());
+                (image, cache)
             },
         )
-        .size_full(),
-    )
+    }
+
+    /// 每处波形仅提交一个图片绘制指令；GPUI 复用同一图片 ID 的 GPU 纹理。
+    fn paint(
+        &mut self,
+        _: Option<&GlobalElementId>,
+        _: Option<&InspectorElementId>,
+        bounds: Bounds<Pixels>,
+        _: &mut (),
+        image: &mut Self::PrepaintState,
+        window: &mut Window,
+        _: &mut App,
+    ) {
+        if let Some(image) = image.take()
+            && let Err(error) = window.paint_image(bounds, Default::default(), image, 0, false)
+        {
+            eprintln!("绘制波形失败：{error}");
+        }
+    }
+}
+
+/// 把每个设备像素覆盖的源区间转换为透明 BGRA 图片，保留瞬态、零基线和亚像素边缘。
+/// dimensions 来自实际画布，scale 是 DPI 比例；返回图片仅供当前画布使用，不拉伸旧缓存。
+fn rasterize(
+    dimensions: (u32, u32),
+    scale: f32,
+    start: f64,
+    duration: f64,
+    peak: impl Fn(f64, f64) -> dinuosi_core::waveform::Peak,
+) -> image::RgbaImage {
+    let (width, height) = dimensions;
+    let mut image = image::RgbaImage::new(width, height);
+    let center = height as f32 / 2.0;
+    let amplitude = (center - scale).max(0.0);
+    for x in 0..width {
+        let peak = peak(
+            start + duration * x as f64 / width as f64,
+            start + duration * (x + 1) as f64 / width as f64,
+        );
+        let top = (center - peak.max * amplitude)
+            .min(center - scale / 2.0)
+            .max(0.0);
+        let bottom = (center - peak.min * amplitude)
+            .max(center + scale / 2.0)
+            .min(height as f32);
+        for y in top.floor() as u32..bottom.ceil() as u32 {
+            let alpha = ((bottom.min(y as f32 + 1.0) - top.max(y as f32)) * 255.0).round() as u8;
+            image.put_pixel(
+                x,
+                y,
+                image::Rgba([CYAN as u8, (CYAN >> 8) as u8, (CYAN >> 16) as u8, alpha]),
+            );
+        }
+    }
+    image
+}
+
+/// 验证 BGRA、零基线、瞬态峰值与源时间映射，在普通测试中覆盖无需解码的绘制边界。
+#[test]
+fn raster_keeps_source_peaks_color_and_dpi_baseline() {
+    use dinuosi_core::waveform::Peak;
+    let seen = std::cell::RefCell::new(Vec::new());
+    let image = rasterize((4, 10), 1.0, 2.0, 1.0, |start, end| {
+        seen.borrow_mut().push((start, end));
+        if start == 2.5 {
+            Peak {
+                min: -1.0,
+                max: 1.0,
+            }
+        } else {
+            Peak::default()
+        }
+    });
+    assert_eq!(
+        &*seen.borrow(),
+        &[(2.0, 2.25), (2.25, 2.5), (2.5, 2.75), (2.75, 3.0)]
+    );
+    assert_eq!(image.get_pixel(2, 1).0, [0xdc, 0xcb, 0x35, 255]);
+    assert_eq!(image.get_pixel(0, 0).0, [0, 0, 0, 0]);
+    assert_eq!(image.get_pixel(0, 4).0, [0xdc, 0xcb, 0x35, 128]);
+    let image = rasterize((4, 20), 2.0, 0.0, 1.0, |_, _| Peak::default());
+    assert_eq!(image.get_pixel(0, 9).0[3], 255);
+    assert_eq!(image.get_pixel(0, 10).0[3], 255);
+    assert_eq!(image.get_pixel(0, 8).0[3], 0);
 }

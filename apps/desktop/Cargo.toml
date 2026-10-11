@@ -20,6 +20,10 @@ serde_json.workspace = true
 image = { version = "0.25", default-features = false }
 rodio = { version = "=0.21.1", default-features = false, features = ["playback"] }
 
+[target.'cfg(target_os = "windows")'.dependencies]
+dinuosi-cursor = { path = "../../crates/cursor" }
+resvg = { version = "=0.45.1", default-features = false }
+
 [build-dependencies]
 embed-resource = "=3.0.11"
 

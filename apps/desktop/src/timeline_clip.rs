@@ -107,6 +107,7 @@ impl Desktop {
                                     .top(px(21.0))
                                     .bottom(px(3.0))
                                     .child(crate::waveform::waveform_view(
+                                        "clip-waveform-image",
                                         media
                                             .filter(|m| !m.offline)
                                             .and_then(|m| m.waveform.clone()),

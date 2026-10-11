@@ -1,8 +1,8 @@
 {
-  "name": "轻线 · 完整界面图标集（103 枚完整版）",
-  "version": "1.8",
-  "count": 103,
-  "previousCount": 102,
+  "name": "轻线 · 完整界面图标集（104 枚完整版）",
+  "version": "1.9",
+  "count": 104,
+  "previousCount": 103,
   "additionCount": 1,
   "viewBox": "0 0 24 24",
   "strokeWidth": 1.8,
@@ -714,6 +714,13 @@
       "file": "svg/keyframe-filled.svg",
       "symbolId": "icon-keyframe-filled",
       "addedIn": "1.8"
+    },
+    {
+      "name": "razor-cursor",
+      "label": "刀片光标",
+      "file": "svg/razor-cursor.svg",
+      "symbolId": "icon-razor-cursor",
+      "addedIn": "1.9"
     }
   ]
 }

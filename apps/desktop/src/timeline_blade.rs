@@ -1,10 +1,7 @@
 //! 刀片工具的命中、虚线、光标和编辑事务；核心切割由 Timeline::split 统一执行。
 use crate::{ui::TEXT, view::Desktop};
 use dinuosi_core::timeline::Clip;
-use dinuosi_icons::Icon;
-use gpui::{
-    Context, Div, MouseDownEvent, Pixels, Point, Window, canvas, div, prelude::*, px, rgb, svg,
-};
+use gpui::{Context, Div, MouseDownEvent, Pixels, Point, Window, div, prelude::*, px, rgb};
 use std::collections::BTreeSet;
 
 impl Desktop {
@@ -27,20 +24,25 @@ impl Desktop {
     }
 
     /// 记录用于悬停的窗口坐标；切换到选择工具、离开窗口时仍由命中条件自动隐藏预览。
-    /// 不更改播放头或项目，只在刀片启用时请求重绘。
+    /// 不更改播放头或项目；仅命中片段或切割帧改变时刷新虚线，同一帧内移动不重建主界面。
     pub(crate) fn update_blade_pointer(&mut self, point: Point<Pixels>, cx: &mut Context<Self>) {
+        let before = self
+            .blade_hit()
+            .map(|(clip, frame)| (clip.id.clone(), frame));
         self.timeline.blade_pointer = Some(point);
-        if self.timeline.blade {
+        let after = self
+            .blade_hit()
+            .map(|(clip, frame)| (clip.id.clone(), frame));
+        if before != after {
             cx.notify();
         }
     }
 
-    /// 返回刀片活动内容区内的指针；标尺、轨道头、滚动条、弹窗/菜单和其他手势均不显示刀片。
-    fn blade_point(&self) -> Option<Point<Pixels>> {
-        let point = self.timeline.blade_pointer?;
-        let b = self.timeline.bounds;
-        (self.timeline.blade
+    /// 判定工具是否可作用于内容区；弹窗、菜单、全屏和其他手势期间恢复平台指针。
+    pub(crate) fn blade_enabled(&self) -> bool {
+        self.timeline.blade
             && self.current.is_some()
+            && !self.preview_fullscreen
             && !self.busy
             && self.dialog.is_none()
             && !self.menu_open
@@ -52,6 +54,13 @@ impl Desktop {
             && self.timeline.marker_dialog.is_none()
             && self.timeline.gesture.is_none()
             && self.session.drag.is_none()
+    }
+
+    /// 返回刀片活动内容区内的指针；标尺、轨道头和滚动条不提供切割预览。
+    fn blade_point(&self) -> Option<Point<Pixels>> {
+        let point = self.timeline.blade_pointer?;
+        let b = self.timeline.bounds;
+        (self.blade_enabled()
             && point.x >= b.left() + px(self.timeline.header)
             && point.x < b.right() - px(12.0)
             && point.y >= b.top() + px(38.0)
@@ -191,36 +200,6 @@ impl Desktop {
                         .h(px((height - n as f32 * 7.0).min(4.0)))
                         .bg(rgb(TEXT))
                 })),
-        )
-    }
-
-    /// 使用现有 Razor SVG 替换内容区系统光标，窗口外或离开内容区自动恢复平台指针。
-    /// 根层绘制避免片段边缘裁切；无命中时仍显示刀片，但不显示切割虚线。
-    pub(crate) fn blade_cursor_overlay(&self) -> Option<Div> {
-        let point = self.blade_point()?;
-        Some(
-            div()
-                .debug_selector(|| "blade-cursor".into())
-                .absolute()
-                .left(point.x - px(12.0))
-                .top(point.y - px(12.0))
-                .size(px(24.0))
-                .child(
-                    svg()
-                        .path(Icon::Razor.path())
-                        .size_full()
-                        .text_color(rgb(TEXT)),
-                )
-                .child(
-                    canvas(
-                        |_, _, _| (),
-                        |_, _, window, _| {
-                            window.set_window_cursor_style(gpui::CursorStyle::None);
-                        },
-                    )
-                    .absolute()
-                    .inset_0(),
-                ),
         )
     }
 }

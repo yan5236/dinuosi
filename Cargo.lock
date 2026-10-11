@@ -1426,15 +1426,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "dinuosi-cursor"
+version = "0.1.0"
+dependencies = [
+ "raw-window-handle",
+ "windows 0.61.3",
+]
+
+[[package]]
 name = "dinuosi-desktop"
 version = "0.1.0"
 dependencies = [
  "dinuosi-command",
  "dinuosi-core",
+ "dinuosi-cursor",
  "dinuosi-icons",
  "embed-resource",
  "gpui",
  "image",
+ "resvg",
  "rodio",
  "serde_json",
  "sys-locale",

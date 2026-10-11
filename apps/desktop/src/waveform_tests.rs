@@ -46,6 +46,21 @@ fn waveform_preview_and_timeline_follow_real_audio(cx: &mut TestAppContext) {
     assert_eq!(cx.debug_bounds("preview-waveform").unwrap(), viewport);
     let strip = cx.debug_bounds("preview-seek").unwrap();
     assert_eq!(cx.debug_bounds("preview-strip-waveform").unwrap(), strip);
+    let rasterizations = crate::waveform::RASTERIZATIONS.with(|count| count.get());
+    for _ in 0..10 {
+        desktop.update_in(cx, |_, _, cx| cx.notify());
+        cx.run_until_parked();
+    }
+    assert_eq!(
+        crate::waveform::RASTERIZATIONS.with(|count| count.get()),
+        rasterizations,
+        "不改变源时间、DPI 或尺寸的主界面刷新必须复用两处波形纹理"
+    );
+    cx.simulate_resize(size(px(1500.0), px(920.0)));
+    cx.run_until_parked();
+    assert!(crate::waveform::RASTERIZATIONS.with(|count| count.get()) > rasterizations);
+    cx.simulate_resize(size(px(1440.0), px(900.0)));
+    cx.run_until_parked();
     cx.simulate_click(strip.center(), Modifiers::none());
     assert!((desktop.read_with(cx, |v, _| v.session.position) - 2.0).abs() < 0.01);
     let add = cx.debug_bounds("add-to-track").unwrap().center();
@@ -60,12 +75,17 @@ fn waveform_preview_and_timeline_follow_real_audio(cx: &mut TestAppContext) {
     assert!(wave.top() > clip.top() && wave.bottom() < clip.bottom());
     let trim = cx.debug_bounds(trim_selector).unwrap().center();
     let pps = desktop.read_with(cx, |v, _| v.pixels_per_second());
+    let rasterizations = crate::waveform::RASTERIZATIONS.with(|count| count.get());
     let target = trim + point(px(pps * 0.5), px(0.0));
     cx.simulate_mouse_down(trim, MouseButton::Left, Modifiers::none());
     cx.simulate_mouse_move(target, MouseButton::Left, Modifiers::none());
     cx.simulate_mouse_up(target, MouseButton::Left, Modifiers::none());
     cx.run_until_parked();
     assert_eq!(store.load_timeline(&entry).unwrap().clips[0].source_in, 15);
+    assert!(
+        crate::waveform::RASTERIZATIONS.with(|count| count.get()) > rasterizations,
+        "裁边改变源时间后必须重建片段波形"
+    );
     let zoom = cx.debug_bounds("zoom-slider").unwrap();
     cx.simulate_mouse_down(zoom.center(), MouseButton::Left, Modifiers::none());
     cx.simulate_mouse_move(

@@ -70,6 +70,9 @@ impl Desktop {
                     .top(px(38.0))
                     .bottom(px(12.0))
                     .overflow_hidden()
+                    .when(self.blade_enabled(), |s| {
+                        s.cursor(gpui::CursorStyle::Crosshair)
+                    })
                     .on_mouse_down(
                         MouseButton::Left,
                         cx.listener(|this, e, window, cx| this.begin_marquee(e, window, cx)),

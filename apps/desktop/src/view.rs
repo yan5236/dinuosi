@@ -32,6 +32,7 @@ pub struct Desktop {
     pub(crate) preview_fullscreen: bool,
     pub(crate) session: crate::preview::EditorSession,
     pub(crate) timeline: crate::timeline_state::TimelineSession,
+    pub(crate) blade_cursor: crate::blade_cursor::BladeCursor,
 }
 impl Desktop {
     /// 初始化窗口角色、共享偏好和快捷键焦点；后台加载最近列表，损坏设置或索引显示错误。
@@ -99,6 +100,7 @@ impl Desktop {
         })
         .detach();
         let mut desktop = Self {
+            blade_cursor: Default::default(),
             focus_handle,
             store,
             current,
@@ -284,6 +286,7 @@ impl Render for Desktop {
             }
         }
         if self.preview_fullscreen {
+            self.blade_cursor.clear();
             return self.fullscreen_preview(cx).into_any_element();
         }
         let dimensions = window.viewport_size();
@@ -345,7 +348,7 @@ impl Render for Desktop {
                 self.manager(window, cx)
             })
             .children(self.library_drag_overlay())
-            .children(self.blade_cursor_overlay())
+            .child(self.blade_cursor_region(cx))
             .when(
                 self.menu_open
                     || self.help_open

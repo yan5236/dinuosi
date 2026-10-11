@@ -74,6 +74,7 @@ impl Desktop {
                                 .absolute()
                                 .inset_0()
                                 .child(crate::waveform::waveform_view(
+                                    "preview-waveform-image",
                                     selected.and_then(|m| m.waveform.clone()),
                                     0.0,
                                     selected.map_or(0.0, |m| m.duration),
@@ -159,6 +160,7 @@ impl Desktop {
                                         .absolute()
                                         .inset_0()
                                         .child(crate::waveform::waveform_view(
+                                            "preview-strip-waveform-image",
                                             media.waveform.clone(),
                                             0.0,
                                             media.duration,

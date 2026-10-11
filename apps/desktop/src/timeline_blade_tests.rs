@@ -4,7 +4,7 @@ use crate::{
     view::Desktop,
 };
 use dinuosi_core::{Preferences, ProjectStore, media::MediaKind};
-use gpui::{Modifiers, TestAppContext, point, px, size};
+use gpui::{AppContext, Modifiers, TestAppContext, point, px, size};
 
 /// 在真实设置视图点击下拉选项并应用，验证草稿不提前生效、两项可切换、Esc 收起和重开保存值。
 #[gpui::test]
@@ -91,7 +91,30 @@ fn blade_and_playhead_split_follow_real_pointer_and_keyboard_events(cx: &mut Tes
     let button = cx.debug_bounds("timeline-razor").unwrap().center();
     cx.simulate_click(button, Modifiers::none());
     cx.simulate_mouse_move(position, None, Modifiers::none());
-    assert!(cx.debug_bounds("blade-cursor").is_some());
+    assert!(cx.debug_bounds("blade-cursor").is_none());
+    assert!(desktop.read_with(cx, |v, _| v.blade_enabled()));
+    assert!(cx.debug_bounds("blade-cut-line").is_some());
+    let notifications = std::rc::Rc::new(std::cell::Cell::new(0));
+    let observed = notifications.clone();
+    let _observer = cx.new(|cx| {
+        cx.observe(&desktop, move |_, _, _| observed.set(observed.get() + 1))
+            .detach();
+    });
+    cx.run_until_parked();
+    let before = notifications.get();
+    for offset in [0.01, 0.02, 0.03] {
+        cx.simulate_mouse_move(
+            position + point(px(offset), px(0.0)),
+            None,
+            Modifiers::none(),
+        );
+        cx.run_until_parked();
+    }
+    assert_eq!(
+        notifications.get(),
+        before,
+        "同一切割帧内移动不得触发工作区通知"
+    );
     assert!(cx.debug_bounds("blade-cut-line").is_some());
     cx.simulate_click(position, Modifiers::none());
     cx.run_until_parked();
@@ -141,7 +164,7 @@ fn blade_and_playhead_split_follow_real_pointer_and_keyboard_events(cx: &mut Tes
     cx.simulate_click(button, Modifiers::none());
     cx.simulate_keystrokes("v");
     assert!(!desktop.read_with(cx, |v, _| v.timeline.blade));
-    assert!(desktop.read_with(cx, |v, _| v.blade_cursor_overlay().is_none()));
+    assert!(!desktop.read_with(cx, |v, _| v.blade_enabled()));
     cx.simulate_keystrokes("c");
     assert!(desktop.read_with(cx, |v, _| v.timeline.blade));
     cx.simulate_click(position, Modifiers::none());

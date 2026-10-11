@@ -14,7 +14,7 @@ H.264：Windows 使用 Media Foundation 硬件/软件；macOS 使用 VideoToolbo
 
 FFmpeg 固定 8.0.3，继续禁止 GPL、nonfree、version3、网络协议及任意系统 FFmpeg。OpenH264 2.6.0 来源和 SHA-256 记录在输入锁的 `unixInputs` 中，仅用于 Unix 构建；许可与专利原文必须随对应源码和运行库保留。自行编译 OpenH264 不等于获得 Cisco 预编译二进制的专利许可承诺，公开发行仍需按现有发行约束审核。
 
-`crates/media` 是唯一允许 unsafe 的 Rust FFI 边界，Core/Desktop 继续禁止 unsafe。原生解码与编码上下文独占，Drop 在库与取消句柄存活期间释放资源；BGRA 和 PCM 使用有界缓冲。视频按播放时钟输出，导出复用原生顺序解码。取消监视器只设置原子标志，原生 IO 和处理边界检查取消；不并发释放上下文。系统编码器卡在驱动内部时，进程内取消不能保证强制抢占，十秒能力探测期限属于协作取消。能力探测在独立线程执行，避免 Windows GUI STA COM 环境影响 Media Foundation。
+Rust FFI 分别限定在 `crates/media` 的媒体边界与 `crates/cursor` 的 Windows 原生光标边界，Core/Desktop 继续禁止 unsafe。光标只在所属窗口线程创建和更新，窗口销毁或会话释放后清理回调及资源；其他平台使用 GPUI 系统十字光标。原生解码与编码上下文独占，Drop 在库与取消句柄存活期间释放资源；BGRA 和 PCM 使用有界缓冲。视频按播放时钟输出，导出复用原生顺序解码。取消监视器只设置原子标志，原生 IO 和处理边界检查取消；不并发释放上下文。系统编码器卡在驱动内部时，进程内取消不能保证强制抢占，十秒能力探测期限属于协作取消。能力探测在独立线程执行，避免 Windows GUI STA COM 环境影响 Media Foundation。
 
 Windows 用户数据位置保持 `%LOCALAPPDATA%/Dinuosi`；macOS 新默认是 `~/Library/Application Support/Dinuosi`，已有旧目录且新目录不存在时保留旧列表；Linux 使用绝对 `XDG_DATA_HOME` 或 `~/.local/share/Dinuosi`。`DINUOSI_DATA_DIR` 保留开发隔离用途。项目中的素材路径仍是本机引用，不自动转换为另一台电脑的路径。
 

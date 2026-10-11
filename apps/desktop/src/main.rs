@@ -2,6 +2,7 @@
 
 mod assets;
 mod audio_inspector;
+mod blade_cursor;
 mod dialogs;
 mod editor;
 mod export_controls;
