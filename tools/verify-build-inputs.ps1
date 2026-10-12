@@ -38,6 +38,14 @@ finally { Move-Item -LiteralPath "$notice.withheld" -Destination $notice }
 
 $manifest=Join-Path $work 'runtime-manifest.json'
 $original=[IO.File]::ReadAllText($manifest)
+foreach ($name in 'dinuosi_media.dll', 'avfilter-11.dll') {
+    try {
+        $data=$original|ConvertFrom-Json
+        $data.files=@($data.files | Where-Object { $_.name -ne $name })
+        [IO.File]::WriteAllText($manifest,($data|ConvertTo-Json -Depth 6),[Text.UTF8Encoding]::new($false))
+        Assert-Rejected '运行时未包含已封存的媒体动态库|运行时封存清单缺少'
+    } finally { [IO.File]::WriteAllText($manifest,$original,[Text.UTF8Encoding]::new($false)) }
+}
 try {
     $data=$original|ConvertFrom-Json
     $data.files[0].sha256='0'*64
@@ -53,4 +61,4 @@ try {
     [IO.File]::WriteAllText($audit,($data|ConvertTo-Json -Depth 6),[Text.UTF8Encoding]::new($false))
     Assert-Rejected 'Cargo 依赖输入已变更'
 } finally { [IO.File]::WriteAllText($audit,$original,[Text.UTF8Encoding]::new($false)) }
-Write-Output '缺失源码/许可/编码库声明、运行时校验失败与过期审计六项拒绝边界通过。'
+Write-Output '缺失源码/许可/编码库声明/桥接或配套动态库、运行时校验失败与过期审计八项拒绝边界通过。'

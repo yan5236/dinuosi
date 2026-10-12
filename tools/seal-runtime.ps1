@@ -14,6 +14,11 @@ if (!$license.Contains('Lesser General Public License')) { throw '产物不是 L
 $source = "$work/source-bundle"
 New-Item -ItemType Directory -Force $source | Out-Null
 $lock = Get-Content "$root/distribution/inputs.lock.json" -Raw | ConvertFrom-Json
+foreach ($name in 'dinuosi_media.dll', 'avcodec-62.dll', 'avformat-62.dll', 'avfilter-11.dll', 'avutil-60.dll', 'swresample-6.dll', 'swscale-9.dll') {
+    if (!(Test-Path -LiteralPath "$work/runtime/ffmpeg/bin/$name" -PathType Leaf)) {
+        throw "运行时缺少 $name，不能封存；请先构建配套媒体动态库"
+    }
+}
 foreach ($key in 'ffmpeg','ffmpegSignature','ffmpegKey','zlib','lame','aom','vpx') {
     $entry = $lock.inputs.$key
     Copy-Item -LiteralPath "$work/downloads/$($entry.file)" -Destination $source -Force
@@ -32,7 +37,7 @@ $record = [ordered]@{
     compiler = (Get-Item (Join-Path $compilerRoot.FullName 'bin/Hostx64/x64/cl.exe')).VersionInfo.FileVersion
     msvcEnvironment = $VcVars
     msysVersion = (& "$MsysRoot/usr/bin/bash.exe" --version | Select-Object -First 1)
-    os = (Get-CimInstance Win32_OperatingSystem).Version
+    os = [Environment]::OSVersion.Version.ToString()
     files = @()
     bridgeInputs = @(@('tools/build-media-library.py') + @(Get-ChildItem "$root/crates/media/native" -File | ForEach-Object { "crates/media/native/$($_.Name)" }) | ForEach-Object { @{path=$_;sha256=(Get-FileHash (Join-Path $root $_)).Hash.ToLowerInvariant()} })
 }

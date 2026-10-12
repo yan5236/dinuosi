@@ -2,7 +2,30 @@
 
 验收日期：2026-10-10。当前 Windows 10 IoT 企业版 LTSC 19044 x64 上的内部安装包和便携版通过本轮自动检查及实际媒体操作。未签名、未上传、未公开发布。公开发布仍受下述授权材料及系统验证缺口约束，不能将本报告理解为所有电脑兼容或法律风险为零。
 
-2026-10-11 后续新增时间线导出及 Media Foundation 运行库构建，行为与验证见 [EXPORT.md](EXPORT.md)。下列安装包哈希和安装生命周期证据属于此前版本，未覆盖本次新增编码路径；新版本仍需重新打包与干净系统验证。
+2026-10-11 后续新增时间线导出及 Media Foundation 运行库构建，行为与验证见 [EXPORT.md](EXPORT.md)。2026-10-12 已重新打包并验收当前动态库版本，见下一节；后文 2026-10-10 的安装包哈希和安装生命周期证据属于此前版本。干净系统验证仍待完成。
+
+## 2026-10-12 安装器多语言、品牌与当前动态库打包
+
+已重新构建 Release 主程序和媒体桥接库、封存动态库及桥接源码，并刷新 466 个 Windows 运行依赖的许可审计。安装器支持 English 与简体中文，安装语言登记及本地化卸载快捷方式分别通过验收。应用包包含主程序、MIT 原文、8 个运行 DLL、完整许可材料和逐文件清单；音源、翻译和图标内嵌，不再装入测试用 FFmpeg/ffprobe CLI。
+
+本轮最终产物位于 `target/distribution/`，仍为未签名内部验收包：
+
+| 文件 | 字节数 | SHA-256 |
+| --- | ---: | --- |
+| Dinuosi-0.1.0-windows-x64-setup.exe | 153835498 | `e236899ea6d0983442ef040205cbb8c5db6ce774cc0694f4c0810911c48e315f` |
+| Dinuosi-0.1.0-windows-x64.zip | 156726527 | `15d879a49c6d67be9a81316c117673de38b5244b78ca417a3555e9bcbdcd521f` |
+| Dinuosi-0.1.0-ffmpeg-8.0.3-sources.zip | 26439893 | `7bdb5950138e896aef61a243ac873e17cc72533b038c1f30c4dac573ccd1e45b` |
+
+- `verify-package.ps1 -Language English` / `-Language SimpChinese` 各通过 8 项检查：文件哈希、语言登记与卸载快捷方式、当前用户安装登记、运行中升级拒绝且进程保留、关闭后升级、便携内容一致、无外部 PATH 启动及卸载保留未知文件/项目/用户数据。验收后临时安装登记与开始菜单快捷方式已清理。证据为 `.local/distribution/qa/package-verification-English.json` 与 `package-verification-SimpChinese.json`。
+- `verify-build-inputs.ps1` 通过 8 项拒绝边界，新增桥接及必要 libav 从封存清单遗漏时拒绝打包。许可策略和媒体部署检查通过。
+- 最终源码 ZIP 的 7 个锁定输入归档 SHA-256、桥接源码、重建脚本和编码库声明逐项通过校验；补齐的官方 libaom 归档全部文件与现有构建源码一致。
+- 最终便携包的 DLL 在中文路径及仅系统 PATH 下通过现有 `installed_runtime_child` 三种场景：完整运行库实际探测、视频帧、音频样本与时间线导出；缺少桥接和 avcodec 分别正确失败。保留证据于 `.local/installer-validation/media/report.json` 及三个日志。上层 `relocated_runtime_ignores_path_and_reports_missing_files` 在上述媒体断言后删除临时测试 EXE 时遇到 Windows 共享冲突 32，整项测试仍记为失败，不计为通过。
+- Computer Use 可访问性实际将语言选择在 English 与中文(简体)之间切换。其截图出现 `FrameArrived timed out`，点击报告坐标不可用；改用窗口截图保存 `.local/installer-validation/language-dialog.png` 与 `language-English.png`。当时仅检查语言选择窗；后续完整流程的原生控件验证见下文，真人鼠标/键盘完整操作仍未验收。
+- 后续替换安装器及卸载器图标为现有 `assets/brand/dinuosi.ico`，`BrandingText` 改为 `Dinuosi` 并重新打包。实际安装器与生成的卸载器均在编号 103 图标组中逐帧匹配全部 9 帧品牌图标；语言选择窗的图标像素也与安装器品牌资源一致。真实卸载确认窗口的 1028 号页脚控件为 `Dinuosi`，标题及页首图标已截图核对；证据为 `.local/installer-branding/result.json`、`language.png` 与 `uninstaller.png`。未点击确认页执行卸载，随后使用静默卸载清理该独占品牌验收安装。
+- 后续完成安装流程调整：详情默认收起且可反复切换；安装结束保留下一步，完成页提供两个默认勾选项，只有点击完成才创建桌面快捷方式或立即运行；卸载确认不显示目录。`tools/verify-installer-ui.py` 实际通过中英文各四种勾选组合，共 8 个完整安装/完成/卸载场景；反复折叠、完成前无副作用、真实软件启动与正常退出、卸载隐藏目录、未知文件及用户数据保留均通过。未创建桌面快捷方式时另验证用户同名文件不被卸载删除。完整证据为 `.local/installer-flow/c359874319cc42f09093c7f0e3742374/report.json`，两种语言的 `*-1-1/` 内包含完成页、展开/收起详情及卸载页截图。
+- 新进度页组件以严格 `/W4 /WX` 构建；依赖仅为操作系统 `USER32.dll`、`COMCTL32.dll`、`KERNEL32.dll`，没有额外 VC++ 动态运行库要求。组件嵌入安装器，不进入应用/便携版的 8 个媒体 DLL。界面回归使用真实 Win32 控件消息、文件及进程验证，并等待系统实际释放已退出程序的临时映像占用；它不等同于真人鼠标/键盘完整操作验收。
+
+本轮未重跑全部工作区测试、独立从零重建全部 FFmpeg 或干净 Windows/Windows 11 验收；旧报告下述公开发布待办继续保留。以下内容为 2026-10-10 的历史证据。
 
 ## 交付产物
 

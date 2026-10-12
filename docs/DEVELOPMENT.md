@@ -102,12 +102,26 @@ python ./tools/collect-licenses.py
 
 - Windows x64 安装程序。
 - 同内容便携 ZIP。
-- FFmpeg、zlib、LAME 对应源码与重建脚本 ZIP。
+- FFmpeg、zlib、LAME、libaom、libvpx 及媒体桥接对应源码与重建脚本 ZIP。
 - 第三方许可声明及产物校验清单。
+
+安装器提供 English 与简体中文选择，保存到当前用户安装登记；再次交互安装可改选，卸载沿用安装语言。目录页、进度页、卸载确认、运行占用提示与卸载快捷方式均按所选语言显示。实现沿用 [NSIS Modern UI 2 的语言选择与登记流程](https://nsis.sourceforge.io/Docs/Modern%20UI%202/Readme.html#language-selection-dialog)。安装器语言不改写应用自身的语言偏好。
+
+安装器与卸载器共用现有 `assets/brand/dinuosi.ico`，窗口及语言选择图标使用该品牌资源；向导底部品牌文字为 `Dinuosi`。
+
+安装详情默认收起，按钮可反复展开与收起日志；该切换只影响进度页列表，不改变安装器窗口状态。安装结束保留“下一步”，进入“安装完成”页；“创建桌面快捷方式”和“立即运行 Dinuosi”默认勾选，仅点击“完成”后执行。开始菜单快捷方式仍随安装创建；静默安装跳过完成页，不创建桌面快捷方式或自动运行。卸载确认隐藏目录标签和路径框，实际卸载仍使用安装登记目录及原文件清单；只有 `DesktopShortcutCreated` 登记表明桌面快捷方式由本安装器创建时才删除，未创建时保留用户的同名文件。
+
+打包时 `tools/build-installer-ui.py` 使用已有 MSVC x86 工具及锁定 NSIS 3.13 SDK 构建进度页按钮扩展。NSIS 安装器自身为 x86，不改变应用 x64；该扩展只嵌入安装器并在其临时目录运行，便携版和应用运行库不包含它。完成页复用已有 nsDialogs 与品牌页首，不引入额外向导图片。
+
+`python tools/verify-installer-ui.py` 执行真实原生控件回归，覆盖两种语言的四种完成选项组合、详情反复切换、点击完成前不触发副作用、卸载隐藏目录及未知文件/用户数据保留。它拒绝已有安装或桌面/开始菜单快捷方式，使用 `.local/installer-flow/<随机ID>/` 中的独占安装与隔离数据；截图需要既有 Pillow，测试结果及截图保存在该目录。
+
+应用包只包含 `dinuosi.exe`、主程序 MIT、`runtime/ffmpeg/` 中的桥接及配套 DLL、`licenses/` 与 `package-files.json`；音源、界面翻译和品牌图标已编译内嵌。FFmpeg/ffprobe CLI、导入库、头文件与构建工具留在开发缓存，不进入安装包或便携 ZIP。原生媒体源码及重建材料通过对应源码 ZIP 另行交付。
+
+已有运行库但封存清单早于桥接库修改时，先按上文重编 `build-media-library.py` 并运行 `seal-runtime.ps1`，再重新收集许可和打包。封存不接受缺少桥接或必要 libav 的目录，打包不接受遗漏必要 DLL 的清单；Cargo 输入变化后不能复用旧许可审计。
 
 安装和便携程序目录中的 `dinuosi.exe`、`runtime/ffmpeg/` 与 `licenses/` 应一同保留。当前生成的是未签名内部验收包；公开发行前的待确认事项保存在 [发行验收报告](DISTRIBUTION_VALIDATION.md#许可材料与公开发布阻断)。
 
-`tools/verify-build-inputs.ps1` 检查缺失或变更输入时拒绝打包，`tools/verify-package.ps1` 执行实际安装、升级与卸载验收。后者会运行安装程序、创建临时当前用户安装登记及快捷方式，存在已有安装时拒绝执行；请先阅读脚本和验收范围。
+`tools/verify-build-inputs.ps1` 检查缺失或变更输入时拒绝打包，`tools/verify-package.ps1` 执行实际安装、升级与卸载验收。后者会运行安装程序、创建临时当前用户安装登记及快捷方式，存在已有安装时拒绝执行；请先阅读脚本和验收范围。分别使用 `-Language English` 与 `-Language SimpChinese` 验证语言登记和本地化快捷方式；结果分别写入 `.local/distribution/qa/package-verification-English.json` 与 `package-verification-SimpChinese.json`，并检查安装/便携内容含完整 DLL 和许可且不含测试 CLI。
 
 ## 仓库文件边界
 

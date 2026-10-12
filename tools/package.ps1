@@ -8,6 +8,9 @@ $OutputDirectory = [IO.Path]::GetFullPath($OutputDirectory)
 $manifest = Get-Content "$work/runtime-manifest.json" -Raw | ConvertFrom-Json
 $lock = Get-Content "$root/distribution/inputs.lock.json" -Raw | ConvertFrom-Json
 if (!($manifest.files.name -contains 'dinuosi_media.dll') -or !$manifest.bridgeInputs.Count) { throw '运行时未包含已封存的媒体动态库，请重新构建并封存' }
+foreach ($name in 'avcodec-62.dll', 'avformat-62.dll', 'avfilter-11.dll', 'avutil-60.dll', 'swresample-6.dll', 'swscale-9.dll') {
+    if (!($manifest.files.name -contains $name)) { throw "运行时封存清单缺少 $name，请重新构建并封存" }
+}
 foreach ($input in $manifest.bridgeInputs) {
     if ((Get-FileHash (Join-Path $root $input.path)).Hash.ToLowerInvariant() -ne $input.sha256) { throw "媒体桥接源码已变更：$($input.path)" }
     $bundled = if ($input.path -like 'crates/media/native/*') { "$work/source-bundle/media-native/$(Split-Path $input.path -Leaf)" } else { "$work/source-bundle/build-media-library.py" }
@@ -81,7 +84,10 @@ New-Item -ItemType Directory -Force $stage, "$stage/runtime/ffmpeg", "$stage/lic
 Copy-Item -LiteralPath $exe -Destination "$stage/dinuosi.exe"
 # 主程序的 MIT 原文随应用分发，并进入文件清单与卸载文件列表。
 Copy-Item -LiteralPath "$root/LICENSE" -Destination "$stage/LICENSE"
-foreach ($file in $manifest.files) { Copy-Item -LiteralPath "$work/runtime/ffmpeg/bin/$($file.name)" -Destination "$stage/runtime/ffmpeg" }
+# 与开发部署相同，只分发应用需要的动态库；FFmpeg/ffprobe CLI 保留在构建缓存供独立验收。
+foreach ($file in $manifest.files | Where-Object { $_.name.EndsWith('.dll') }) {
+    Copy-Item -LiteralPath "$work/runtime/ffmpeg/bin/$($file.name)" -Destination "$stage/runtime/ffmpeg"
+}
 Copy-Item -Path "$work/licenses/*" -Destination "$stage/licenses" -Recurse
 Copy-Item -LiteralPath "$root/assets/audio/FluidR3-LICENSE.txt" -Destination "$stage/licenses"
 Copy-Item -LiteralPath "$work/sources/ffmpeg-8.0.3/COPYING.LGPLv2.1" -Destination "$stage/licenses/FFmpeg-LGPL-2.1.txt"
@@ -103,6 +109,8 @@ $deletions += @(Get-ChildItem $stage -Directory -Recurse | Sort-Object {$_.FullN
 $uninstall = [IO.Path]::GetFullPath("$work/build/uninstall-files.nsh").Replace('/' , '\')
 [IO.File]::WriteAllLines($uninstall,$deletions,[Text.UTF8Encoding]::new($false))
 $output = "$OutputDirectory/Dinuosi-$version-windows-x64-setup.exe"
+& python "$PSScriptRoot/build-installer-ui.py"
+if ($LASTEXITCODE -ne 0) { throw '安装器详情组件编译失败' }
 & "$work/build/nsis/nsis-3.13/makensis.exe" /INPUTCHARSET UTF8 /V2 "/DSTAGE=$stage" "/DOUTPUT=$output" "/DVERSION=$version" "/DREMOVAL_LIST=$uninstall" "$root/distribution/installer.nsi"
 if ($LASTEXITCODE -ne 0) { throw '安装包编译失败' }
 Compress-Archive -Path "$stage/*" -DestinationPath "$OutputDirectory/Dinuosi-$version-windows-x64.zip" -Force
