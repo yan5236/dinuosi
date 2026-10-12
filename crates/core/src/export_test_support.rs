@@ -155,6 +155,7 @@ pub(in crate::export) fn timeline(video: &Media, audio: &Media, image: &Media) -
         scale: 200.0,
         rotation: 90.0,
         opacity: 50.0,
+        ..Default::default()
     };
     clip.keyframes = vec![
         Keyframe {

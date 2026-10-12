@@ -121,7 +121,7 @@ impl Clip {
             _ => self.base_values(kind),
         }
     }
-    /// 返回当前帧的完整画面变换，供预览合成、命中与检查器共用。
+    /// 返回当前帧的完整画面变换，供预览合成、命中与检查器共用；镜像沿用片段静态状态。
     pub fn transform_at(&self, frame: f64) -> Transform {
         let pos = self.keyframe_values(KeyframeKind::Position, frame);
         Transform {
@@ -130,6 +130,7 @@ impl Clip {
             x: pos[0],
             y: pos[1],
             rotation: self.keyframe_values(KeyframeKind::Rotation, frame)[0],
+            ..self.transform.clone()
         }
     }
     /// 返回当前帧线性音量；零值可安全序列化并且严格静音。

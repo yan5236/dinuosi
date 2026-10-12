@@ -42,6 +42,8 @@ fn native_blend_matches_preview_semantics() {
         scale: 73.0,
         rotation: 23.0,
         opacity: 61.0,
+        mirror_horizontal: true,
+        mirror_vertical: true,
     };
     let mut preview = [0, 0, 0, 255].repeat((media::FRAME_WIDTH * media::FRAME_HEIGHT) as usize);
     let mut exported = preview.clone();

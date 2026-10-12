@@ -15,6 +15,7 @@ fn blend_fast_paths_preserve_pixels() {
                 rotation,
                 x,
                 y,
+                ..Default::default()
             };
             let mut actual = [90, 80, 70, 50].repeat((FRAME_WIDTH * FRAME_HEIGHT) as usize);
             let mut expected = actual.clone();
@@ -102,6 +103,7 @@ fn cached_transform_reuses_decode_and_invalidates_source_changes() {
         x: 150.0,
         y: -60.0,
         rotation: 28.0,
+        ..Default::default()
     };
     let expected = render(&transformed, 0, media).unwrap();
     std::fs::rename(&path, &parked).unwrap();

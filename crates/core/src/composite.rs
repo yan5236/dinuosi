@@ -89,7 +89,7 @@ pub fn blend_pixels(
     )
 }
 
-/// 在输出中心矩形内使用统一逆变换算法采样；预览补边和原尺寸导出共用透明度与旋转语义。
+/// 在输出中心矩形内使用统一逆变换算法采样；预览补边和原尺寸导出共用透明度、旋转与素材中心镜像语义。
 /// sizes 分别为输出和源缓冲尺寸，region 为有效项目矩形；拒绝无效长度和矩形。
 fn blend_region(
     output: &mut [u8],
@@ -140,14 +140,20 @@ fn blend_region(
             let dy = (y as f64 + 0.5 - top as f64 - region.1 as f64 / 2.0) * canvas.1 as f64
                 / region.1 as f64
                 - t.y;
-            let sx = ((dx * cos + dy * sin) / scale * source_size.0 as f64 / source_extent.0
+            let mut sx = ((dx * cos + dy * sin) / scale * source_size.0 as f64 / source_extent.0
                 + source_size.0 as f64 / 2.0)
                 .floor() as i32;
-            let sy = ((-dx * sin + dy * cos) / scale * source_size.1 as f64 / source_extent.1
+            let mut sy = ((-dx * sin + dy * cos) / scale * source_size.1 as f64 / source_extent.1
                 + source_size.1 as f64 / 2.0)
                 .floor() as i32;
             if sx < 0 || sy < 0 || sx >= source_size.0 as i32 || sy >= source_size.1 as i32 {
                 continue;
+            }
+            if t.mirror_horizontal {
+                sx = source_size.0 as i32 - 1 - sx;
+            }
+            if t.mirror_vertical {
+                sy = source_size.1 as i32 - 1 - sy;
             }
             let i = ((y * output_size.0 + x) * 4) as usize;
             let j = ((sy as u32 * source_size.0 + sx as u32) * 4) as usize;

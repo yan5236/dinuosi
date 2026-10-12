@@ -13,6 +13,24 @@ pub struct Marker {
 }
 
 impl Timeline {
+    /// 切换选中图片、视频的镜像状态；horizontal 为 true 时左右翻转，否则上下翻转。
+    /// 忽略未知身份、音频、锁定片段及锁轨，不改源文件和关键帧；保存与历史由宿主提交。
+    pub fn mirror_clips(&mut self, ids: &BTreeSet<String>, horizontal: bool) {
+        for c in self.clips.iter_mut().filter(|c| {
+            ids.contains(&c.id)
+                && c.kind != crate::media::MediaKind::Audio
+                && !c.locked
+                && !self.tracks[c.track].locked
+        }) {
+            let mirror = if horizontal {
+                &mut c.transform.mirror_horizontal
+            } else {
+                &mut c.transform.mirror_vertical
+            };
+            *mirror = !*mirror;
+        }
+    }
+
     /// 校验外部标记身份、时间、名称和 RGB 范围；重复身份或损坏字段返回错误，不修改项目。
     pub(crate) fn validate_markers(&self) -> Result<(), String> {
         let mut ids = BTreeSet::new();

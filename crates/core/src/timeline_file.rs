@@ -42,6 +42,10 @@ struct ClipV1 {
     source_frames: i64,
     transform: [f64; 5],
     #[serde(default)]
+    mirror_horizontal: bool,
+    #[serde(default)]
+    mirror_vertical: bool,
+    #[serde(default)]
     kind: Option<String>,
     #[serde(default = "default_gain")]
     gain: f64,
@@ -74,7 +78,7 @@ fn default_bitrate() -> u32 {
     12000
 }
 impl TimelineV1 {
-    /// 显式复制领域数据、片段锁定、标记、磁吸、码率及关键帧到版本化字段，不保存选择、拖动和历史。
+    /// 显式复制领域数据、片段锁定与镜像、标记、磁吸、码率及关键帧到版本化字段，不保存选择、拖动和历史。
     pub fn from_timeline(t: &Timeline) -> Self {
         Self {
             fps: t.fps,
@@ -131,6 +135,8 @@ impl TimelineV1 {
                         c.transform.y,
                         c.transform.rotation,
                     ],
+                    mirror_horizontal: c.transform.mirror_horizontal,
+                    mirror_vertical: c.transform.mirror_vertical,
                     kind: Some(
                         match c.kind {
                             MediaKind::Audio => "audio",
@@ -158,6 +164,7 @@ impl TimelineV1 {
     /// 缺失自定义名称标记时仅将与旧默认名一致的轨道判为默认，其余名称保留用户原文。
     /// 旧重叠片段分配到上方新轨道；缺失关键帧和标记使用空集合，片段默认解锁、磁吸默认开启。
     /// 损坏类型、增益、重复关键帧或非法动画值返回错误，不进入编辑器。
+    /// 缺失镜像字段的旧项目默认不翻转，保持原有画面。
     pub fn into_timeline(self) -> Result<Timeline, String> {
         let legacy = self.tracks.iter().all(|t| t.kind.is_none());
         let migrate_audio = self.clips.iter().any(|c| c.kind.is_none());
@@ -245,6 +252,8 @@ impl TimelineV1 {
                             x: c.transform[2],
                             y: c.transform[3],
                             rotation: c.transform[4],
+                            mirror_horizontal: c.mirror_horizontal,
+                            mirror_vertical: c.mirror_vertical,
                         },
                         kind,
                         gain: c.gain,

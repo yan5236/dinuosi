@@ -2,6 +2,68 @@
 use crate::view::Desktop;
 use dinuosi_core::{ProjectStore, media::MediaKind};
 use gpui::{Modifiers, MouseButton, TestAppContext, px, size};
+
+/// 点击实际工具控件，验证选中片段双轴镜像、重复恢复、保存及撤销重做，锁定时点击无操作。
+#[gpui::test]
+fn mirror_toolbar_clicks_persist_and_undo(cx: &mut TestAppContext) {
+    let root = std::env::temp_dir().join(format!("dinuosi-mirror-ui-{}", std::process::id()));
+    std::fs::create_dir_all(&root).unwrap();
+    let store = ProjectStore::new(root.join("recent.json"));
+    let entry = store.create("镜像工具", &root).unwrap();
+    let (desktop, cx) = cx
+        .add_window_view(|window, cx| Desktop::new(store.clone(), Some(entry.clone()), window, cx));
+    cx.simulate_resize(size(px(1440.0), px(900.0)));
+    let id = desktop.update_in(cx, |v, _, cx| {
+        let before = v.timeline.model.clone();
+        let id = v
+            .timeline
+            .model
+            .insert(
+                ("mirror-ui.png".into(), MediaKind::Image),
+                "画面".into(),
+                0,
+                0,
+                0..150,
+                150,
+            )
+            .unwrap();
+        v.commit_timeline(before, cx);
+        id
+    });
+    cx.run_until_parked();
+    let original = store.load_timeline(&entry).unwrap();
+    click(cx, "timeline-mirror-horizontal");
+    assert_eq!(store.load_timeline(&entry).unwrap(), original);
+    click(cx, Box::leak(format!("clip-{id}").into_boxed_str()));
+    click(cx, "timeline-mirror-horizontal");
+    assert!(
+        store.load_timeline(&entry).unwrap().clips[0]
+            .transform
+            .mirror_horizontal
+    );
+    click(cx, "timeline-mirror-vertical");
+    let both = store.load_timeline(&entry).unwrap();
+    assert!(both.clips[0].transform.mirror_horizontal && both.clips[0].transform.mirror_vertical);
+    cx.simulate_keystrokes("ctrl-z");
+    cx.run_until_parked();
+    assert!(
+        !store.load_timeline(&entry).unwrap().clips[0]
+            .transform
+            .mirror_vertical
+    );
+    cx.simulate_keystrokes("ctrl-shift-z");
+    cx.run_until_parked();
+    assert_eq!(store.load_timeline(&entry).unwrap(), both);
+    click(cx, "timeline-mirror-horizontal");
+    click(cx, "timeline-mirror-vertical");
+    assert_eq!(store.load_timeline(&entry).unwrap(), original);
+    click(cx, "timeline-lock");
+    let locked = store.load_timeline(&entry).unwrap();
+    click(cx, "timeline-mirror-horizontal");
+    click(cx, "timeline-mirror-vertical");
+    assert_eq!(store.load_timeline(&entry).unwrap(), locked);
+    std::fs::remove_dir_all(root).unwrap();
+}
 /// 点击本次绘制的控件边界并等待界面稳定，避免直接调用业务方法掩盖未接通的按钮。
 fn click(cx: &mut gpui::VisualTestContext, selector: &'static str) {
     let point = cx.debug_bounds(selector).unwrap().center();

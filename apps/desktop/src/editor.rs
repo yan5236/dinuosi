@@ -103,7 +103,7 @@ impl Desktop {
             )
     }
 
-    /// 依草图顺序绘制分组工具，接通选择、刀片、磁吸、标记和片段锁；其他剪辑工具保留禁用，缩放控件独立靠右。
+    /// 依草图顺序绘制分组工具，接通选择、刀片、磁吸、标记、片段锁与镜像；镜像仅在选中可编辑画面片段时启用。
     /// 工具提示使用立即向下显示的 Tooltip；缩放按钮仅改变标尺密度，不创建历史记录。
     fn timeline_toolbar(&self, height: f32, cx: &mut Context<Self>) -> Div {
         let groups: &[&[Icon]] = &[
@@ -144,7 +144,9 @@ impl Desktop {
                                 *icon,
                                 Icon::Select | Icon::Razor | Icon::Snap | Icon::Marker
                             ) || (matches!(*icon, Icon::Trash | Icon::Lock)
-                                && !self.timeline.selected.is_empty()),
+                                && !self.timeline.selected.is_empty())
+                                || (matches!(*icon, Icon::MirrorHorizontal | Icon::MirrorVertical)
+                                    && self.can_mirror_clips()),
                             if *icon == Icon::Lock {
                                 crate::i18n::t(
                                     "editor",
@@ -189,6 +191,15 @@ impl Desktop {
                                     this.add_timeline_marker(window, cx);
                                 } else if icon == Icon::Lock {
                                     this.toggle_clip_lock(window, cx);
+                                } else if matches!(
+                                    icon,
+                                    Icon::MirrorHorizontal | Icon::MirrorVertical
+                                ) {
+                                    this.mirror_selected_clips(
+                                        icon == Icon::MirrorHorizontal,
+                                        window,
+                                        cx,
+                                    );
                                 } else if icon == Icon::Trash {
                                     this.delete_clips(cx);
                                 } else if matches!(icon, Icon::Select | Icon::Razor) {

@@ -19,6 +19,9 @@ pub struct Transform {
     pub x: f64,
     pub y: f64,
     pub rotation: f64,
+    /// 按素材自身中心翻转像素，独立于缩放、平移和旋转，不改变动画关键帧。
+    pub mirror_horizontal: bool,
+    pub mirror_vertical: bool,
 }
 
 impl Default for Transform {
@@ -30,6 +33,8 @@ impl Default for Transform {
             x: 0.0,
             y: 0.0,
             rotation: 0.0,
+            mirror_horizontal: false,
+            mirror_vertical: false,
         }
     }
 }

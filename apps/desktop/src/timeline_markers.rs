@@ -26,6 +26,42 @@ pub(crate) fn timecode(frame: i64, fps: u32) -> String {
     )
 }
 impl Desktop {
+    /// 判断当前选择是否含未锁定的图片或视频；忙碌、音频及锁轨不能启用镜像工具。
+    pub(crate) fn can_mirror_clips(&self) -> bool {
+        !self.busy
+            && self.timeline.model.clips.iter().any(|c| {
+                self.timeline.selected.contains(&c.id)
+                    && c.kind != dinuosi_core::media::MediaKind::Audio
+                    && !c.locked
+                    && !self.timeline.model.tracks[c.track].locked
+            })
+    }
+
+    /// 左右或上下翻转选中画面片段，先结束输入与拖动，再沿用保存、回滚和单次撤销事务。
+    /// horizontal 为 true 表示左右镜像；成功后刷新预览并恢复时间线键盘焦点，不修改源素材。
+    pub(crate) fn mirror_selected_clips(
+        &mut self,
+        horizontal: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if !self.can_mirror_clips() {
+            return;
+        }
+        self.commit_inspector_input(cx);
+        self.end_timeline_pointer(window, cx);
+        self.stop_timeline();
+        let before = self.timeline.model.clone();
+        self.timeline
+            .model
+            .mirror_clips(&self.timeline.selected, horizontal);
+        self.stop_preview();
+        self.timeline.preview = true;
+        self.commit_timeline(before, cx);
+        self.focus_handle.focus(window);
+        cx.notify();
+    }
+
     /// 在当前播放头添加唯一标记并切换标记页签；名称按当前语言生成，失败保留项目并显示真实错误。
     pub(crate) fn add_timeline_marker(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.busy {
