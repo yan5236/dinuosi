@@ -104,6 +104,7 @@ pub struct Clip {
     /// 倒放使用当前源选区的逆序帧；定格保存绝对源帧，取消后恢复原选区和方向。
     pub reversed: bool,
     pub freeze_frame: Option<i64>,
+    pub speed: Option<crate::speed::Speed>,
     pub transform: Transform,
     pub kind: MediaKind,
     /// 线性音频增益：1 为 0dB，0 为负无穷，10 为 20dB；避免 JSON 保存无穷数值。
@@ -229,7 +230,7 @@ impl Timeline {
             .unwrap_or(0)
     }
     /// 校验载入/提交数据的画布、码率、轨道、片段、倒放类型、定格源帧及标记；错误不修改状态。
-    /// 图片时长独立于默认源帧数，但仍限于一天；视频和音频不得超过源入点后的可用帧数。
+    /// 图片时长独立于默认源帧数；变速片段校验精确源区间，普通视频/音频不得超过可用源帧数。
     pub fn validate(&self) -> Result<(), String> {
         if !(1..=240).contains(&self.fps)
             || self.width == 0
@@ -267,9 +268,20 @@ impl Timeline {
                 })
                 || (clip.kind == MediaKind::Image && clip.duration > 86400 * self.fps as i64)
                 || (clip.kind != MediaKind::Image
+                    && clip.speed.is_none()
                     && clip.duration > clip.source_frames - clip.source_in)
             {
                 return Err("片段身份或时间范围无效".into());
+            }
+            if let Some(speed) = &clip.speed {
+                speed.validate(clip.source_frames)?;
+                if clip.kind == MediaKind::Image
+                    || (clip.kind == MediaKind::Audio && !speed.curve.is_empty())
+                    || clip.duration > 86400 * self.fps as i64
+                    || clip.source_in != speed.source[0].floor() as i64
+                {
+                    return Err("片段变速区间无效".into());
+                }
             }
             if !self.tracks[clip.track].kind.accepts(clip.kind) {
                 return Err("素材类型与轨道不匹配".into());

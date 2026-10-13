@@ -124,7 +124,7 @@ impl Desktop {
         cx.notify();
     }
     /// 处理活动手势的移动，片段修改从按下快照计算；音量按比例映射增益并停止旧声音。
-    /// 参数和预览变换只在内存更新，释放时保存并记录一次历史，避免累计漂移与重复提交。
+    /// 参数、变速控制点和预览变换只在内存更新，释放时保存并记录一次历史，避免累计漂移与重复提交。
     pub(crate) fn move_timeline_pointer(&mut self, point: Point<Pixels>, cx: &mut Context<Self>) {
         let Some(gesture) = &self.timeline.gesture else {
             return;
@@ -242,6 +242,36 @@ impl Desktop {
                     self.auto_keyframe(cx),
                 );
                 self.refresh_timeline(cx);
+            }
+            Gesture::Speed { bounds } => {
+                let ratio = (f32::from(point.x - bounds.left())
+                    / f32::from(bounds.size.width).max(1.0))
+                .clamp(0.0, 1.0);
+                if let Some(before) = &self.timeline.before {
+                    self.timeline.model = before.clone();
+                }
+                let pitch = self
+                    .speed_clip()
+                    .and_then(|c| c.speed.as_ref())
+                    .is_some_and(|s| s.pitch);
+                match self.preview_speed(
+                    crate::speed_inspector::rate_from_ratio(ratio as f64),
+                    &[],
+                    pitch,
+                ) {
+                    Ok(()) => {
+                        self.timeline.preview = true;
+                        self.refresh_timeline(cx);
+                    }
+                    Err(error) => self.notice = Some(error),
+                }
+            }
+            Gesture::SpeedPoint { bounds, index } => {
+                let (bounds, index) = (*bounds, *index);
+                if let Some(before) = &self.timeline.before {
+                    self.timeline.model = before.clone();
+                }
+                self.move_speed_point(point, bounds, index, cx);
             }
         }
         cx.notify();

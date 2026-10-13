@@ -304,6 +304,7 @@ impl Render for Desktop {
                 cx.listener(|this, _, window, cx| {
                     if this.timeline.input.is_some()
                         || this.timeline.volume_input.is_some()
+                        || this.timeline.speed_input.is_some()
                         || this.timeline.rename.is_some()
                     {
                         this.commit_inspector_input(cx);

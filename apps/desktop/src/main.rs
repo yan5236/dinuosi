@@ -33,6 +33,9 @@ mod settings_dropdown;
 mod settings_view;
 mod shortcuts;
 mod sliders;
+mod speed_curve;
+mod speed_input;
+mod speed_inspector;
 mod switch;
 mod timeline_actions;
 mod timeline_blade;
@@ -73,6 +76,8 @@ mod preview_transform_tests;
 mod settings_drag_tests;
 #[cfg(test)]
 mod settings_tests;
+#[cfg(test)]
+mod speed_tests;
 #[cfg(test)]
 mod timeline_blade_tests;
 #[cfg(test)]

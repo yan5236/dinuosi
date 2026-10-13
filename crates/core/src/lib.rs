@@ -11,6 +11,7 @@ pub mod media;
 pub mod media_stream;
 mod midi;
 mod project_settings;
+pub mod speed;
 mod storage;
 pub mod timeline;
 pub mod timeline_audio;

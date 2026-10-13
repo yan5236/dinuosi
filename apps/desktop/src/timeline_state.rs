@@ -44,6 +44,13 @@ pub enum Gesture {
     Volume {
         bounds: Bounds<Pixels>,
     },
+    Speed {
+        bounds: Bounds<Pixels>,
+    },
+    SpeedPoint {
+        bounds: Bounds<Pixels>,
+        index: usize,
+    },
     Property {
         property: Property,
         bounds: Bounds<Pixels>,
@@ -93,6 +100,9 @@ pub struct TimelineSession {
     pub timer: Option<Task<()>>,
     pub input: Option<(Property, Entity<TextInput>)>,
     pub volume_input: Option<Entity<TextInput>>,
+    pub speed_input: Option<(bool, String, Entity<TextInput>)>,
+    pub speed_curve_mode: bool,
+    pub speed_curve_point: usize,
     pub input_blur: Option<gpui::Subscription>,
     pub rename: Option<(usize, Entity<TextInput>)>,
     pub scrub_preview: dinuosi_core::timeline::ScrubPreview,

@@ -138,7 +138,8 @@ impl Desktop {
         .detach();
         cx.notify();
     }
-    /// 每次设备时钟推进时请求最新合成帧，视频渲染跟不上时合并请求，保持声音连续。
+    /// 每次设备时钟推进时请求最新合成帧；音频队列耗尽时精确停在项目终点，避免非整秒时钟舍入后永不结束。
+    /// 视频渲染跟不上时合并请求，保持声音连续；尾部错误先报告，再释放设备与计时器。
     fn run_timeline_clock(
         &mut self,
         start: f64,
@@ -173,7 +174,12 @@ impl Desktop {
                         cx.notify();
                         return false;
                     }
-                    this.session.timeline_position = (start + elapsed.as_secs_f64()).min(end);
+                    let finished = this.timeline.sound.as_ref().is_some_and(|s| s.sink.empty());
+                    this.session.timeline_position = if finished {
+                        end
+                    } else {
+                        (start + elapsed.as_secs_f64()).min(end)
+                    };
                     this.refresh_timeline(cx);
                     this.timeline.playing = this.session.timeline_position < end;
                     if !this.timeline.playing {

@@ -38,16 +38,35 @@ struct Samples {
 }
 impl Iterator for Samples {
     type Item = f32;
-    /// 转发核心样本并每半秒提取解码错误，避免在每个样本上加锁。
+    /// 转发核心样本，每半秒及 EOF 提取解码错误；尾部不足半秒的真实失败也必须报告。
     fn next(&mut self) -> Option<f32> {
         self.count += 1;
-        if self.count.is_multiple_of(48000)
+        let sample = self.audio.next();
+        if (self.count.is_multiple_of(48000) || sample.is_none())
             && let Some(error) = self.audio.error()
         {
             *self.error.lock().unwrap() = Some(error);
         }
-        self.audio.next()
+        sample
     }
+}
+
+/// 在无硬件混音器中消费 41/30 秒 PCM；设备时钟可能小于真实终点，但队列完成状态必须可靠。
+#[test]
+fn fractional_timeline_end_is_detected_by_queue_completion() {
+    let (mixer, mut output) = rodio::mixer::mixer(2, 48000);
+    let sink = Sink::connect_new(&mixer);
+    sink.append(rodio::buffer::SamplesBuffer::new(
+        2,
+        48000,
+        vec![0.0; 131200],
+    ));
+    assert!(!sink.empty());
+    for _ in 0..135296 {
+        let _ = output.next();
+    }
+    assert!(sink.empty());
+    assert!(sink.get_pos().as_secs_f64() <= 41.0 / 30.0);
 }
 impl Source for Samples {
     /// 核心输出格式在流内固定，设备可连续消费。

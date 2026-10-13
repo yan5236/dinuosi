@@ -44,6 +44,8 @@ struct ClipV1 {
     reversed: bool,
     #[serde(default)]
     freeze_frame: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    speed: Option<SpeedV1>,
     transform: [f64; 5],
     #[serde(default)]
     mirror_horizontal: bool,
@@ -62,6 +64,13 @@ struct MarkerV1 {
     frame: i64,
     name: String,
     color: u32,
+}
+#[derive(Serialize, Deserialize)]
+struct SpeedV1 {
+    source: [f64; 2],
+    rate: f64,
+    curve: Vec<[f64; 2]>,
+    pitch: bool,
 }
 /// 旧项目默认启用磁吸，不要求重新保存后才能拖放。
 fn default_snapping() -> bool {
@@ -82,7 +91,7 @@ fn default_bitrate() -> u32 {
     12000
 }
 impl TimelineV1 {
-    /// 显式复制领域数据、片段锁定、镜像、倒放、定格、标记和关键帧到版本化字段，不保存选择、拖动和历史。
+    /// 显式复制领域数据、变速精确源区间、锁定、镜像、倒放、定格、标记和关键帧到版本化字段。
     pub fn from_timeline(t: &Timeline) -> Self {
         Self {
             fps: t.fps,
@@ -134,6 +143,12 @@ impl TimelineV1 {
                     source_frames: c.source_frames,
                     reversed: c.reversed,
                     freeze_frame: c.freeze_frame,
+                    speed: c.speed.as_ref().map(|s| SpeedV1 {
+                        source: s.source,
+                        rate: s.rate,
+                        curve: s.curve.clone(),
+                        pitch: s.pitch,
+                    }),
                     transform: [
                         c.transform.opacity,
                         c.transform.scale,
@@ -254,6 +269,12 @@ impl TimelineV1 {
                         source_frames: c.source_frames,
                         reversed: c.reversed,
                         freeze_frame: c.freeze_frame,
+                        speed: c.speed.map(|s| crate::speed::Speed {
+                            source: s.source,
+                            rate: s.rate,
+                            curve: s.curve,
+                            pitch: s.pitch,
+                        }),
                         transform: Transform {
                             opacity: c.transform[0],
                             scale: c.transform[1],

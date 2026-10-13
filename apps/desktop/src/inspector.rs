@@ -11,7 +11,7 @@ use gpui::{Context, Div, MouseButton, Window, canvas, div, prelude::*, px, rgb, 
 
 impl Desktop {
     /// 保持草图的“基本”页签、图片、视频的变换布局；选中音频仅显示音量滑块及右侧 dB 值。
-    /// 空选择显示项目概览，标记页签显示排序标记，变速页签保留空白；锁定片段禁用写入控件。
+    /// 空选择显示项目概览并隐藏变速，标记页签显示排序标记；变速连接源区间和时长，锁定片段禁用写入。
     pub(crate) fn inspector(&self, width: f32, cx: &mut Context<Self>) -> Div {
         let audio = self
             .timeline
@@ -39,10 +39,9 @@ impl Desktop {
                 if matches!(
                     self.timeline.inspector_tab,
                     crate::timeline_state::InspectorTab::Speed
-                ) {
-                    div()
-                        .debug_selector(|| "inspector-speed-page".into())
-                        .flex_1()
+                ) && self.speed_clip().is_some()
+                {
+                    self.speed_inspector(enabled, cx)
                 } else if matches!(
                     self.timeline.inspector_tab,
                     crate::timeline_state::InspectorTab::Markers
@@ -364,10 +363,24 @@ impl Desktop {
         self.timeline.input = Some((property, input));
         cx.notify();
     }
-    /// 提交画面或音量数值输入；音量支持 dB 后缀和负无穷，非法数字显示真实错误且保持原参数。
+    /// 提交画面、音量或变速数值输入；变速绑定片段身份，非法数字显示真实错误且保持原参数。
     /// 轨道名称仅修改所选轨道；输入实体先取出，避免失焦回调重复提交。
     pub(crate) fn commit_inspector_input(&mut self, cx: &mut Context<Self>) {
         self.timeline.input_blur = None;
+        if let Some((duration, id, input)) = self.timeline.speed_input.take()
+            && self.speed_clip().is_some_and(|c| c.id == id)
+        {
+            match input
+                .read(cx)
+                .text
+                .trim()
+                .trim_end_matches(['s', 'x', '×'])
+                .parse::<f64>()
+            {
+                Ok(value) => self.apply_speed_number(duration, value, cx),
+                Err(_) => self.notice = Some("请输入有效变速数值".into()),
+            }
+        }
         if let Some(input) = self.timeline.volume_input.take() {
             let text = input
                 .read(cx)

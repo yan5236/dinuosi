@@ -110,6 +110,7 @@ impl Timeline {
             source_frames,
             reversed: false,
             freeze_frame: None,
+            speed: None,
             transform: Transform::default(),
             kind,
             gain: 1.0,
@@ -158,6 +159,7 @@ impl Timeline {
     }
 
     /// 按帧增量拖动片段左右边缘，最短一帧；正放左裁边调整源入点，倒放右裁边调整源入点。
+    /// 变速按精确源边界重映射曲线，延伸使用端点倍率并夹紧源范围；关键帧随左裁边调整局部时间。
     /// 图片左右均可延长，不改变源入点；起点保持在零至一天内，时长遵守项目的一天范围。
     /// 左裁边同步平移关键帧局部位置，保留范围外锚点，使保留画面的动画连续。
     /// 延长后若与同轨片段相交，裁剪片段优先复用上方空轨道，否则新建；锁轨或不存在返回错误。
@@ -172,6 +174,34 @@ impl Timeline {
         }
         if self.tracks[c.track].locked {
             return Err("轨道已锁定".into());
+        }
+        if c.speed.is_some() {
+            let [a, b] = c.source_bounds();
+            let speed = c.speed.as_ref().unwrap();
+            let scale = c.duration as f64 / ((b - a) * speed.integral(1.0));
+            let available = if left == c.reversed {
+                c.source_frames as f64 - b
+            } else {
+                a
+            };
+            let edge = if left { 0.0 } else { 1.0 };
+            let extension = (available / speed.rate_at(edge) * scale).floor() as i64;
+            if left {
+                let delta = delta.clamp(-extension.min(c.start), c.duration - 1);
+                c.slice_speed(delta as f64, c.duration as f64);
+                c.start += delta;
+                for key in &mut c.keyframes {
+                    key.frame -= delta;
+                }
+            } else {
+                let duration = c
+                    .duration
+                    .saturating_add(delta)
+                    .clamp(1, (c.duration + extension).min(86400 * self.fps as i64));
+                c.slice_speed(0.0, duration as f64);
+            }
+            self.resolve_overlap(id);
+            return Ok(());
         }
         if left {
             let (min, max) = if c.kind == MediaKind::Image {

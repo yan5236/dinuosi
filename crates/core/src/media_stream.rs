@@ -171,6 +171,32 @@ impl Decoder {
     pub(crate) fn cancellation(&self) -> Arc<AtomicBool> {
         self.cancel.clone()
     }
+    /// 将源 PCM 包装为片段变速输出；倍率、曲线和变调均复用外层取消与错误句柄。
+    /// 初始化失败不保留部分 PCM，供时间线播放和导出共用，视频线程不受此接口影响。
+    pub(crate) fn retime(
+        &mut self,
+        pcm: Pcm,
+        clip: &crate::timeline::Clip,
+        fps: f64,
+        elapsed: f64,
+    ) -> Result<Pcm, String> {
+        if clip.speed.as_ref().is_some_and(|s| {
+            if s.curve.is_empty() {
+                s.rate == 1.0
+            } else {
+                s.curve.iter().all(|p| p[1] == 1.0)
+            }
+        }) {
+            return Ok(pcm);
+        }
+        Ok(Pcm(PcmSource::Speed(Box::new(speed::SpeedPcm::new(
+            pcm,
+            clip.clone(),
+            fps,
+            elapsed,
+            self.cancel.clone(),
+        )?))))
+    }
 
     /// 在 PCM 消费结束后等待视频线程并确认真实解码诊断；未消费的音频不会被隐式解码。
     pub fn finish(mut self) -> Result<(), String> {
@@ -193,7 +219,23 @@ impl Drop for Decoder {
 }
 
 pub struct Pcm(PcmSource);
+impl Pcm {
+    /// 在后台排空源 PCM 并逐块检查取消；变速尾部即使超过项目舍入时长也必须检查源解码错误。
+    /// 不在音频设备回调调用，取消返回固定导出状态，错误最终由所属 Decoder::finish 提取。
+    pub(crate) fn finish_cancellable(&mut self, cancel: &AtomicBool) -> Result<(), String> {
+        if let PcmSource::Speed(pcm) = &mut self.0 {
+            return pcm.finish_cancellable(cancel);
+        }
+        for (index, _) in self.by_ref().enumerate() {
+            if index % 4096 == 0 && cancel.load(Ordering::Relaxed) {
+                return Err("导出已取消".into());
+            }
+        }
+        Ok(())
+    }
+}
 enum PcmSource {
+    Speed(Box<speed::SpeedPcm>),
     Native(Box<NativePcm>),
     Midi(Box<crate::midi::MidiPcm>),
     Reverse(Box<reverse::ReversePcm>),
@@ -214,6 +256,7 @@ impl Iterator for Pcm {
     /// 复用固定 PCM 缓冲，回调不为每个样本分配内存；取消后立即停止消费。
     fn next(&mut self) -> Option<f32> {
         match &mut self.0 {
+            PcmSource::Speed(pcm) => pcm.next(),
             PcmSource::Reverse(pcm) => pcm.next(),
             PcmSource::Midi(pcm) => pcm.next(),
             PcmSource::Native(pcm) => {
@@ -254,5 +297,9 @@ impl Iterator for Pcm {
     }
 }
 
+#[path = "media_curve.rs"]
+mod curve;
 #[path = "media_reverse.rs"]
 mod reverse;
+#[path = "media_speed.rs"]
+mod speed;

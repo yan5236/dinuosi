@@ -44,7 +44,7 @@ impl Desktop {
                     .child(div().flex_1().min_w_0().text_color(rgb(TEXT)).child(value))
             }))
     }
-    /// 根据当前选择生成“基本/项目”“标记点”“变速”页签；变速为空页，切换前提交输入并保留选择和播放位置。
+    /// 根据当前选择生成“基本/项目”“标记点”“变速”页签；仅选中视频/音频才显示变速，切换前提交输入。
     pub(crate) fn inspector_tabs(&self, empty: bool, cx: &mut Context<Self>) -> Div {
         div()
             .h(px(37.0))
@@ -60,6 +60,7 @@ impl Desktop {
                     InspectorTab::Speed,
                 ]
                 .into_iter()
+                .filter(|tab| *tab != InspectorTab::Speed || self.speed_clip().is_some())
                 .map(|tab| {
                     let id = match tab {
                         InspectorTab::Markers => "inspector-markers-tab",
@@ -75,9 +76,14 @@ impl Desktop {
                         .cursor_pointer()
                         .whitespace_nowrap()
                         .text_size(px(12.0))
-                        .when(self.timeline.inspector_tab == tab, |s| {
-                            s.border_b_1().border_color(rgb(TEXT))
-                        })
+                        .when(
+                            (self.timeline.inspector_tab == tab
+                                && (tab != InspectorTab::Speed || self.speed_clip().is_some()))
+                                || (tab == InspectorTab::Basic
+                                    && self.timeline.inspector_tab == InspectorTab::Speed
+                                    && self.speed_clip().is_none()),
+                            |s| s.border_b_1().border_color(rgb(TEXT)),
+                        )
                         .child(crate::i18n::t(
                             "inspector",
                             if tab == InspectorTab::Markers {

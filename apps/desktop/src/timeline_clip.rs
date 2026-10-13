@@ -106,20 +106,16 @@ impl Desktop {
                                     .right_0()
                                     .top(px(21.0))
                                     .bottom(px(3.0))
-                                    .child(crate::waveform::waveform_view(
-                                        "clip-waveform-image",
+                                    .child(crate::waveform::timeline_waveform_view(
                                         media
                                             .filter(|m| !m.offline)
                                             .and_then(|m| m.waveform.clone()),
-                                        (clip.source_in
-                                            + if clip.reversed { clip.duration } else { 0 })
-                                            as f64
-                                            / self.timeline.model.fps as f64
-                                            + (if clip.reversed { -1.0 } else { 1.0 })
-                                                * ((-x).max(0.0) as f64 + 1.0)
-                                                / pps as f64,
+                                        clip,
+                                        self.timeline.model.fps as f64,
+                                        ((-x).max(0.0) as f64 + 1.0) / pps as f64
+                                            * self.timeline.model.fps as f64,
                                         (visible - 2.0).max(0.0) as f64 / pps as f64
-                                            * if clip.reversed { -1.0 } else { 1.0 },
+                                            * self.timeline.model.fps as f64,
                                     )),
                             )
                         })

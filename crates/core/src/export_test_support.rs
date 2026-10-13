@@ -221,7 +221,7 @@ pub(in crate::export) fn rms(path: &Path, start: f64, end: f64) -> f64 {
 
 /// 为真实鼠标验收保存独立项目及稳定生成素材引用；仅写入本任务 .local/export-qa。
 /// 重复测试复用同一验收项目并更新时间线，不修改真实用户项目与应用默认数据目录。
-pub(super) fn save_gui_fixture(artifacts: &Path, timeline: &Timeline, media: &[Media]) {
+pub(in crate::export) fn save_gui_fixture(artifacts: &Path, timeline: &Timeline, media: &[Media]) {
     let source_folder = artifacts.join("sources");
     fs::create_dir_all(&source_folder).unwrap();
     let mut saved = timeline.clone();

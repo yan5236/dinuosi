@@ -7,10 +7,20 @@ use std::collections::BTreeSet;
 
 impl Clip {
     /// 将项目绝对帧映射为源帧；定格优先，倒放从当前选区尾帧开始，区间外夹紧到首尾。
-    /// 返回项目帧率下的非负源帧，供预览和导出共同寻址，不修改片段或源文件。
+    /// 返回项目帧率下的非负源帧，变速使用同一精确源区间和曲线，供预览和导出共同寻址。
     pub fn source_frame(&self, frame: i64) -> i64 {
         self.freeze_frame.unwrap_or_else(|| {
             let local = (frame - self.start).clamp(0, self.duration - 1);
+            if self.speed.is_some() {
+                let [a, b] = self.source_bounds();
+                let boundary = self.source_boundary(local as f64);
+                let source = if self.reversed {
+                    (boundary - 1e-9).ceil() - 1.0
+                } else {
+                    (boundary + 1e-9).floor()
+                };
+                return source.clamp(a.floor(), (b.ceil() - 1.0).max(a.floor())) as i64;
+            }
             self.source_in
                 + if self.reversed {
                     self.duration - 1 - local

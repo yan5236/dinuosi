@@ -109,4 +109,14 @@ cargo run -p dinuosi-desktop --locked
 
 如果缺库时已经打开软件，补齐后需保存工作并完全退出、重新启动。进程会缓存首次动态库加载结果，仅重开项目不能清除失败缓存。源文件仍在原路径时会重新探测；跨电脑移动项目后，项目内的本机素材路径还需对应实际源文件位置。
 
+已有本机 FFmpeg 缓存、只更新媒体桥源码时，可在第 2 步的 MSVC 开发终端中增量重建桥接 DLL，再重新封存和部署：
+
+```powershell
+python tools/build-media-library.py --prefix .local/distribution/runtime/ffmpeg
+./tools/seal-runtime.ps1 -MsysRoot $msysRoot -VcVars $vcVars
+./tools/prepare-media.ps1 -DeployOnly
+```
+
+这些命令依赖本机此前生成的受控头文件、库及源码缓存；全新机器仍执行第 3 步。Linux/macOS 的准备脚本同样会从当前源码编译媒体桥。
+
 Linux/macOS 从零准备的命令与依赖见 [跨平台支持](docs/CROSS_PLATFORM.md)。

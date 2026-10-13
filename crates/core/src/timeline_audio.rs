@@ -41,7 +41,7 @@ impl TimelineAudio {
         Self::start_inner(t, offset, sources, Some(cancel), register)
     }
 
-    /// 共用轨道、裁剪、倒放与音量动画初始化；定格片段静音，导出逐层登记稳定取消句柄。
+    /// 共用轨道、裁剪、倒放、变速和音量动画初始化；定格片段静音，导出逐层登记稳定取消句柄。
     /// 任一失败释放已打开的层与原生解码句柄；缺少可播放音频的片段维持既有跳过语义。
     fn start_inner(
         t: &Timeline,
@@ -51,7 +51,7 @@ impl TimelineAudio {
         register: impl Fn(&Decoder),
     ) -> Result<Self, String> {
         let fps = t.fps as f64;
-        let sample = |seconds: f64| (seconds.max(0.0) * 96000.0).round() as u64;
+        let sample = |seconds: f64| (seconds.max(0.0) * 48000.0).round() as u64 * 2;
         let mut layers = Vec::new();
         for c in &t.clips {
             if cancel.is_some_and(|cancel| cancel.load(std::sync::atomic::Ordering::Relaxed)) {
@@ -83,10 +83,10 @@ impl TimelineAudio {
                 continue;
             };
             let elapsed = (offset - c.start as f64 / fps).max(0.0);
-            let source_in = c.source_in as f64 / fps + if c.reversed { 0.0 } else { elapsed };
-            let source_end = (((c.source_in + c.duration) as f64 / fps)
-                - if c.reversed { elapsed } else { 0.0 })
-            .min(m.duration);
+            let [a, b] = c.source_bounds();
+            let boundary = c.source_boundary(elapsed * fps);
+            let source_in = if c.reversed { a } else { boundary } / fps;
+            let source_end = (if c.reversed { boundary } else { b } / fps).min(m.duration);
             if source_in >= source_end {
                 continue;
             }
@@ -104,6 +104,11 @@ impl TimelineAudio {
             };
             register(&decoder);
             if let Some(pcm) = decoder.take_audio() {
+                let pcm = if c.speed.is_some() {
+                    decoder.retime(pcm, c, fps, elapsed * fps)?
+                } else {
+                    pcm
+                };
                 let mut keys: Vec<_> = c
                     .keyframes
                     .iter()
@@ -144,11 +149,7 @@ impl TimelineAudio {
         cancel: &std::sync::atomic::AtomicBool,
     ) -> Result<(), String> {
         for mut layer in self.layers {
-            for (index, _) in layer.pcm.by_ref().enumerate() {
-                if index % 4096 == 0 && cancel.load(std::sync::atomic::Ordering::Relaxed) {
-                    return Err("导出已取消".into());
-                }
-            }
+            layer.pcm.finish_cancellable(cancel)?;
             layer.decoder.finish()?;
         }
         Ok(())

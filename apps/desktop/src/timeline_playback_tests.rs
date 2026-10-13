@@ -10,7 +10,7 @@ fn click(cx: &mut VisualTestContext, selector: &'static str) {
     cx.run_until_parked();
 }
 
-/// 验证按钮倒放、定格、撤回/还原及历史分叉；变速只存在空检查器页，锁定和空选择保持数据。
+/// 验证倒放、定格、撤回/还原及历史分叉；变速面板已接线，锁定和空选择保持数据并隐藏入口。
 #[gpui::test]
 fn playback_toolbar_history_and_empty_speed_tab(cx: &mut TestAppContext) {
     let root = std::env::temp_dir().join(format!("dinuosi-playback-ui-{}", std::process::id()));
@@ -93,6 +93,7 @@ fn playback_toolbar_history_and_empty_speed_tab(cx: &mut TestAppContext) {
         cx.notify();
     });
     cx.run_until_parked();
+    assert!(desktop.read_with(cx, |v, _| v.speed_clip().is_none()));
     click(cx, "timeline-reverse-playback");
     click(cx, "timeline-freeze-frame");
     assert_eq!(store.load_timeline(&entry).unwrap(), branch);

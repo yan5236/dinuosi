@@ -4,7 +4,7 @@ use crate::timeline::Timeline;
 impl Timeline {
     /// 原子修改分辨率、整数帧率和 kbps 码率；四舍五入换算片段、固定源帧、标记及关键帧时间。
     /// 裁剪范围外负帧锚点对称取整；同类型帧若折叠到同一新帧则拒绝，避免静默丢失动画。
-    /// 低帧率若导致片段消失、源越界或重叠则拒绝整次修改，原状态保持不变。
+    /// 变速精确源区间按帧率比例换算并夹紧舍入后的源尾；低帧率若导致片段消失或重叠则拒绝整次修改。
     pub fn configure(
         &mut self,
         width: u32,
@@ -33,6 +33,12 @@ impl Timeline {
             clip.duration = end - clip.start;
             clip.source_in = convert(clip.source_in);
             clip.source_frames = convert(clip.source_frames);
+            if let Some(speed) = &mut clip.speed {
+                for bound in &mut speed.source {
+                    *bound = (*bound * fps as f64 / self.fps as f64).min(clip.source_frames as f64);
+                }
+                clip.source_in = speed.source[0].floor() as i64;
+            }
             clip.freeze_frame = clip.freeze_frame.map(convert);
         }
         for marker in &mut next.markers {

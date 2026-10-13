@@ -72,6 +72,31 @@ pub(crate) fn waveform_view(
         waveform,
         start,
         duration,
+        mapping: None,
+    })
+}
+
+/// 按片段实际源时间映射绘制时间线波形；start/duration 为局部项目帧，常规/曲线/倒放共用源区间。
+/// 缓存键只包含声音寻址数据，选择和片段移动不触发无关栅格化；离线素材沿用空波形。
+pub(crate) fn timeline_waveform_view(
+    waveform: Option<Arc<Waveform>>,
+    clip: &dinuosi_core::timeline::Clip,
+    fps: f64,
+    start: f64,
+    duration: f64,
+) -> Div {
+    let speed = clip.speed.clone().unwrap_or(dinuosi_core::speed::Speed {
+        source: clip.source_bounds(),
+        rate: 1.0,
+        curve: Vec::new(),
+        pitch: false,
+    });
+    div().size_full().overflow_hidden().child(WaveformElement {
+        id: "clip-waveform-image",
+        waveform,
+        start: start / clip.duration as f64,
+        duration: duration / clip.duration as f64,
+        mapping: Some((speed, clip.reversed, fps)),
     })
 }
 
@@ -80,12 +105,14 @@ struct WaveformElement {
     waveform: Option<Arc<Waveform>>,
     start: f64,
     duration: f64,
+    mapping: Option<(dinuosi_core::speed::Speed, bool, f64)>,
 }
 
 struct WaveformPaint {
     waveform: Arc<Waveform>,
     start: f64,
     duration: f64,
+    mapping: Option<(dinuosi_core::speed::Speed, bool, f64)>,
     dimensions: (u32, u32),
     scale: f32,
     image: Arc<RenderImage>,
@@ -161,6 +188,7 @@ impl Element for WaveformElement {
                     Arc::ptr_eq(&cache.waveform, waveform)
                         && cache.start == self.start
                         && cache.duration == self.duration
+                        && cache.mapping == self.mapping
                         && cache.dimensions == dimensions
                         && cache.scale == scale
                 });
@@ -172,12 +200,30 @@ impl Element for WaveformElement {
                         scale,
                         self.start,
                         self.duration,
-                        |start, end| waveform.peak(start, end),
+                        |start, end| {
+                            let mapped = |time: f64| {
+                                self.mapping
+                                    .as_ref()
+                                    .map_or(time, |(speed, reversed, fps)| {
+                                        let progress = speed.progress(time);
+                                        (if *reversed {
+                                            speed.source[1]
+                                                - progress * (speed.source[1] - speed.source[0])
+                                        } else {
+                                            speed.source[0]
+                                                + progress * (speed.source[1] - speed.source[0])
+                                        }) / fps
+                                    })
+                            };
+                            let (a, b) = (mapped(start), mapped(end));
+                            waveform.peak(a.min(b), a.max(b))
+                        },
                     ))]));
                     cache = Some(cx.new(|_| WaveformPaint {
                         waveform: waveform.clone(),
                         start: self.start,
                         duration: self.duration,
+                        mapping: self.mapping.clone(),
                         dimensions,
                         scale,
                         image,

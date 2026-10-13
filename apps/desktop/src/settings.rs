@@ -108,6 +108,7 @@ impl Desktop {
             || self.timeline.gesture.is_some()
             || self.timeline.input.is_some()
             || self.timeline.volume_input.is_some()
+            || self.timeline.speed_input.is_some()
             || self.timeline.rename.is_some()
             || self.timeline.marker_dialog.is_some()
         {
