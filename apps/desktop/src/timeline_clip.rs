@@ -8,7 +8,7 @@ use dinuosi_core::timeline::Clip;
 use gpui::{Context, Div, MouseButton, ObjectFit, Stateful, div, img, prelude::*, px, rgb};
 impl Desktop {
     /// 返回可见片段内容和独立把手层，调用方须先绘制全部内容，再绘制全部把手，避免邻片遮挡及抢占命中。
-    /// 水平滚动截断处不伪造端点；音频按源选区方向、滚动截断及缩放查询波形，刀片模式隐藏把手。
+    /// 水平滚动截断处不伪造端点；音频按源选区查询波形，刀片模式隐藏把手，关联片段名称加下划线。
     /// 跟随鼠标模式仅在实际片段拖动时隐藏选中原块及把手；保留模式、点击和其他手势正常绘制，不修改模型。
     pub(crate) fn timeline_clip(
         &self,
@@ -128,6 +128,7 @@ impl Desktop {
                                 .text_size(px(11.0))
                                 .overflow_hidden()
                                 .whitespace_nowrap()
+                                .when(clip.link.is_some(), |s| s.underline())
                                 .child(clip.name.clone()),
                         ),
                 ),

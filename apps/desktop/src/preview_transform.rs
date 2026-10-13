@@ -118,8 +118,8 @@ impl Desktop {
             )
     }
 
-    /// 点击预览时选择最上层命中片段，并开始相应变换；已选手柄优先，空白清空选择。
-    /// 提交正在输入的检查器值，停止播放并保存按下快照；片段时间、源文件和层级均不改变。
+    /// 点击预览时选择最上层命中片段及其关联组，Alt 临时单选；变换仅调整命中画面，已选手柄优先。
+    /// 提交正在输入的检查器值，以命中画面作为检查器主对象，停止播放并保存按下快照；时间与层级不改变。
     fn begin_preview_transform(
         &mut self,
         event: &MouseDownEvent,
@@ -144,6 +144,7 @@ impl Desktop {
             });
         let Some((shape, handle)) = target else {
             self.timeline.selected.clear();
+            self.timeline.primary_clip = None;
             cx.notify();
             cx.stop_propagation();
             return;
@@ -156,7 +157,12 @@ impl Desktop {
             .find(|c| c.id == shape.id)
             .unwrap()
             .transform_at(self.keyframe_frame() as f64);
-        self.timeline.selected = [shape.id.clone()].into();
+        self.timeline.selected = if event.modifiers.alt {
+            [shape.id.clone()].into()
+        } else {
+            self.timeline.model.linked_ids(&[shape.id.clone()].into())
+        };
+        self.timeline.primary_clip = Some(shape.id.clone());
         if shape.locked {
             cx.notify();
             cx.stop_propagation();

@@ -12,13 +12,10 @@ use gpui::{Context, Div, MouseButton, Window, canvas, div, prelude::*, px, rgb, 
 impl Desktop {
     /// 保持草图的“基本”页签、图片、视频的变换布局；选中音频仅显示音量滑块及右侧 dB 值。
     /// 空选择显示项目概览并隐藏变速，标记页签显示排序标记；变速连接源区间和时长，锁定片段禁用写入。
+    /// 关联组按实际点击成员决定画面或音频布局；无有效主对象时沿用首个选中片段。
     pub(crate) fn inspector(&self, width: f32, cx: &mut Context<Self>) -> Div {
         let audio = self
-            .timeline
-            .model
-            .clips
-            .iter()
-            .find(|c| self.timeline.selected.contains(&c.id))
+            .inspector_clip()
             .is_some_and(|c| c.kind == dinuosi_core::media::MediaKind::Audio);
         let enabled = self.timeline.model.clips.iter().any(|c| {
             self.timeline.selected.contains(&c.id)
@@ -126,15 +123,15 @@ impl Desktop {
             )
             .child(self.keyframe_controls(dinuosi_core::keyframes::KeyframeKind::Position, cx))
     }
-    /// 按播放头帧读取首个选中画面片段的插值参数；多选写入仅应用于未锁定图片、视频。
+    /// 按播放头帧优先读取点击的画面片段插值参数，主对象非画面时沿用首个选中画面；写入仍作用于同类多选。
     pub(crate) fn property_value(&self, property: Property) -> f64 {
-        self.timeline
-            .model
-            .clips
-            .iter()
-            .find(|c| {
-                c.kind != dinuosi_core::media::MediaKind::Audio
-                    && self.timeline.selected.contains(&c.id)
+        self.inspector_clip()
+            .filter(|c| c.kind != dinuosi_core::media::MediaKind::Audio)
+            .or_else(|| {
+                self.timeline.model.clips.iter().find(|c| {
+                    c.kind != dinuosi_core::media::MediaKind::Audio
+                        && self.timeline.selected.contains(&c.id)
+                })
             })
             .map_or_else(
                 || dinuosi_core::timeline::Transform::default().get(property),

@@ -86,8 +86,8 @@ impl Desktop {
         })
     }
 
-    /// 左键只处理当前命中的片段：直接模式立即切割，需要选择模式先选中，再次点击才切割。
-    /// 两种模式均阻止向空白框选冒泡；锁轨和端点点击不产生编辑或移动播放头。
+    /// 左键处理命中片段及关联成员；Alt 仅切命中单段，需要选择模式先选组、再次点击切割。
+    /// 两种模式均阻止向空白框选冒泡；锁轨和端点点击不产生编辑或移动播放头，选中目标作为检查器主对象。
     pub(crate) fn click_blade_clip(
         &mut self,
         id: String,
@@ -110,12 +110,18 @@ impl Desktop {
             .0
             .blade_requires_selection;
         self.timeline.preview = true;
+        let ids = if event.modifiers.alt {
+            BTreeSet::from([id.clone()])
+        } else {
+            self.timeline.model.linked_ids(&[id.clone()].into())
+        };
         if requires_selection && !self.timeline.selected.contains(&id) {
-            self.timeline.selected.clear();
-            self.timeline.selected.insert(id);
+            self.timeline.selected = ids;
+            self.timeline.primary_clip = Some(id);
             self.refresh_timeline(cx);
         } else {
-            self.split_timeline_clips(BTreeSet::from([id]), frame, cx);
+            self.timeline.primary_clip = self.timeline.selected.contains(&id).then_some(id);
+            self.split_timeline_clips(ids, frame, cx);
         }
     }
 

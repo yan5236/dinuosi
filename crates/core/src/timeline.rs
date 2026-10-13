@@ -92,6 +92,8 @@ impl Property {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Clip {
     pub id: String,
+    /// 同组片段共享关联身份；无关联时为 None，不改变素材源或时间位置。
+    pub link: Option<String>,
     /// 锁定只禁止片段编辑，时间线和检查器仍可选择。
     pub locked: bool,
     pub source: PathBuf,
@@ -250,6 +252,7 @@ impl Timeline {
             return Err("时间线格式无效".into());
         }
         self.validate_markers()?;
+        self.validate_links()?;
         let mut ids = BTreeSet::new();
         for clip in &self.clips {
             if !ids.insert(&clip.id)

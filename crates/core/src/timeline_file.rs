@@ -31,6 +31,8 @@ struct TrackV1 {
 #[derive(Serialize, Deserialize)]
 struct ClipV1 {
     id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    link: Option<String>,
     #[serde(default)]
     locked: bool,
     source: PathBuf,
@@ -133,6 +135,7 @@ impl TimelineV1 {
                 .iter()
                 .map(|c| ClipV1 {
                     id: c.id.clone(),
+                    link: c.link.clone(),
                     locked: c.locked,
                     source: c.source.clone(),
                     name: c.name.clone(),
@@ -185,7 +188,7 @@ impl TimelineV1 {
     /// 缺失倒放和定格字段默认正放、无定格；缺失自定义名称标记时按旧默认名判断，其余保留用户原文。
     /// 旧重叠片段分配到上方新轨道；缺失关键帧和标记使用空集合，片段默认解锁、磁吸默认开启。
     /// 损坏类型、增益、重复关键帧或非法动画值返回错误，不进入编辑器。
-    /// 缺失镜像字段的旧项目默认不翻转，保持原有画面。
+    /// 缺失镜像字段的旧项目默认不翻转，缺失关联字段默认独立片段；非法关联身份或单成员组拒绝载入。
     pub fn into_timeline(self) -> Result<Timeline, String> {
         let legacy = self.tracks.iter().all(|t| t.kind.is_none());
         let migrate_audio = self.clips.iter().any(|c| c.kind.is_none());
@@ -259,6 +262,7 @@ impl TimelineV1 {
                     };
                     Ok(Clip {
                         id: c.id,
+                        link: c.link,
                         locked: c.locked,
                         source: c.source,
                         name: c.name,

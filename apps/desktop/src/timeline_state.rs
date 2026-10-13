@@ -1,6 +1,6 @@
 //! 桌面编辑会话仅保存指针、选择与绘制缓存；编辑规则和合成均委派 Core。
 use crate::{input::TextInput, view::Desktop};
-use dinuosi_core::timeline::{History, Property, Timeline};
+use dinuosi_core::timeline::{Clip, History, Property, Timeline};
 use gpui::{Bounds, Entity, Pixels, Point, RenderImage, Task};
 use std::{collections::BTreeSet, sync::Arc};
 
@@ -19,6 +19,7 @@ pub enum Gesture {
     Marquee {
         start: Point<Pixels>,
         additive: BTreeSet<String>,
+        linked: bool,
     },
     Move {
         start: Point<Pixels>,
@@ -70,6 +71,8 @@ pub struct TimelineSession {
     pub model: Timeline,
     pub history: History,
     pub selected: BTreeSet<String>,
+    /// 最后点击的选中成员，仅决定检查器读取对象；整组联动仍使用 selected，不写入项目。
+    pub primary_clip: Option<String>,
     pub keyframe_menu: Option<crate::timeline_keyframes::KeyframeMenu>,
     pub blade: bool,
     pub inspector_tab: InspectorTab,
@@ -109,6 +112,25 @@ pub struct TimelineSession {
 }
 
 impl Desktop {
+    /// 返回仍存在且被选中的检查器主对象；框选、取消选择或删除使主对象失效时沿用首段读取。
+    /// 只读取会话状态，不改变关联组或编辑集合，也不会让过期身份影响检查器。
+    pub(crate) fn inspector_clip(&self) -> Option<&Clip> {
+        let clips = &self.timeline.model.clips;
+        self.timeline
+            .primary_clip
+            .as_ref()
+            .and_then(|id| {
+                clips
+                    .iter()
+                    .find(|c| &c.id == id && self.timeline.selected.contains(id))
+            })
+            .or_else(|| {
+                clips
+                    .iter()
+                    .find(|c| self.timeline.selected.contains(&c.id))
+            })
+    }
+
     /// 最小档按所有轨道最晚结束时间适配可见宽度，并留出 15% 尾部空白；空项目显示一分钟。
     /// 中间档对数插值到原有每秒 1800 像素上限；编辑手势使用按下快照，避免裁边时比例漂移。
     pub(crate) fn pixels_per_second(&self) -> f32 {

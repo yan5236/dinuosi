@@ -75,7 +75,7 @@ impl EditorSession {
 }
 
 impl Desktop {
-    /// 切换素材并复位预览选区，停止旧音频和解码；不自动开始播放或修改项目引用。
+    /// 切换素材并复位预览选区，清除时间线选择与检查器主对象，停止旧音频和解码；不修改项目引用。
     pub(crate) fn select_media(
         &mut self,
         index: usize,
@@ -87,6 +87,7 @@ impl Desktop {
         self.timeline.preview = false;
         self.stop_timeline();
         self.timeline.selected.clear();
+        self.timeline.primary_clip = None;
         let Some(media) = self.session.media.get(index) else {
             return;
         };

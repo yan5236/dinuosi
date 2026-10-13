@@ -9,13 +9,17 @@ use dinuosi_icons::Icon;
 use gpui::{Context, Div, Window, div, prelude::*, px, rgb, svg};
 
 impl Desktop {
-    /// 按播放头帧读取首个选中音频片段的插值增益；无选择时返回单位增益，不修改模型。
+    /// 按播放头帧优先读取点击音频的插值增益，主对象非音频时沿用首个选中音频；无选择返回单位增益。
     fn audio_gain(&self) -> f64 {
-        self.timeline
-            .model
-            .clips
-            .iter()
-            .find(|c| c.kind == MediaKind::Audio && self.timeline.selected.contains(&c.id))
+        self.inspector_clip()
+            .filter(|c| c.kind == MediaKind::Audio)
+            .or_else(|| {
+                self.timeline
+                    .model
+                    .clips
+                    .iter()
+                    .find(|c| c.kind == MediaKind::Audio && self.timeline.selected.contains(&c.id))
+            })
             .map_or(1.0, |c| c.gain_at(self.keyframe_frame() as f64))
     }
     /// 格式化音量为一位小数 dB；零增益显示负无穷，小于显示精度的零值消除负号。

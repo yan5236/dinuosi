@@ -100,6 +100,7 @@ impl Timeline {
         let id = Uuid::new_v4().to_string();
         self.clips.push(Clip {
             id: id.clone(),
+            link: None,
             locked: false,
             source,
             name,
@@ -245,10 +246,11 @@ impl Timeline {
         Ok(())
     }
 
-    /// 删除选中的未锁定片段并清理空自由轨道；保留主轨、素材库、源文件和剩余片段时间位置。
+    /// 删除选中的未锁定片段并清理单成员关联和空自由轨道；保留源文件及剩余片段时间位置。
     pub fn delete(&mut self, ids: &BTreeSet<String>) {
         self.clips
             .retain(|c| !ids.contains(&c.id) || c.locked || self.tracks[c.track].locked);
+        self.remove_single_links();
         self.remove_empty_tracks();
     }
 
@@ -364,8 +366,9 @@ impl Timeline {
         Ok(())
     }
 
-    /// 检查片段间落点，空隙足够时不后移；不足时先验证全部后续片段的时间上限再整体后移。
+    /// 检查片段间落点，空隙足够时不后移；不足时展开后续片段的关联并整体后移，保持音画时间差。
     /// start/duration 为项目帧；锁轨、前段相交或时间越界返回错误，避免一半成功一半失败。
+    /// 后移后的关联成员不得覆盖插入区间；冲突返回错误，由调用方丢弃候选模型而非自动分轨。
     fn shift_following(&mut self, track: usize, start: i64, duration: i64) -> Result<(), String> {
         self.accept_track(track)?;
         let shift = if self.insertion_requires_shift(track, start, duration, &BTreeSet::new()) {
@@ -373,11 +376,22 @@ impl Timeline {
         } else {
             0
         };
-        if shift > 0
-            && self
-                .clips
-                .iter()
-                .any(|c| c.track == track && c.start >= start && c.locked)
+        let following = if shift > 0 {
+            self.linked_ids(
+                &self
+                    .clips
+                    .iter()
+                    .filter(|c| c.track == track && c.start >= start)
+                    .map(|c| c.id.clone())
+                    .collect(),
+            )
+        } else {
+            BTreeSet::new()
+        };
+        if self
+            .clips
+            .iter()
+            .any(|c| following.contains(&c.id) && (c.locked || self.tracks[c.track].locked))
         {
             return Err("片段已锁定".into());
         }
@@ -388,8 +402,7 @@ impl Timeline {
                 .iter()
                 .any(|c| c.track == track && c.start < start && c.start + c.duration > start)
             || self.clips.iter().any(|c| {
-                c.track == track
-                    && c.start >= start
+                following.contains(&c.id)
                     && c.start
                         .checked_add(shift)
                         .is_none_or(|s| s > 86400 * self.fps as i64)
@@ -397,12 +410,15 @@ impl Timeline {
         {
             return Err("插入后片段超出时间范围".into());
         }
-        for c in self
-            .clips
-            .iter_mut()
-            .filter(|c| c.track == track && c.start >= start)
-        {
+        for c in self.clips.iter_mut().filter(|c| following.contains(&c.id)) {
             c.start += shift;
+        }
+        if self.clips.iter().any(|c| {
+            c.track == track
+                && c.start < start.saturating_add(duration)
+                && start < c.start + c.duration
+        }) {
+            return Err("同一轨道的片段不能重叠".into());
         }
         Ok(())
     }

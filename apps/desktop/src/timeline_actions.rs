@@ -3,11 +3,13 @@ use crate::{
     timeline_state::{DropTarget, Gesture},
     view::Desktop,
 };
-use dinuosi_core::timeline::{Property, Timeline, TrackKind};
+use dinuosi_core::timeline::{Property, TrackKind};
 use gpui::{Context, MouseDownEvent, Pixels, Point, Window};
 
 impl Desktop {
-    /// 刀片模式委派未锁定素材切割；选择保持已选组并支持 Ctrl/Shift 追加，锁定片段仍可选择但不启动移动/修剪，锁轨忽略输入。
+    /// 刀片模式委派切割；默认选择完整关联组，Ctrl/Shift 切换整组，Alt 临时只选择单段。
+    /// 点击的已选成员成为检查器主对象，显示与变速按其类型读取，不改变整组联动集合。
+    /// 锁定片段仍可选择；整组有锁定片段或轨道时不启动移动/裁边，直接点击锁轨忽略输入。
     pub(crate) fn begin_clip(
         &mut self,
         id: String,
@@ -36,25 +38,34 @@ impl Desktop {
         }
         let track = clip.track;
         let locked = clip.locked;
+        let ids = if event.modifiers.alt {
+            [id.clone()].into()
+        } else {
+            self.timeline.model.linked_ids(&[id.clone()].into())
+        };
         if event.modifiers.control || event.modifiers.shift {
-            if !self.timeline.selected.insert(id.clone()) {
-                self.timeline.selected.remove(&id);
+            if ids.is_subset(&self.timeline.selected) {
+                self.timeline
+                    .selected
+                    .retain(|selected| !ids.contains(selected));
+            } else {
+                self.timeline.selected.extend(ids);
             }
-        } else if !self.timeline.selected.contains(&id) {
-            self.timeline.selected.clear();
-            self.timeline.selected.insert(id.clone());
+        } else if event.modifiers.alt || !self.timeline.selected.contains(&id) {
+            self.timeline.selected = ids;
+        } else {
+            self.timeline.selected.extend(ids);
         }
+        self.timeline.primary_clip = self.timeline.selected.contains(&id).then(|| id.clone());
         self.focus_handle.focus(window);
         self.timeline.preview = true;
         self.stop_timeline();
         self.stop_preview();
         if locked
-            || self
-                .timeline
-                .model
-                .clips
-                .iter()
-                .any(|c| c.locked && self.timeline.selected.contains(&c.id))
+            || self.timeline.model.clips.iter().any(|c| {
+                self.timeline.selected.contains(&c.id)
+                    && (c.locked || self.timeline.model.tracks[c.track].locked)
+            })
         {
             self.refresh_timeline(cx);
             cx.stop_propagation();
@@ -78,7 +89,8 @@ impl Desktop {
         self.refresh_timeline(cx);
         cx.stop_propagation();
     }
-    /// 在选择工具的空白区按下时开始框选，不移动播放头；Shift/Ctrl 框选保留已有选择，刀片工具忽略空白。
+    /// 空白区开始框选且不移动播放头；Shift/Ctrl 保留已有选择，Alt 不展开关联，刀片工具忽略空白。
+    /// 框选没有唯一点击目标，清除检查器主对象并沿用首个选中成员。
     pub(crate) fn begin_marquee(
         &mut self,
         event: &MouseDownEvent,
@@ -96,10 +108,12 @@ impl Desktop {
             Default::default()
         };
         self.timeline.selected = additive.clone();
+        self.timeline.primary_clip = None;
         self.timeline.gesture_scroll = gpui::point(self.timeline.scroll_x, self.timeline.scroll_y);
         self.timeline.gesture = Some(Gesture::Marquee {
             start: event.position,
             additive,
+            linked: !event.modifiers.alt,
         });
         self.timeline.pointer = event.position;
         self.timeline.moved = false;
@@ -124,7 +138,7 @@ impl Desktop {
         cx.notify();
     }
     /// 处理活动手势的移动，片段修改从按下快照计算；音量按比例映射增益并停止旧声音。
-    /// 参数、变速控制点和预览变换只在内存更新，释放时保存并记录一次历史，避免累计漂移与重复提交。
+    /// 裁边对当前选择中的关联成员使用共同帧增量；参数与预览变换只更新内存，释放时保存一次历史。
     pub(crate) fn move_timeline_pointer(&mut self, point: Point<Pixels>, cx: &mut Context<Self>) {
         let Some(gesture) = &self.timeline.gesture else {
             return;
@@ -132,7 +146,11 @@ impl Desktop {
         self.timeline.pointer = point;
         match gesture {
             Gesture::Preview(_) => self.move_preview_transform(point, cx),
-            Gesture::Marquee { start, additive } => {
+            Gesture::Marquee {
+                start,
+                additive,
+                linked,
+            } => {
                 let start = self.timeline_gesture_start(*start);
                 let (a, b) = (
                     self.timeline_frame_at(start.x),
@@ -153,7 +171,11 @@ impl Desktop {
                         ));
                     }
                 }
-                self.timeline.selected = selected;
+                self.timeline.selected = if *linked {
+                    self.timeline.model.linked_ids(&selected)
+                } else {
+                    selected
+                };
                 self.timeline.moved = true;
             }
             Gesture::Move { start, .. } | Gesture::Track { start, .. } => {
@@ -167,6 +189,11 @@ impl Desktop {
                     .round() as i64;
                 if let Some(before) = &self.timeline.before {
                     let mut next = before.clone();
+                    let ids = before
+                        .linked_ids(&[id.clone()].into())
+                        .intersection(&self.timeline.selected)
+                        .cloned()
+                        .collect();
                     let delta = before
                         .clips
                         .iter()
@@ -176,12 +203,12 @@ impl Desktop {
                             delta
                                 + before.snap_offset(
                                     &[edge + delta],
-                                    &[id.clone()].into(),
+                                    &ids,
                                     self.keyframe_frame(),
                                     self.snap_tolerance(),
                                 )
                         });
-                    let _ = next.trim(id, *left, delta);
+                    let _ = next.trim_clips(&ids, *left, delta);
                     self.timeline.model = next;
                 }
                 self.timeline.moved = true;
@@ -402,6 +429,7 @@ impl Desktop {
         match result {
             Ok(id) => {
                 self.timeline.selected.clear();
+                self.timeline.primary_clip = Some(id.clone());
                 self.timeline.selected.insert(id);
                 self.timeline.preview = true;
                 self.session.timeline_position = start as f64 / self.timeline.model.fps as f64;
@@ -414,65 +442,6 @@ impl Desktop {
                 self.notice = Some(error);
                 cx.notify();
             }
-        }
-    }
-    /// 提交前清理空非主轨并同步保存元数据；主轨保留，轨道清理与编辑共用一条撤销历史。
-    /// 失败回滚本次编辑并显示实际错误，清除不存在的片段选择，成功刷新轨道几何和预览。
-    pub(crate) fn commit_timeline(&mut self, before: Timeline, cx: &mut Context<Self>) {
-        self.timeline.model.remove_empty_tracks();
-        self.timeline.rename = None;
-        if before == self.timeline.model {
-            return;
-        }
-        let result = self
-            .current
-            .as_ref()
-            .ok_or_else(|| "没有打开项目".to_owned())
-            .and_then(|entry| self.store.save_timeline(entry, &self.timeline.model));
-        if let Err(error) = result {
-            self.timeline.model = before;
-            self.notice = Some(error);
-        } else {
-            self.timeline.history.record(before, &self.timeline.model);
-        }
-        self.timeline
-            .selected
-            .retain(|id| self.timeline.model.clips.iter().any(|c| &c.id == id));
-        self.refresh_timeline(cx);
-    }
-    /// 删除未锁定的选中片段，持久化成功后可撤销；不更改任何素材文件。
-    pub(crate) fn delete_clips(&mut self, cx: &mut Context<Self>) {
-        if self.busy {
-            return;
-        }
-        self.stop_timeline();
-        let before = self.timeline.model.clone();
-        self.timeline.model.delete(&self.timeline.selected);
-        self.commit_timeline(before, cx);
-        self.timeline
-            .selected
-            .retain(|id| self.timeline.model.clips.iter().any(|c| &c.id == id));
-        cx.notify();
-    }
-    /// 撤销/重做由核心快照交换执行，保存失败时反向交换恢复历史和当前模型；成功后清理失效选择，让检查器显示正确项目资料。
-    pub(crate) fn timeline_history(&mut self, redo: bool, cx: &mut Context<Self>) {
-        if self.busy {
-            return;
-        }
-        self.stop_timeline();
-        let before = self.timeline.model.clone();
-        self.timeline.history.step(&mut self.timeline.model, redo);
-        if self.timeline.model != before
-            && let Some(entry) = &self.current
-        {
-            if let Err(error) = self.store.save_timeline(entry, &self.timeline.model) {
-                self.timeline.history.step(&mut self.timeline.model, !redo);
-                self.notice = Some(error);
-            }
-            self.timeline
-                .selected
-                .retain(|id| self.timeline.model.clips.iter().any(|c| &c.id == id));
-            self.refresh_timeline(cx);
         }
     }
     /// 停止播放并按当前项目帧修改检查器参数；核心处理类型隔离、自动关键帧及范围校验。

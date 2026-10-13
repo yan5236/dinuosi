@@ -40,8 +40,10 @@ mod switch;
 mod timeline_actions;
 mod timeline_blade;
 mod timeline_clip;
+mod timeline_commit;
 mod timeline_drag;
 mod timeline_keyframes;
+mod timeline_links;
 mod timeline_markers;
 mod timeline_playback;
 mod timeline_preview;
@@ -82,6 +84,8 @@ mod speed_tests;
 mod timeline_blade_tests;
 #[cfg(test)]
 mod timeline_handle_tests;
+#[cfg(test)]
+mod timeline_links_tests;
 #[cfg(test)]
 mod timeline_playback_tests;
 #[cfg(test)]

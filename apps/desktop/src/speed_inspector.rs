@@ -24,13 +24,9 @@ fn rate_ratio(rate: f64) -> f32 {
 }
 
 impl Desktop {
-    /// 读取首个选中视频/音频；空选择、失效身份及图片不显示变速入口，不以内部 UUID 作为可见文案。
+    /// 读取检查器主对象的视频/音频；空选择、失效身份及图片不显示变速入口，关联组按实际点击类型编辑。
     pub(crate) fn speed_clip(&self) -> Option<&Clip> {
-        self.timeline
-            .model
-            .clips
-            .iter()
-            .find(|c| self.timeline.selected.contains(&c.id) && c.kind != MediaKind::Image)
+        self.inspector_clip().filter(|c| c.kind != MediaKind::Image)
     }
     /// 绘制常规/曲线模式、倍率、源时长/目标时长、声音变调及重置；音频仅提供常规模式。
     /// 锁定片段保持读取，所有输入和写入忽略；空选择由外层检查器切回项目概览。
@@ -327,7 +323,7 @@ impl Desktop {
         self.refresh_timeline(cx);
     }
 
-    /// 为手势预览调用原子 Core 编辑，仅作用于首个选中素材的同类型选择；不写磁盘、不记录历史。
+    /// 为手势预览调用原子 Core 编辑，仅作用于检查器主对象的同类型选择；不写磁盘、不记录历史。
     pub(crate) fn preview_speed(
         &mut self,
         rate: f64,

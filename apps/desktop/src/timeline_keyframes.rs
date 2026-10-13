@@ -82,7 +82,7 @@ impl Desktop {
             .collect()
     }
     /// 用最新模型确认点击目标仍存在且未锁定，先提交输入，选中目标素材并取消旧手势，恢复尚未提交的按下快照。
-    /// position 为 None 时左键按帧寻址；Some 时右键记录独立删除目标，不移动播放头。
+    /// position 为 None 时左键按帧寻址；Some 时右键记录独立删除目标，不移动播放头；命中片段为检查器主对象。
     fn click_timeline_keyframe(
         &mut self,
         id: &str,
@@ -110,6 +110,7 @@ impl Desktop {
         }
         self.stop_timeline();
         self.timeline.selected = [id.to_owned()].into();
+        self.timeline.primary_clip = Some(id.to_owned());
         self.timeline.keyframe_menu = None;
         if let Some(position) = position {
             self.menu_open = false;

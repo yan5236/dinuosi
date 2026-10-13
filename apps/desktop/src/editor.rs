@@ -146,6 +146,8 @@ impl Desktop {
                                 && !self.timeline.selected.is_empty())
                                 || (matches!(*icon, Icon::MirrorHorizontal | Icon::MirrorVertical)
                                     && self.can_mirror_clips())
+                                || (matches!(*icon, Icon::LinkClips | Icon::UnlinkClips)
+                                    && self.can_link_clips(*icon == Icon::UnlinkClips))
                                 || (matches!(*icon, Icon::Undo | Icon::Redo)
                                     && !self.busy
                                     && self.timeline.history.can_step(*icon == Icon::Redo))
@@ -220,6 +222,8 @@ impl Desktop {
                                     );
                                 } else if icon == Icon::Trash {
                                     this.delete_clips(cx);
+                                } else if matches!(icon, Icon::LinkClips | Icon::UnlinkClips) {
+                                    this.link_selected_clips(icon == Icon::UnlinkClips, window, cx);
                                 } else if matches!(icon, Icon::Select | Icon::Razor) {
                                     this.set_blade_tool(icon == Icon::Razor, window, cx);
                                 }
