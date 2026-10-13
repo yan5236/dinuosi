@@ -1,4 +1,4 @@
-//! 原尺寸时间线渲染；源片段顺序解码，变换与预览使用同一个像素合成入口。
+//! 原尺寸时间线渲染；正放顺序解码，倒放/定格按源帧寻址，变换与预览共用像素合成。
 use crate::{
     composite,
     export::ExportSettings,
@@ -17,10 +17,14 @@ struct Source {
     size: (u32, u32),
     index: i64,
     image: bool,
+    path: std::path::PathBuf,
+    filter: String,
+    fps: u32,
+    cancel: Arc<AtomicBool>,
 }
 
 impl Source {
-    /// 从裁剪入点创建原生 BGRA 顺序解码，计入旋转/像素比例并按项目帧率输出。
+    /// 从片段首帧对应源位置创建原生 BGRA 解码，计入倒放、定格、旋转及项目帧率。
     /// 图片仅消费首帧，原生上下文独占；取消句柄登记到本次导出，失败不写源文件。
     fn start(
         clip: &Clip,
@@ -31,34 +35,55 @@ impl Source {
         let size = media.source_size;
         let cancel = Arc::new(AtomicBool::new(false));
         register(sessions, &cancel);
-        let offset = if media.kind == MediaKind::Video {
-            clip.source_in as f64 / timeline.fps as f64
+        let first = if media.kind == MediaKind::Video {
+            clip.source_frame(clip.start)
         } else {
-            0.0
+            0
         };
         let filter = format!(
             "scale={}:{}:flags=bicubic,setsar=1,format=bgra,fps={}",
             size.0, size.1, timeline.fps
         );
-        let decoder =
-            dinuosi_media::Decoder::open(&clip.source, false, offset, 1e12, &filter, cancel)?;
+        let decoder = dinuosi_media::Decoder::open(
+            &clip.source,
+            false,
+            first as f64 / timeline.fps as f64,
+            1e12,
+            &filter,
+            cancel.clone(),
+        )?;
         Ok(Self {
             decoder,
             pixels: vec![0; size.0 as usize * size.1 as usize * 4],
             size,
-            index: -1,
+            index: first - 1,
             image: media.kind == MediaKind::Image,
+            path: clip.source.clone(),
+            filter,
+            fps: timeline.fps,
+            cancel,
         })
     }
 
-    /// 顺序读取到目标项目源帧，低帧率素材尾端重复最后有效画面，与预览尾帧语义一致。
-    /// 复用原尺寸像素缓冲；正常 EOF 保留尾帧，部分帧或真实原生解码错误终止导出。
+    /// 读取绝对源帧；倒放时重新寻址，正放继续顺序解码，定格与重复输出帧复用当前像素。
+    /// 复用原尺寸缓冲，低帧率源 EOF 保留尾帧；部分帧、取消及真实解码错误终止导出。
     fn read(&mut self, index: i64) -> Result<&[u8], String> {
         let target = if self.image { 0 } else { index };
+        if target < self.index {
+            // shortcut: 倒放逐帧寻址可能较慢，需要提升长视频导出速度时改用有内存上限的分块缓存。
+            self.seek(target)?;
+        }
+        let mut decoded = false;
+        let mut fallback = false;
         while self.index < target {
             let count = self.decoder.read(&mut self.pixels)?;
             if count == 0 {
-                if self.index < 0 {
+                if !decoded && !fallback && !self.image && target > 0 {
+                    self.seek((target - self.fps as i64).max(0))?;
+                    fallback = true;
+                    continue;
+                }
+                if !decoded {
                     return Err("素材没有可导出的画面".into());
                 }
                 self.index = target;
@@ -68,8 +93,24 @@ impl Source {
                 return Err("素材画面不完整".into());
             }
             self.index += 1;
+            decoded = true;
         }
         Ok(&self.pixels)
+    }
+
+    /// 重新打开指定源帧的原生解码器，复用滤镜、取消句柄和像素缓冲；打开失败不返回旧画面。
+    /// 尾帧无输出时由调用方向前一秒顺序解码，避免低帧率素材定格或倒放首帧变黑。
+    fn seek(&mut self, frame: i64) -> Result<(), String> {
+        self.decoder = dinuosi_media::Decoder::open(
+            &self.path,
+            false,
+            frame as f64 / self.fps as f64,
+            1e12,
+            &self.filter,
+            self.cancel.clone(),
+        )?;
+        self.index = frame - 1;
+        Ok(())
     }
 }
 
@@ -87,7 +128,7 @@ impl Renderer {
         }
     }
 
-    /// 在指定项目帧合成完整导出画面，保持轨道顺序、隐藏、入点和所有画面关键帧。
+    /// 在指定项目帧合成导出画面，保持轨道顺序、隐藏、选区方向、定格源帧及画面关键帧。
     /// 复用输出缓冲并重置为黑色不透明底，返回切片在下一次渲染前有效；失败返回错误，不静默跳过。
     pub fn render(
         &mut self,
@@ -132,7 +173,7 @@ impl Renderer {
                 }
                 let source = self.sources.get_mut(&clip.id).unwrap();
                 let size = source.size;
-                let pixels = source.read((frame - clip.start as f64).floor() as i64)?;
+                let pixels = source.read(clip.source_frame(frame.floor() as i64))?;
                 composite::blend_pixels(
                     output,
                     (settings.width, settings.height),

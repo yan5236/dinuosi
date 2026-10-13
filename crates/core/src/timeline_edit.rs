@@ -108,6 +108,8 @@ impl Timeline {
             duration: range.end - range.start,
             source_in: range.start,
             source_frames,
+            reversed: false,
+            freeze_frame: None,
             transform: Transform::default(),
             kind,
             gain: 1.0,
@@ -155,7 +157,7 @@ impl Timeline {
         Ok(())
     }
 
-    /// 按帧增量拖动片段左右边缘，最短一帧；视频和音频受源时长限制，左边缘同步调整源入点。
+    /// 按帧增量拖动片段左右边缘，最短一帧；正放左裁边调整源入点，倒放右裁边调整源入点。
     /// 图片左右均可延长，不改变源入点；起点保持在零至一天内，时长遵守项目的一天范围。
     /// 左裁边同步平移关键帧局部位置，保留范围外锚点，使保留画面的动画连续。
     /// 延长后若与同轨片段相交，裁剪片段优先复用上方空轨道，否则新建；锁轨或不存在返回错误。
@@ -178,6 +180,11 @@ impl Timeline {
                     (-c.start).max(c.duration - limit),
                     (c.duration - 1).min(limit - c.start),
                 )
+            } else if c.reversed {
+                (
+                    -(c.source_frames - c.source_in - c.duration).min(c.start),
+                    c.duration - 1,
+                )
             } else {
                 (-c.source_in.min(c.start), c.duration - 1)
             };
@@ -186,17 +193,23 @@ impl Timeline {
             for key in &mut c.keyframes {
                 key.frame -= delta;
             }
-            if c.kind != MediaKind::Image {
+            if c.kind != MediaKind::Image && !c.reversed {
                 c.source_in += delta;
             }
             c.duration -= delta;
         } else {
             let max = if c.kind == MediaKind::Image {
                 86400 * self.fps as i64
+            } else if c.reversed {
+                c.duration + c.source_in
             } else {
                 c.source_frames - c.source_in
             };
-            c.duration = c.duration.saturating_add(delta).clamp(1, max);
+            let duration = c.duration.saturating_add(delta).clamp(1, max);
+            if c.reversed {
+                c.source_in += c.duration - duration;
+            }
+            c.duration = duration;
         }
         self.resolve_overlap(id);
         Ok(())

@@ -1,5 +1,6 @@
 //! 检查器项目概览；复用现有灰阶和字段行，不添加新的设置入口。
 use crate::{
+    timeline_state::InspectorTab,
     ui::{MUTED, TEXT},
     view::Desktop,
 };
@@ -43,7 +44,7 @@ impl Desktop {
                     .child(div().flex_1().min_w_0().text_color(rgb(TEXT)).child(value))
             }))
     }
-    /// 根据当前选择生成“基本/项目”与“标记点”页签；切换前提交输入，保留片段选择和播放位置。
+    /// 根据当前选择生成“基本/项目”“标记点”“变速”页签；变速为空页，切换前提交输入并保留选择和播放位置。
     pub(crate) fn inspector_tabs(&self, empty: bool, cx: &mut Context<Self>) -> Div {
         div()
             .h(px(37.0))
@@ -52,46 +53,51 @@ impl Desktop {
             .pl(px(20.0))
             .border_b_1()
             .border_color(rgb(crate::ui::LINE))
-            .children([false, true].into_iter().map(|markers| {
-                div()
-                    .id(if markers {
-                        "inspector-markers-tab"
-                    } else {
-                        "inspector-basic-tab"
-                    })
-                    .debug_selector(move || {
-                        if markers {
-                            "inspector-markers-tab".into()
-                        } else {
-                            "inspector-basic-tab".into()
-                        }
-                    })
-                    .h_full()
-                    .pt(px(7.0))
-                    .pb(px(8.0))
-                    .cursor_pointer()
-                    .whitespace_nowrap()
-                    .text_size(px(12.0))
-                    .when(self.timeline.markers_tab == markers, |s| {
-                        s.border_b_1().border_color(rgb(TEXT))
-                    })
-                    .child(crate::i18n::t(
-                        "inspector",
-                        if markers {
-                            "Markers"
-                        } else if empty {
-                            "Project"
-                        } else {
-                            "Basic"
-                        },
-                        cx,
-                    ))
-                    .on_click(cx.listener(move |this, _, window, cx| {
-                        this.commit_inspector_input(cx);
-                        this.timeline.markers_tab = markers;
-                        this.focus_handle.focus(window);
-                        cx.notify();
-                    }))
-            }))
+            .children(
+                [
+                    InspectorTab::Basic,
+                    InspectorTab::Markers,
+                    InspectorTab::Speed,
+                ]
+                .into_iter()
+                .map(|tab| {
+                    let id = match tab {
+                        InspectorTab::Markers => "inspector-markers-tab",
+                        InspectorTab::Speed => "inspector-speed-tab",
+                        InspectorTab::Basic => "inspector-basic-tab",
+                    };
+                    div()
+                        .id(id)
+                        .debug_selector(move || id.into())
+                        .h_full()
+                        .pt(px(7.0))
+                        .pb(px(8.0))
+                        .cursor_pointer()
+                        .whitespace_nowrap()
+                        .text_size(px(12.0))
+                        .when(self.timeline.inspector_tab == tab, |s| {
+                            s.border_b_1().border_color(rgb(TEXT))
+                        })
+                        .child(crate::i18n::t(
+                            "inspector",
+                            if tab == InspectorTab::Markers {
+                                "Markers"
+                            } else if tab == InspectorTab::Speed {
+                                "Speed"
+                            } else if empty {
+                                "Project"
+                            } else {
+                                "Basic"
+                            },
+                            cx,
+                        ))
+                        .on_click(cx.listener(move |this, _, window, cx| {
+                            this.commit_inspector_input(cx);
+                            this.timeline.inspector_tab = tab;
+                            this.focus_handle.focus(window);
+                            cx.notify();
+                        }))
+                }),
+            )
     }
 }

@@ -40,6 +40,7 @@ mod timeline_clip;
 mod timeline_drag;
 mod timeline_keyframes;
 mod timeline_markers;
+mod timeline_playback;
 mod timeline_preview;
 mod timeline_scroll;
 mod timeline_snap;
@@ -76,6 +77,8 @@ mod settings_tests;
 mod timeline_blade_tests;
 #[cfg(test)]
 mod timeline_handle_tests;
+#[cfg(test)]
+mod timeline_playback_tests;
 #[cfg(test)]
 mod timeline_scroll_tests;
 #[cfg(test)]

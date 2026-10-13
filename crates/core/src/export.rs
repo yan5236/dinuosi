@@ -395,3 +395,7 @@ mod tests;
 #[cfg(test)]
 #[path = "export_codec_tests.rs"]
 mod codec_tests;
+
+#[cfg(test)]
+#[path = "export_playback_tests.rs"]
+mod playback_tests;

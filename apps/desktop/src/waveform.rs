@@ -59,7 +59,7 @@ impl Desktop {
 }
 
 /// 按源时间和实际设备像素绘制波形；稳定 ID 必须在父元素内唯一，三处调用各自保留缓存。
-/// 源、裁剪、缩放、尺寸或 DPI 改变时重建，播放头、悬停和窗口平移只复用已上传的纹理。
+/// duration 为负表示从 start 向前显示倒放源区间；源、裁剪、缩放、尺寸或 DPI 改变时重建。
 /// 缓存随元素释放并清理 GPU 图片，不写项目或保留不可见片段的绘制结果。
 pub(crate) fn waveform_view(
     id: &'static str,
@@ -150,7 +150,7 @@ impl Element for WaveformElement {
                 let Some(waveform) = self.waveform.as_ref().filter(|_| {
                     dimensions.0 > 0
                         && dimensions.1 > 0
-                        && self.duration > 0.0
+                        && self.duration != 0.0
                         && self.duration.is_finite()
                         && self.start.is_finite()
                 }) else {
@@ -215,7 +215,7 @@ impl Element for WaveformElement {
 }
 
 /// 把每个设备像素覆盖的源区间转换为透明 BGRA 图片，保留瞬态、零基线和亚像素边缘。
-/// dimensions 来自实际画布，scale 是 DPI 比例；返回图片仅供当前画布使用，不拉伸旧缓存。
+/// dimensions 来自实际画布，scale 是 DPI 比例；负 duration 反向取源峰值，不交换峰值上下方向。
 fn rasterize(
     dimensions: (u32, u32),
     scale: f32,
@@ -228,10 +228,9 @@ fn rasterize(
     let center = height as f32 / 2.0;
     let amplitude = (center - scale).max(0.0);
     for x in 0..width {
-        let peak = peak(
-            start + duration * x as f64 / width as f64,
-            start + duration * (x + 1) as f64 / width as f64,
-        );
+        let a = start + duration * x as f64 / width as f64;
+        let b = start + duration * (x + 1) as f64 / width as f64;
+        let peak = peak(a.min(b), a.max(b));
         let top = (center - peak.max * amplitude)
             .min(center - scale / 2.0)
             .max(0.0);
@@ -277,4 +276,16 @@ fn raster_keeps_source_peaks_color_and_dpi_baseline() {
     assert_eq!(image.get_pixel(0, 9).0[3], 255);
     assert_eq!(image.get_pixel(0, 10).0[3], 255);
     assert_eq!(image.get_pixel(0, 8).0[3], 0);
+    let reversed = rasterize((4, 10), 1.0, 3.0, -1.0, |start, _| {
+        if start == 2.5 {
+            Peak {
+                min: -1.0,
+                max: 1.0,
+            }
+        } else {
+            Peak::default()
+        }
+    });
+    assert_eq!(reversed.get_pixel(1, 1).0, [0xdc, 0xcb, 0x35, 255]);
+    assert_eq!(reversed.get_pixel(2, 1).0[3], 0);
 }

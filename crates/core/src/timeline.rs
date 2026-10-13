@@ -101,6 +101,9 @@ pub struct Clip {
     pub duration: i64,
     pub source_in: i64,
     pub source_frames: i64,
+    /// 倒放使用当前源选区的逆序帧；定格保存绝对源帧，取消后恢复原选区和方向。
+    pub reversed: bool,
+    pub freeze_frame: Option<i64>,
     pub transform: Transform,
     pub kind: MediaKind,
     /// 线性音频增益：1 为 0dB，0 为负无穷，10 为 20dB；避免 JSON 保存无穷数值。
@@ -225,7 +228,7 @@ impl Timeline {
             .max()
             .unwrap_or(0)
     }
-    /// 校验载入/提交数据的画布、码率、轨道、片段及标记身份、时长和参数；错误不修改状态。
+    /// 校验载入/提交数据的画布、码率、轨道、片段、倒放类型、定格源帧及标记；错误不修改状态。
     /// 图片时长独立于默认源帧数，但仍限于一天；视频和音频不得超过源入点后的可用帧数。
     pub fn validate(&self) -> Result<(), String> {
         if !(1..=240).contains(&self.fps)
@@ -258,6 +261,10 @@ impl Timeline {
                 || clip.source_frames < 1
                 || clip.source_in > clip.source_frames
                 || clip.source_frames > 86400 * self.fps as i64
+                || (clip.kind == MediaKind::Image && clip.reversed)
+                || clip.freeze_frame.is_some_and(|frame| {
+                    clip.kind != MediaKind::Video || frame < 0 || frame >= clip.source_frames
+                })
                 || (clip.kind == MediaKind::Image && clip.duration > 86400 * self.fps as i64)
                 || (clip.kind != MediaKind::Image
                     && clip.duration > clip.source_frames - clip.source_in)
@@ -358,6 +365,14 @@ pub struct History {
     redo: Vec<Timeline>,
 }
 impl History {
+    /// 查询指定方向是否有可用快照，供宿主禁用空历史按钮；不消费或修改历史。
+    pub fn can_step(&self, redo: bool) -> bool {
+        if redo {
+            !self.redo.is_empty()
+        } else {
+            !self.undo.is_empty()
+        }
+    }
     /// 一次手势提交一条历史；相同状态不入栈，历史最多保留一百次编辑。
     pub fn record(&mut self, before: Timeline, after: &Timeline) {
         if &before != after {

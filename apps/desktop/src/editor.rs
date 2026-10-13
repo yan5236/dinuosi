@@ -103,7 +103,7 @@ impl Desktop {
             )
     }
 
-    /// 依草图顺序绘制分组工具，接通选择、刀片、磁吸、标记、片段锁与镜像；镜像仅在选中可编辑画面片段时启用。
+    /// 依草图顺序绘制分组工具，接通编辑历史、倒放和定格；工具按历史、素材类型及锁定状态启用。
     /// 工具提示使用立即向下显示的 Tooltip；缩放按钮仅改变标尺密度，不创建历史记录。
     fn timeline_toolbar(&self, height: f32, cx: &mut Context<Self>) -> Div {
         let groups: &[&[Icon]] = &[
@@ -115,7 +115,6 @@ impl Desktop {
                 Icon::MirrorVertical,
                 Icon::ReversePlayback,
                 Icon::FreezeFrame,
-                Icon::Speed,
             ],
             &[Icon::LinkClips, Icon::UnlinkClips],
             &[Icon::ReplaceMedia],
@@ -146,7 +145,12 @@ impl Desktop {
                             ) || (matches!(*icon, Icon::Trash | Icon::Lock)
                                 && !self.timeline.selected.is_empty())
                                 || (matches!(*icon, Icon::MirrorHorizontal | Icon::MirrorVertical)
-                                    && self.can_mirror_clips()),
+                                    && self.can_mirror_clips())
+                                || (matches!(*icon, Icon::Undo | Icon::Redo)
+                                    && !self.busy
+                                    && self.timeline.history.can_step(*icon == Icon::Redo))
+                                || (matches!(*icon, Icon::ReversePlayback | Icon::FreezeFrame)
+                                    && self.can_change_clip_playback(*icon == Icon::FreezeFrame)),
                             if *icon == Icon::Lock {
                                 crate::i18n::t(
                                     "editor",
@@ -177,6 +181,8 @@ impl Desktop {
                             self.timeline.model.snapping
                         } else if *icon == Icon::Lock {
                             self.selected_clips_locked()
+                        } else if matches!(*icon, Icon::ReversePlayback | Icon::FreezeFrame) {
+                            self.selected_playback_active(*icon == Icon::FreezeFrame)
                         } else if self.timeline.blade {
                             *icon == Icon::Razor
                         } else {
@@ -185,7 +191,19 @@ impl Desktop {
                         .on_click(cx.listener({
                             let icon = *icon;
                             move |this, _, window, cx| {
-                                if icon == Icon::Snap {
+                                if matches!(icon, Icon::Undo | Icon::Redo) {
+                                    this.commit_inspector_input(cx);
+                                    this.end_timeline_pointer(window, cx);
+                                    this.timeline_history(icon == Icon::Redo, cx);
+                                    this.focus_handle.focus(window);
+                                } else if matches!(icon, Icon::ReversePlayback | Icon::FreezeFrame)
+                                {
+                                    this.change_clip_playback(
+                                        icon == Icon::FreezeFrame,
+                                        window,
+                                        cx,
+                                    );
+                                } else if icon == Icon::Snap {
                                     this.toggle_snapping(window, cx);
                                 } else if icon == Icon::Marker {
                                     this.add_timeline_marker(window, cx);

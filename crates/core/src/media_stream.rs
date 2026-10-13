@@ -14,6 +14,32 @@ pub struct Decoder {
 }
 
 impl Decoder {
+    /// 为倒放建立按秒分块的立体声 PCM；共享取消和错误状态，峰值缓冲不随素材长度增长。
+    /// 输入须为在线音频区间，MIDI 同样按块合成；不创建视频线程或修改源文件。
+    pub(crate) fn start_reverse(media: &Media, offset: f64, end: f64) -> Result<Self, String> {
+        if media.offline || !media.path.is_file() {
+            return Err("媒体离线".into());
+        }
+        if !offset.is_finite()
+            || !end.is_finite()
+            || offset < 0.0
+            || end <= offset
+            || end > media.duration
+        {
+            return Err("媒体播放区间无效".into());
+        }
+        let cancel = Arc::new(AtomicBool::new(false));
+        let error = Arc::new(Mutex::new(None));
+        let pcm =
+            reverse::ReversePcm::new(media.clone(), offset, end, cancel.clone(), error.clone());
+        Ok(Self {
+            cancel,
+            frames: Arc::new(Mutex::new(None)),
+            error,
+            audio: Some(Pcm(PcmSource::Reverse(Box::new(pcm)))),
+            video: None,
+        })
+    }
     /// 读取在线素材的秒级区间；视频为固定 24fps BGRA，音频为立体声 48kHz PCM。
     /// MIDI 维持内置采样合成，普通媒体调用 libav 动态库；非法区间或初始化失败返回错误。
     pub fn start(media: &Media, offset: f64, end: f64) -> Result<Self, String> {
@@ -170,6 +196,7 @@ pub struct Pcm(PcmSource);
 enum PcmSource {
     Native(Box<NativePcm>),
     Midi(Box<crate::midi::MidiPcm>),
+    Reverse(Box<reverse::ReversePcm>),
 }
 struct NativePcm {
     decoder: dinuosi_media::Decoder,
@@ -183,10 +210,11 @@ struct NativePcm {
 
 impl Iterator for Pcm {
     type Item = f32;
-    /// 消费原生解码块或 MIDI 合成器，输出交错立体声样本；错误发布至共享状态并结束。
+    /// 消费普通或倒放的原生/MIDI PCM，输出交错立体声样本；错误发布至共享状态并结束。
     /// 复用固定 PCM 缓冲，回调不为每个样本分配内存；取消后立即停止消费。
     fn next(&mut self) -> Option<f32> {
         match &mut self.0 {
+            PcmSource::Reverse(pcm) => pcm.next(),
             PcmSource::Midi(pcm) => pcm.next(),
             PcmSource::Native(pcm) => {
                 if pcm.done || pcm.cancel.load(Ordering::Relaxed) {
@@ -225,3 +253,6 @@ impl Iterator for Pcm {
         }
     }
 }
+
+#[path = "media_reverse.rs"]
+mod reverse;

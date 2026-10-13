@@ -77,7 +77,7 @@ impl Desktop {
         let frame = self.keyframe_frame();
         match self.timeline.model.add_marker(frame, name) {
             Ok(_) => {
-                self.timeline.markers_tab = true;
+                self.timeline.inspector_tab = crate::timeline_state::InspectorTab::Markers;
                 self.commit_timeline(before, cx);
             }
             Err(e) => self.notice = Some(e),

@@ -16,6 +16,7 @@ pub mod timeline;
 pub mod timeline_audio;
 mod timeline_edit;
 mod timeline_file;
+mod timeline_playback;
 mod timeline_split;
 pub mod timeline_tools;
 pub mod waveform;

@@ -40,6 +40,10 @@ struct ClipV1 {
     duration: i64,
     source_in: i64,
     source_frames: i64,
+    #[serde(default)]
+    reversed: bool,
+    #[serde(default)]
+    freeze_frame: Option<i64>,
     transform: [f64; 5],
     #[serde(default)]
     mirror_horizontal: bool,
@@ -78,7 +82,7 @@ fn default_bitrate() -> u32 {
     12000
 }
 impl TimelineV1 {
-    /// 显式复制领域数据、片段锁定与镜像、标记、磁吸、码率及关键帧到版本化字段，不保存选择、拖动和历史。
+    /// 显式复制领域数据、片段锁定、镜像、倒放、定格、标记和关键帧到版本化字段，不保存选择、拖动和历史。
     pub fn from_timeline(t: &Timeline) -> Self {
         Self {
             fps: t.fps,
@@ -128,6 +132,8 @@ impl TimelineV1 {
                     duration: c.duration,
                     source_in: c.source_in,
                     source_frames: c.source_frames,
+                    reversed: c.reversed,
+                    freeze_frame: c.freeze_frame,
                     transform: [
                         c.transform.opacity,
                         c.transform.scale,
@@ -161,7 +167,7 @@ impl TimelineV1 {
     }
     /// 校验外部字段及码率并迁移无类型的旧三轨格式；载入后移除所有空非主轨，主轨始终保留。
     /// 旧音频片段迁移至独立音频轨道且音量默认 0dB；源选区、时间、轨道开关保持不变。
-    /// 缺失自定义名称标记时仅将与旧默认名一致的轨道判为默认，其余名称保留用户原文。
+    /// 缺失倒放和定格字段默认正放、无定格；缺失自定义名称标记时按旧默认名判断，其余保留用户原文。
     /// 旧重叠片段分配到上方新轨道；缺失关键帧和标记使用空集合，片段默认解锁、磁吸默认开启。
     /// 损坏类型、增益、重复关键帧或非法动画值返回错误，不进入编辑器。
     /// 缺失镜像字段的旧项目默认不翻转，保持原有画面。
@@ -246,6 +252,8 @@ impl TimelineV1 {
                         duration: c.duration,
                         source_in: c.source_in,
                         source_frames: c.source_frames,
+                        reversed: c.reversed,
+                        freeze_frame: c.freeze_frame,
                         transform: Transform {
                             opacity: c.transform[0],
                             scale: c.transform[1],

@@ -50,6 +50,14 @@ pub enum Gesture {
     },
 }
 
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
+pub enum InspectorTab {
+    #[default]
+    Basic,
+    Markers,
+    Speed,
+}
+
 #[derive(Default)]
 pub struct TimelineSession {
     pub model: Timeline,
@@ -57,7 +65,7 @@ pub struct TimelineSession {
     pub selected: BTreeSet<String>,
     pub keyframe_menu: Option<crate::timeline_keyframes::KeyframeMenu>,
     pub blade: bool,
-    pub markers_tab: bool,
+    pub inspector_tab: InspectorTab,
     pub marker_menu: Option<crate::timeline_markers::MarkerMenu>,
     pub marker_dialog: Option<crate::marker_dialog::MarkerDialog>,
     pub blade_pointer: Option<Point<Pixels>>,

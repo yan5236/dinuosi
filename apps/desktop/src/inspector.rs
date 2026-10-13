@@ -11,7 +11,7 @@ use gpui::{Context, Div, MouseButton, Window, canvas, div, prelude::*, px, rgb, 
 
 impl Desktop {
     /// 保持草图的“基本”页签、图片、视频的变换布局；选中音频仅显示音量滑块及右侧 dB 值。
-    /// 空选择显示项目概览，另一页签显示排序标记；锁定片段保留参数展示但禁用全部写入控件。
+    /// 空选择显示项目概览，标记页签显示排序标记，变速页签保留空白；锁定片段禁用写入控件。
     pub(crate) fn inspector(&self, width: f32, cx: &mut Context<Self>) -> Div {
         let audio = self
             .timeline
@@ -35,38 +35,50 @@ impl Desktop {
             .flex()
             .flex_col()
             .child(self.inspector_tabs(self.timeline.selected.is_empty(), cx))
-            .child(if self.timeline.markers_tab {
-                self.markers_inspector(cx)
-            } else if self.timeline.selected.is_empty() {
-                self.project_inspector(cx)
-            } else if audio {
-                self.audio_inspector(enabled, cx)
-            } else {
-                div()
-                    .pt(px(38.0))
-                    .px(px(20.0))
-                    .opacity(if enabled { 1.0 } else { 0.4 })
-                    .child(self.inspector_row(
-                        crate::i18n::t("inspector", "Opacity", cx),
-                        Property::Opacity,
-                        enabled,
-                        cx,
-                    ))
-                    .child(self.inspector_row(
-                        crate::i18n::t("inspector", "Scale", cx),
-                        Property::Scale,
-                        enabled,
-                        cx,
-                    ))
-                    .child(self.position_row(width, enabled, cx))
-                    .child(div().h(px(16.0)))
-                    .child(self.inspector_row(
-                        crate::i18n::t("inspector", "Rotation", cx),
-                        Property::Rotation,
-                        enabled,
-                        cx,
-                    ))
-            })
+            .child(
+                if matches!(
+                    self.timeline.inspector_tab,
+                    crate::timeline_state::InspectorTab::Speed
+                ) {
+                    div()
+                        .debug_selector(|| "inspector-speed-page".into())
+                        .flex_1()
+                } else if matches!(
+                    self.timeline.inspector_tab,
+                    crate::timeline_state::InspectorTab::Markers
+                ) {
+                    self.markers_inspector(cx)
+                } else if self.timeline.selected.is_empty() {
+                    self.project_inspector(cx)
+                } else if audio {
+                    self.audio_inspector(enabled, cx)
+                } else {
+                    div()
+                        .pt(px(38.0))
+                        .px(px(20.0))
+                        .opacity(if enabled { 1.0 } else { 0.4 })
+                        .child(self.inspector_row(
+                            crate::i18n::t("inspector", "Opacity", cx),
+                            Property::Opacity,
+                            enabled,
+                            cx,
+                        ))
+                        .child(self.inspector_row(
+                            crate::i18n::t("inspector", "Scale", cx),
+                            Property::Scale,
+                            enabled,
+                            cx,
+                        ))
+                        .child(self.position_row(width, enabled, cx))
+                        .child(div().h(px(16.0)))
+                        .child(self.inspector_row(
+                            crate::i18n::t("inspector", "Rotation", cx),
+                            Property::Rotation,
+                            enabled,
+                            cx,
+                        ))
+                },
+            )
     }
     /// 为坐标标签及 X/Y 分别保留独立布局和完整数值框，避免相邻文字被合并、挤压。
     /// 宽检查器横向排列，窄于 360px 时仅将 X/Y 成组竖排；坐标共用一个右侧关键帧控件。

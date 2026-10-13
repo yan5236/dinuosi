@@ -2,7 +2,7 @@
 use crate::timeline::Timeline;
 
 impl Timeline {
-    /// 原子修改分辨率、整数帧率和 kbps 码率；按绝对边界四舍五入换算片段、标记及关键帧时间。
+    /// 原子修改分辨率、整数帧率和 kbps 码率；四舍五入换算片段、固定源帧、标记及关键帧时间。
     /// 裁剪范围外负帧锚点对称取整；同类型帧若折叠到同一新帧则拒绝，避免静默丢失动画。
     /// 低帧率若导致片段消失、源越界或重叠则拒绝整次修改，原状态保持不变。
     pub fn configure(
@@ -33,6 +33,7 @@ impl Timeline {
             clip.duration = end - clip.start;
             clip.source_in = convert(clip.source_in);
             clip.source_frames = convert(clip.source_frames);
+            clip.freeze_frame = clip.freeze_frame.map(convert);
         }
         for marker in &mut next.markers {
             marker.frame = convert(marker.frame);

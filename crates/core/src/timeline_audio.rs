@@ -41,7 +41,7 @@ impl TimelineAudio {
         Self::start_inner(t, offset, sources, Some(cancel), register)
     }
 
-    /// 共用轨道、裁剪与音量动画初始化；导出模式低并发解码并逐层登记取消句柄。
+    /// 共用轨道、裁剪、倒放与音量动画初始化；定格片段静音，导出逐层登记稳定取消句柄。
     /// 任一失败释放已打开的层与原生解码句柄；缺少可播放音频的片段维持既有跳过语义。
     fn start_inner(
         t: &Timeline,
@@ -58,6 +58,7 @@ impl TimelineAudio {
                 return Err("导出已取消".into());
             }
             if t.tracks[c.track].muted
+                || c.freeze_frame.is_some()
                 || (c.gain == 0.0
                     && !c.keyframes.iter().any(|k| {
                         k.kind == crate::keyframes::KeyframeKind::Volume && k.values[0] > 0.0
@@ -81,16 +82,25 @@ impl TimelineAudio {
             else {
                 continue;
             };
-            let source_in = c.source_in as f64 / fps + (offset - c.start as f64 / fps).max(0.0);
-            let source_end = ((c.source_in + c.duration) as f64 / fps).min(m.duration);
+            let elapsed = (offset - c.start as f64 / fps).max(0.0);
+            let source_in = c.source_in as f64 / fps + if c.reversed { 0.0 } else { elapsed };
+            let source_end = (((c.source_in + c.duration) as f64 / fps)
+                - if c.reversed { elapsed } else { 0.0 })
+            .min(m.duration);
             if source_in >= source_end {
                 continue;
             }
             let mut audio = m.clone();
             audio.kind = MediaKind::Audio;
-            let mut decoder = match cancel {
-                Some(cancel) => Decoder::start_cancellable(&audio, source_in, source_end, cancel)?,
-                None => Decoder::start(&audio, source_in, source_end)?,
+            let mut decoder = if c.reversed {
+                Decoder::start_reverse(&audio, source_in, source_end)?
+            } else {
+                match cancel {
+                    Some(cancel) => {
+                        Decoder::start_cancellable(&audio, source_in, source_end, cancel)?
+                    }
+                    None => Decoder::start(&audio, source_in, source_end)?,
+                }
             };
             register(&decoder);
             if let Some(pcm) = decoder.take_audio() {

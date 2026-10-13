@@ -223,7 +223,7 @@ impl FrameCache {
                 let bytes = if m.kind == MediaKind::Image {
                     m.thumbnail.as_ref().cloned().ok_or("图片没有可用画面")?
                 } else {
-                    let source_frame = clip.source_in + frame - clip.start;
+                    let source_frame = clip.source_frame(frame);
                     let matches = |cached: &&CachedFrame| {
                         cached.path == m.path
                             && cached.frame == source_frame
