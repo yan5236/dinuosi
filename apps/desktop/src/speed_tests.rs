@@ -175,7 +175,8 @@ fn speed_controls_persist_and_hide_without_selection(cx: &mut TestAppContext) {
         v.commit_timeline(before, cx);
     });
     cx.run_until_parked();
-    cx.simulate_click(old_tab, Modifiers::none());
+    // 图片现在有调色页签，复用旧变速坐标会点击新入口；按当帧基本页签验证图片检查器。
+    click(cx, "inspector-basic-tab");
     cx.run_until_parked();
     assert!(desktop.read_with(cx, |v, _| v.speed_clip().is_none()
         && v.timeline.inspector_tab == crate::timeline_state::InspectorTab::Basic));

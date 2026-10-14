@@ -12,6 +12,7 @@ pub enum KeyframeKind {
     Position,
     Rotation,
     Volume,
+    Color(usize, crate::color::Control),
 }
 #[derive(Clone, Debug, PartialEq)]
 pub struct Keyframe {
@@ -24,13 +25,25 @@ pub struct Keyframe {
 }
 impl KeyframeKind {
     /// 返回稳定磁盘类型名；坐标用两个值，其余类型第二个值固定为零。
-    pub fn name(self) -> &'static str {
+    pub fn name(self) -> String {
         match self {
-            Self::Opacity => "opacity",
-            Self::Scale => "scale",
-            Self::Position => "position",
-            Self::Rotation => "rotation",
-            Self::Volume => "volume",
+            Self::Opacity => "opacity".into(),
+            Self::Scale => "scale".into(),
+            Self::Position => "position".into(),
+            Self::Rotation => "rotation".into(),
+            Self::Volume => "volume".into(),
+            Self::Color(stage, control) => {
+                use crate::color::Control as C;
+                let suffix = match control {
+                    C::Basic(i) => format!("basic/{i}"),
+                    C::Hsl(g, i) => format!("hsl/{g}/{i}"),
+                    C::PickedHsl(i) => format!("picked/{i}"),
+                    C::Wheel(w, i) => format!("wheel/{w}/{i}"),
+                    C::Mask(i) => format!("mask/{i}"),
+                    C::Qualifier(i) => format!("qualifier/{i}"),
+                };
+                format!("color/{stage}/{suffix}")
+            }
         }
     }
     /// 解析磁盘类型，未知类型返回错误而不丢弃项目动画。
@@ -41,7 +54,7 @@ impl KeyframeKind {
             "position" => Ok(Self::Position),
             "rotation" => Ok(Self::Rotation),
             "volume" => Ok(Self::Volume),
-            _ => Err("关键帧类型无效".into()),
+            _ => crate::color_animation::parse_kind(name),
         }
     }
     /// 将检查器参数映射到动画类型；X/Y 同属于坐标，音量独立处理。
@@ -53,7 +66,7 @@ impl KeyframeKind {
             Property::Rotation => Self::Rotation,
         }
     }
-    /// 判断素材可编辑的类型；音频仅支持音量，画面仅支持变换。
+    /// 判断素材可编辑的类型；音频仅支持音量，画面支持几何与调色参数。
     pub fn accepts(self, kind: MediaKind) -> bool {
         (self == Self::Volume) == (kind == MediaKind::Audio)
     }
@@ -65,6 +78,7 @@ impl KeyframeKind {
             Self::Opacity if component == 0 => Property::Opacity.range(),
             Self::Scale if component == 0 => Property::Scale.range(),
             Self::Rotation if component == 0 => Property::Rotation.range(),
+            Self::Color(_, c) if component == 0 => c.range(),
             _ => (0.0, 0.0),
         }
     }
@@ -82,6 +96,10 @@ impl Clip {
             KeyframeKind::Scale => [self.transform.scale, 0.0],
             KeyframeKind::Rotation => [self.transform.rotation, 0.0],
             KeyframeKind::Volume => [self.gain, 0.0],
+            KeyframeKind::Color(stage, control) => [
+                self.color.stages.get(stage).map_or(0.0, |s| s.get(control)),
+                0.0,
+            ],
         }
     }
     /// 设置已经校验的后备值；删除最后一帧时保留当前画面/声音。
@@ -95,6 +113,11 @@ impl Clip {
             KeyframeKind::Scale => self.transform.scale = v[0],
             KeyframeKind::Rotation => self.transform.rotation = v[0],
             KeyframeKind::Volume => self.gain = v[0],
+            KeyframeKind::Color(stage, control) => {
+                if let Some(s) = self.color.stages.get_mut(stage) {
+                    let _ = s.set_value(control, v[0]);
+                }
+            }
         }
     }
     /// 在项目绝对帧求值：同类关键帧之间逐值按贝塞尔切线插值，缺省线性，范围外保持最近端点。
@@ -152,6 +175,7 @@ impl Clip {
         let mut keys = BTreeSet::new();
         for k in &self.keyframes {
             if !k.kind.accepts(self.kind)
+                || matches!(k.kind, KeyframeKind::Color(s, c) if self.color.stages.get(s).is_none_or(|v| !v.supports(c)))
                 || k.frame.unsigned_abs() > 86400 * fps as u64 * 2
                 || !keys.insert((k.kind, k.frame))
             {
@@ -205,7 +229,7 @@ impl Clip {
     }
     /// 应用单个参数编辑：已有帧直接更新，同类已有动画且自动开启时仅在实际改变后新增。
     /// 自动关闭时在帧间按差值整体调整本类型并清除该分量旧越界端点差；未启用动画时写静态值。
-    fn edit_animated(
+    pub(crate) fn edit_animated(
         &mut self,
         kind: KeyframeKind,
         frame: i64,
@@ -245,15 +269,23 @@ impl Clip {
 impl Timeline {
     /// 在选中未锁定且覆盖当前帧的素材上添加/删除一种关键帧；混合选择仅处理匹配素材。
     /// 存在当前帧时删除，删除最后一帧烘焙当前值；不存在时记录当前插值，调用方负责保存历史。
+    /// 亮度选区另一端仍有动画时保留本端原始值并校正静态范围；两端都静态后烘焙有效有序范围，不改无关参数。
     pub fn toggle_keyframe(&mut self, ids: &BTreeSet<String>, kind: KeyframeKind, frame: i64) {
         for c in self.clips.iter_mut().filter(|c| {
             ids.contains(&c.id)
                 && !c.locked
                 && !self.tracks[c.track].locked
                 && kind.accepts(c.kind)
+                && !matches!(kind, KeyframeKind::Color(s, v) if c.color.stages.get(s).is_none_or(|stage| !stage.supports(v)))
                 && c.contains_frame(frame)
         }) {
             let values = c.keyframe_values(kind, frame as f64);
+            let qualifier = match kind {
+                KeyframeKind::Color(stage, crate::color::Control::Qualifier(i @ (4 | 5))) => {
+                    Some((stage, 9 - i, c.color_at(frame as f64).stages[stage].qualifier.values))
+                }
+                _ => None,
+            };
             if let Some(i) = c
                 .keyframes
                 .iter()
@@ -262,6 +294,18 @@ impl Timeline {
                 c.keyframes.remove(i);
                 if !c.keyframes.iter().any(|k| k.kind == kind) {
                     c.set_base(kind, values);
+                    if let Some((stage, other, range)) = qualifier {
+                        let animated = c.keyframes.iter().any(|k| {
+                            k.kind == KeyframeKind::Color(stage, crate::color::Control::Qualifier(other))
+                        });
+                        let base = &mut c.color.stages[stage].qualifier.values;
+                        if !animated {
+                            base[4] = range[4];
+                            base[5] = range[5];
+                        } else if base[4] > base[5] {
+                            base[other] = values[0];
+                        }
+                    }
                 }
             } else {
                 c.put_keyframe(kind, frame, values);

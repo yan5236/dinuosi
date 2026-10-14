@@ -3,6 +3,15 @@
 mod assets;
 mod audio_inspector;
 mod blade_cursor;
+mod color_controls;
+mod color_edit;
+mod color_graph;
+mod color_hsl;
+mod color_inspector;
+mod color_scopes;
+mod color_steps;
+#[cfg(test)]
+mod color_tests;
 mod curve_edit;
 mod curve_graph;
 mod curve_panel;
@@ -12,6 +21,8 @@ mod export_controls;
 mod export_dialog;
 mod export_view;
 mod help;
+#[cfg(test)]
+mod hsl_tests;
 mod i18n;
 mod input;
 mod inspector;

@@ -1,4 +1,6 @@
 轻线 · 完整界面图标集 / Qingxian Interface Icons
+应用现行清单见 spec.json：v1.10，共 105 枚，新增 24px 轻线取色器 eyedropper.svg。
+下文保留 v1.5 原始素材包的交付说明。
 版本 1.5 · 89 枚完整版 · 2026-10-02
 
 一、这是什么

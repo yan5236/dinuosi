@@ -89,6 +89,7 @@ impl Desktop {
             .debug_selector(|| "preview-transform".into())
             .absolute()
             .inset_0()
+            .when(self.hsl_picking(), |s| s.cursor_crosshair())
             .on_mouse_down(
                 MouseButton::Left,
                 cx.listener(Self::begin_preview_transform),
@@ -120,6 +121,7 @@ impl Desktop {
 
     /// 点击预览时选择最上层命中片段及其关联组，Alt 临时单选；变换仅调整命中画面，已选手柄优先。
     /// 提交正在输入的检查器值，以命中画面作为检查器主对象，停止播放并保存按下快照；时间与层级不改变。
+    /// HSL 吸管启用时优先消费画布点击，只取样当前颜色，不启动选择或变换手势。
     fn begin_preview_transform(
         &mut self,
         event: &MouseDownEvent,
@@ -127,6 +129,11 @@ impl Desktop {
         cx: &mut Context<Self>,
     ) {
         if self.busy || !self.timeline.preview {
+            return;
+        }
+        if self.timeline.color.picker.is_some() {
+            self.pick_hsl(event.position, cx);
+            cx.stop_propagation();
             return;
         }
         self.commit_inspector_input(cx);

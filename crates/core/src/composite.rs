@@ -255,9 +255,15 @@ impl FrameCache {
                     }
                 };
                 let fitted = fitted_size(m.source_size, (timeline.width, timeline.height));
+                let graded = crate::color_render::apply(
+                    &bytes,
+                    (FRAME_WIDTH, FRAME_HEIGHT),
+                    m.preview_size,
+                    &clip.color_at(frame as f64),
+                )?;
                 blend_mapped(
                     &mut out,
-                    &bytes,
+                    &graded,
                     &clip.transform_at(frame as f64),
                     (timeline.width, timeline.height),
                     (

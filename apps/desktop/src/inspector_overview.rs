@@ -58,13 +58,16 @@ impl Desktop {
                     InspectorTab::Basic,
                     InspectorTab::Markers,
                     InspectorTab::Speed,
+                    InspectorTab::Color,
                 ]
                 .into_iter()
                 .filter(|tab| *tab != InspectorTab::Speed || self.speed_clip().is_some())
+                .filter(|tab| *tab != InspectorTab::Color || self.color_clip().is_some())
                 .map(|tab| {
                     let id = match tab {
                         InspectorTab::Markers => "inspector-markers-tab",
                         InspectorTab::Speed => "inspector-speed-tab",
+                        InspectorTab::Color => "inspector-color-tab",
                         InspectorTab::Basic => "inspector-basic-tab",
                     };
                     div()
@@ -80,13 +83,17 @@ impl Desktop {
                             (self.timeline.inspector_tab == tab
                                 && (tab != InspectorTab::Speed || self.speed_clip().is_some()))
                                 || (tab == InspectorTab::Basic
-                                    && self.timeline.inspector_tab == InspectorTab::Speed
-                                    && self.speed_clip().is_none()),
+                                    && ((self.timeline.inspector_tab == InspectorTab::Speed
+                                        && self.speed_clip().is_none())
+                                        || (self.timeline.inspector_tab == InspectorTab::Color
+                                            && self.color_clip().is_none()))),
                             |s| s.border_b_1().border_color(rgb(TEXT)),
                         )
                         .child(crate::i18n::t(
                             "inspector",
-                            if tab == InspectorTab::Markers {
+                            if tab == InspectorTab::Color {
+                                "Color"
+                            } else if tab == InspectorTab::Markers {
                                 "Markers"
                             } else if tab == InspectorTab::Speed {
                                 "Speed"

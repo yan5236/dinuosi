@@ -1,8 +1,8 @@
 {
-  "name": "轻线 · 完整界面图标集（104 枚完整版）",
-  "version": "1.9",
-  "count": 104,
-  "previousCount": 103,
+  "name": "轻线 · 完整界面图标集（105 枚完整版）",
+  "version": "1.10",
+  "count": 105,
+  "previousCount": 104,
   "additionCount": 1,
   "viewBox": "0 0 24 24",
   "strokeWidth": 1.8,
@@ -721,6 +721,12 @@
       "file": "svg/razor-cursor.svg",
       "symbolId": "icon-razor-cursor",
       "addedIn": "1.9"
+    },
+    {
+      "name": "eyedropper",
+      "label": "取色器",
+      "file": "svg/eyedropper.svg",
+      "addedIn": "1.10"
     }
   ]
 }

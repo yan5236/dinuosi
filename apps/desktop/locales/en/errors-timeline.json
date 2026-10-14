@@ -37,5 +37,17 @@
   "关键帧曲线参数无效": "Invalid keyframe curve parameters",
   "关键帧不存在": "Keyframe not found",
   "关键帧不可编辑": "The keyframe cannot be edited",
-  "该时间已有同类关键帧": "A keyframe for this property already exists at this time"
+  "该时间已有同类关键帧": "A keyframe for this property already exists at this time",
+  "调色参数必须为有限数值": "Color parameters must be finite numbers",
+  "颜色选区亮度范围无效": "Invalid color range luminance limits",
+  "调色参数索引无效": "Invalid color parameter index",
+  "调色步骤数量应为 1–8": "Color correction requires 1 to 8 steps",
+  "调色参数范围无效": "Invalid color parameter range",
+  "调色曲线控制点无效": "Invalid color curve control points",
+  "调色像素尺寸无效": "Invalid color pixel dimensions",
+  "示波器像素尺寸无效": "Invalid scope pixel dimensions",
+  "请输入有效调色数值": "Enter a valid color value",
+  "调色步骤已改变": "The color correction step has changed",
+  "调色步骤数量已改变": "The number of color correction steps has changed",
+  "取样色组色相无效": "Invalid sampled color hue"
 }

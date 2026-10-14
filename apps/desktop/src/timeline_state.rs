@@ -11,6 +11,7 @@ pub enum DropTarget {
 }
 
 pub enum Gesture {
+    Color(crate::color_edit::ColorDrag),
     Curve(crate::curve_graph::CurveDrag),
     Preview(crate::preview_transform::PreviewDrag),
     Track {
@@ -65,10 +66,12 @@ pub enum InspectorTab {
     Basic,
     Markers,
     Speed,
+    Color,
 }
 
 #[derive(Default)]
 pub struct TimelineSession {
+    pub color: crate::color_edit::ColorSession,
     pub curves: crate::curve_panel::CurveSession,
     pub model: Timeline,
     pub history: History,

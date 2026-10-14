@@ -1,5 +1,11 @@
 //! 不依赖 GUI 的项目领域模型、媒体处理及版本化项目存储。
 
+pub mod color;
+mod color_animation;
+pub mod color_render;
+pub mod color_scopes;
+#[cfg(test)]
+mod color_tests;
 pub mod composite;
 pub mod export;
 mod export_cancel;

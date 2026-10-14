@@ -12,6 +12,7 @@ use gpui::{Context, Div, MouseButton, Window, canvas, div, prelude::*, px, rgb, 
 impl Desktop {
     /// 保持草图的“基本”页签、图片、视频的变换布局；选中音频仅显示音量滑块及右侧 dB 值。
     /// 空选择显示项目概览并隐藏变速，标记页签显示排序标记；变速连接源区间和时长，锁定片段禁用写入。
+    /// 调色仅对图片/视频主对象显示，沿用当前检查器宽度、选择和独立片段事务。
     /// 关联组按实际点击成员决定画面或音频布局；无有效主对象时沿用首个选中片段。
     pub(crate) fn inspector(&self, width: f32, cx: &mut Context<Self>) -> Div {
         let audio = self
@@ -33,7 +34,11 @@ impl Desktop {
             .flex_col()
             .child(self.inspector_tabs(self.timeline.selected.is_empty(), cx))
             .child(
-                if matches!(
+                if self.timeline.inspector_tab == crate::timeline_state::InspectorTab::Color
+                    && self.color_clip().is_some()
+                {
+                    self.color_inspector(cx)
+                } else if matches!(
                     self.timeline.inspector_tab,
                     crate::timeline_state::InspectorTab::Speed
                 ) && self.speed_clip().is_some()
@@ -375,7 +380,11 @@ impl Desktop {
     /// 提交画面、音量或变速数值输入；变速绑定片段身份，非法数字显示真实错误且保持原参数。
     /// 轨道名称仅修改所选轨道；输入实体先取出，避免失焦回调重复提交。
     /// 曲线节点输入先按其绑定的素材/属性身份提交，不将过期数字写入新选择。
+    /// 调色输入同样绑定片段和步骤身份，先提交有限数值再释放失焦订阅。
+    /// 普通编辑或切换选择先退出 HSL 取样并释放像素，防止旧吸管目标误写。
     pub(crate) fn commit_inspector_input(&mut self, cx: &mut Context<Self>) {
+        self.cancel_hsl_picker();
+        self.commit_color_input(cx);
         self.commit_curve_input(cx);
         self.timeline.input_blur = None;
         if let Some((duration, id, input)) = self.timeline.speed_input.take()

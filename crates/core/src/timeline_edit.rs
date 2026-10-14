@@ -113,6 +113,7 @@ impl Timeline {
             freeze_frame: None,
             speed: None,
             transform: Transform::default(),
+            color: crate::color::Grade::default(),
             kind,
             gain: 1.0,
             keyframes: Vec::new(),

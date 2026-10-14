@@ -108,6 +108,7 @@ pub struct Clip {
     pub freeze_frame: Option<i64>,
     pub speed: Option<crate::speed::Speed>,
     pub transform: Transform,
+    pub color: crate::color::Grade,
     pub kind: MediaKind,
     /// 线性音频增益：1 为 0dB，0 为负无穷，10 为 20dB；避免 JSON 保存无穷数值。
     pub gain: f64,
@@ -231,7 +232,7 @@ impl Timeline {
             .max()
             .unwrap_or(0)
     }
-    /// 校验载入/提交数据的画布、码率、轨道、片段、倒放类型、定格源帧及标记；错误不修改状态。
+    /// 校验载入/提交数据的画布、码率、轨道、片段、调色、倒放类型、定格源帧及标记；错误不修改状态。
     /// 图片时长独立于默认源帧数；变速片段校验精确源区间，普通视频/音频不得超过可用源帧数。
     pub fn validate(&self) -> Result<(), String> {
         if !(1..=240).contains(&self.fps)
@@ -293,6 +294,7 @@ impl Timeline {
                 return Err("音量参数无效".into());
             }
             clip.validate_keyframes(self.fps)?;
+            clip.color.validate()?;
             for property in [
                 Property::Opacity,
                 Property::Scale,

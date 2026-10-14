@@ -7,14 +7,27 @@ use crate::{
 use dinuosi_core::{keyframe_curve::Easing, keyframes::KeyframeKind as K, timeline::Clip};
 use gpui::{Context, Div, Entity, div, prelude::*, px, rgb};
 
-pub(crate) const CHANNELS: &[(K, usize, &str)] = &[
-    (K::Scale, 0, "Scale"),
-    (K::Position, 0, "Position X"),
-    (K::Position, 1, "Position Y"),
-    (K::Rotation, 0, "Rotation"),
-    (K::Opacity, 0, "Opacity"),
-    (K::Volume, 0, "Volume"),
-];
+pub(crate) static CHANNELS: std::sync::LazyLock<Vec<(K, usize, &'static str)>> =
+    std::sync::LazyLock::new(|| {
+        let mut channels = vec![
+            (K::Scale, 0, "Scale"),
+            (K::Position, 0, "Position X"),
+            (K::Position, 1, "Position Y"),
+            (K::Rotation, 0, "Rotation"),
+            (K::Opacity, 0, "Opacity"),
+            (K::Volume, 0, "Volume"),
+        ];
+        for stage in 0..8 {
+            channels.extend(dinuosi_core::color::Control::all().map(|c| {
+                (
+                    K::Color(stage, c),
+                    0,
+                    crate::color_controls::control_label(c),
+                )
+            }));
+        }
+        channels
+    });
 
 #[derive(Default)]
 pub(crate) struct CurveSession {
@@ -43,14 +56,17 @@ enum CurveAction {
 }
 
 impl Desktop {
-    /// 获取唯一选中的素材；曲线编辑不隐式修改关联组中的其他成员，多选时保留空面板。
+    /// 调色页使用检查器主画面，其他页要求唯一选择；曲线编辑不修改关联组中的其他成员。
     pub(crate) fn curve_clip(&self) -> Option<&Clip> {
+        if self.timeline.inspector_tab == crate::timeline_state::InspectorTab::Color {
+            return self.color_clip();
+        }
         (self.timeline.selected.len() == 1)
             .then(|| self.inspector_clip())
             .flatten()
     }
 
-    /// 从素材类型选择有效曲线分量，音频固定音量，画面恢复上次选择的视觉属性。
+    /// 音频固定音量；画面保留有效调色动画通道，否则回退至上次选择的几何属性。
     pub(crate) fn curve_channel(&self) -> usize {
         if self
             .curve_clip()
@@ -58,7 +74,17 @@ impl Desktop {
         {
             5
         } else {
-            self.timeline.curves.channel.min(4)
+            let channel = self.timeline.curves.channel;
+            if channel >= 6
+                && CHANNELS.get(channel).is_some_and(|(kind, _, _)| {
+                    self.curve_clip()
+                        .is_some_and(|c| c.keyframes.iter().any(|k| &k.kind == kind))
+                })
+            {
+                channel
+            } else {
+                channel.min(4)
+            }
         }
     }
 
@@ -197,7 +223,11 @@ impl Desktop {
                                     .iter()
                                     .enumerate()
                                     .filter(|(_, (kind, _, _))| {
-                                        clip.is_some_and(|c| kind.accepts(c.kind))
+                                        clip.is_some_and(|c| {
+                                            kind.accepts(c.kind)
+                                                && (!matches!(kind, K::Color(..))
+                                                    || c.keyframes.iter().any(|k| k.kind == *kind))
+                                        })
                                     })
                                     .map(|(index, (_, _, label))| {
                                         self.curve_button(
@@ -246,7 +276,15 @@ impl Desktop {
                     .hover(|s| s.bg(rgb(LINE)))
                     .focus(|s| s.bg(rgb(LINE)))
             })
-            .child(crate::i18n::t("timeline", label, cx))
+            .child(
+                if let CurveAction::Channel(index) = action
+                    && let K::Color(stage, control) = CHANNELS[index].0
+                {
+                    crate::color_controls::channel_label(stage, control, cx)
+                } else {
+                    crate::i18n::t("timeline", label, cx).to_string()
+                },
+            )
             .on_click(cx.listener(move |this, _, window, cx| {
                 if enabled {
                     this.curve_action(action, window, cx);

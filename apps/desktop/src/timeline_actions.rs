@@ -151,6 +151,10 @@ impl Desktop {
         };
         self.timeline.pointer = point;
         match gesture {
+            Gesture::Color(drag) => {
+                let drag = drag.clone();
+                self.move_color_drag(&drag, point, cx);
+            }
             Gesture::Curve(drag) => {
                 let drag = drag.clone();
                 self.move_curve_point(point, drag, cx);

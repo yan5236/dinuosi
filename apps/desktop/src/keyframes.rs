@@ -1,4 +1,4 @@
-//! 检查器关键帧按钮与导航：只在单个选中素材覆盖播放头时显示，复用现有事务。
+//! 检查器关键帧按钮与导航：在有效目标覆盖播放头时显示，调色支持关联主对象，复用现有事务。
 use crate::{
     ui::{MUTED, TEXT},
     view::Desktop,
@@ -18,8 +18,11 @@ impl Desktop {
             .0
             .auto_keyframe
     }
-    /// 返回唯一选中且与类型匹配的素材；多选时隐藏关键帧，避免导航目标不明确。
+    /// 调色绑定检查器主画面，允许关联音视频选择；其他类型要求唯一选中，避免导航目标不明确。
     fn keyframe_clip(&self, kind: KeyframeKind) -> Option<&Clip> {
+        if let KeyframeKind::Color(stage, _) = kind {
+            return self.color_clip().filter(|c| stage < c.color.stages.len());
+        }
         if self.timeline.selected.len() != 1 {
             return None;
         }
@@ -30,7 +33,7 @@ impl Desktop {
             .find(|c| self.timeline.selected.contains(&c.id) && kind.accepts(c.kind))
     }
     /// 绘制空心/实心菱形；两帧以上显示同类型前后导航，无邻帧时禁用对应方向。
-    /// 播放头在片段外或无唯一选择时保留布局占位；锁定、忙碌时禁用输入，支持 Tab/Enter/空格。
+    /// 播放头在片段外或无有效目标时保留布局占位；锁定、忙碌时禁用输入，支持 Tab/Enter/空格。
     pub(crate) fn keyframe_controls(&self, kind: KeyframeKind, cx: &mut Context<Self>) -> Div {
         let frame = self.keyframe_frame();
         let clip = self.keyframe_clip(kind).filter(|c| c.contains_frame(frame));
@@ -138,15 +141,26 @@ impl Desktop {
             return;
         };
         let keys = clip.keyframe_frames(Some(kind));
+        let ids = if matches!(kind, KeyframeKind::Color(..)) {
+            [clip.id.clone()].into()
+        } else {
+            self.timeline.selected.clone()
+        };
         if direction == 0 {
             self.stop_timeline();
             self.timeline.preview = true;
             self.stop_preview();
             let before = self.timeline.model.clone();
-            self.timeline
-                .model
-                .toggle_keyframe(&self.timeline.selected, kind, frame);
+            self.timeline.model.toggle_keyframe(&ids, kind, frame);
             self.commit_timeline(before, cx);
+            if matches!(kind, KeyframeKind::Color(..))
+                && let Some(index) = crate::curve_panel::CHANNELS
+                    .iter()
+                    .position(|(k, _, _)| *k == kind)
+            {
+                self.timeline.curves.channel = index;
+                self.timeline.curves.selected = None;
+            }
         } else {
             let target = if direction < 0 {
                 keys.range(..frame).next_back().copied()

@@ -15,6 +15,7 @@ impl Desktop {
     }
     /// 后台串行复用 Core 源帧缓存合成，主线程仅上传 BGRA；变换不重复解码未改变的源帧。
     /// 任务独占缓存并在完成后归还；按请求时项目比例裁切画布，连续寻址追赶最新位置。
+    /// HSL 取样期间为显示帧保留带版本/时间身份的 CPU 像素，正常预览不额外复制。
     fn request_timeline_frame(&mut self, cx: &mut Context<Self>) {
         if !self.timeline.preview || self.timeline.rendering {
             return;
@@ -25,6 +26,7 @@ impl Desktop {
         let model = self.timeline.model.clone();
         let frame = model.frame(self.session.timeline_position);
         let canvas = (model.width, model.height);
+        let scopes = self.timeline.color.scopes;
         let media = self
             .session
             .media
@@ -32,10 +34,15 @@ impl Desktop {
             .map(|m| m.source.clone())
             .collect::<Vec<_>>();
         cx.spawn(async move |this, cx| {
-            let (result, cache) = cx
+            let (result, cache, scopes) = cx
                 .background_spawn(async move {
                     let result = cache.render(&model, frame, &media);
-                    (result, cache)
+                    let scope = result
+                        .as_ref()
+                        .ok()
+                        .filter(|_| scopes)
+                        .and_then(|bytes| crate::color_scopes::scope_pixels(bytes, canvas));
+                    (result, cache, scope)
                 })
                 .await;
             let _ = this.update(cx, |this, cx| {
@@ -46,6 +53,34 @@ impl Desktop {
                 if this.timeline.preview {
                     match result {
                         Ok(bytes) => {
+                            this.timeline.color.pick_frame =
+                                this.timeline.color.picker.as_ref().map(|_| {
+                                    crate::color_hsl::PickFrame {
+                                        pixels: bytes.clone(),
+                                        size: dinuosi_core::media::preview_dimensions(canvas),
+                                        frame,
+                                        revision,
+                                    }
+                                });
+                            if this.timeline.color.scopes {
+                                let image = scopes.map(|bytes| {
+                                    std::sync::Arc::new(gpui::RenderImage::new([
+                                        image::Frame::new(
+                                            image::RgbaImage::from_raw(
+                                                crate::color_scopes::SIZE.0,
+                                                crate::color_scopes::SIZE.1,
+                                                bytes,
+                                            )
+                                            .unwrap(),
+                                        ),
+                                    ]))
+                                });
+                                if let Some(old) =
+                                    std::mem::replace(&mut this.timeline.color.scope_image, image)
+                                {
+                                    this.session.retired_frames.push(old);
+                                }
+                            }
                             let frame = crate::media::render_frame(
                                 bytes,
                                 dinuosi_core::media::preview_dimensions(canvas),
@@ -54,7 +89,10 @@ impl Desktop {
                                 this.session.retired_frames.push(old);
                             }
                         }
-                        Err(error) => this.notice = Some(error),
+                        Err(error) => {
+                            this.cancel_hsl_picker();
+                            this.notice = Some(error);
+                        }
                     }
                     cx.notify();
                 }
@@ -86,6 +124,7 @@ impl Desktop {
     }
     /// 在后台启动核心混音，再由设备消费时钟推进视频合成；初始化失败保留当前位置。
     pub(crate) fn play_timeline(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.cancel_hsl_picker();
         if self.timeline.playing {
             self.stop_timeline();
             cx.notify();

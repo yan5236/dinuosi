@@ -24,6 +24,7 @@ pub(crate) const SOURCES: &[(&str, &str, &str)] = catalogs!(
     "export",
     "library",
     "inspector",
+    "color",
     "timeline",
     "settings",
     "help",

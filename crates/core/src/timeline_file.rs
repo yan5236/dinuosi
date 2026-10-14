@@ -49,6 +49,8 @@ struct ClipV1 {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     speed: Option<SpeedV1>,
     transform: [f64; 5],
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    color: Option<crate::color::Grade>,
     #[serde(default)]
     mirror_horizontal: bool,
     #[serde(default)]
@@ -95,7 +97,7 @@ fn default_bitrate() -> u32 {
     12000
 }
 impl TimelineV1 {
-    /// 显式复制领域数据、变速精确源区间、锁定、镜像、倒放、定格、标记和关键帧到版本化字段。
+    /// 显式复制领域数据、调色步骤、变速精确源区间、锁定、镜像、倒放、定格、标记和关键帧到版本化字段。
     pub fn from_timeline(t: &Timeline) -> Self {
         Self {
             fps: t.fps,
@@ -161,6 +163,7 @@ impl TimelineV1 {
                         c.transform.y,
                         c.transform.rotation,
                     ],
+                    color: (c.color != crate::color::Grade::default()).then(|| c.color.clone()),
                     mirror_horizontal: c.transform.mirror_horizontal,
                     mirror_vertical: c.transform.mirror_vertical,
                     kind: Some(
@@ -177,7 +180,7 @@ impl TimelineV1 {
                         .iter()
                         .map(|k| KeyframeV1 {
                             frame: k.frame,
-                            kind: k.kind.name().into(),
+                            kind: k.kind.name(),
                             values: k.values,
                             curves: k.curves,
                         })
@@ -192,6 +195,7 @@ impl TimelineV1 {
     /// 旧重叠片段分配到上方新轨道；缺失关键帧和标记使用空集合，片段默认解锁、磁吸默认开启。
     /// 损坏类型、增益、重复关键帧或非法动画值返回错误，不进入编辑器。
     /// 缺失镜像字段的旧项目默认不翻转，缺失关联字段默认独立片段；非法关联身份或单成员组拒绝载入。
+    /// 缺失调色字段保持中性，非法步骤、范围、选区或曲线由领域校验拒绝。
     pub fn into_timeline(self) -> Result<Timeline, String> {
         let legacy = self.tracks.iter().all(|t| t.kind.is_none());
         let migrate_audio = self.clips.iter().any(|c| c.kind.is_none());
@@ -292,6 +296,7 @@ impl TimelineV1 {
                             mirror_vertical: c.mirror_vertical,
                         },
                         kind,
+                        color: c.color.unwrap_or_default(),
                         gain: c.gain,
                         keyframes: c
                             .keyframes

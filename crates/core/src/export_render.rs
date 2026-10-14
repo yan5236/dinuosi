@@ -128,7 +128,7 @@ impl Renderer {
         }
     }
 
-    /// 在指定项目帧合成导出画面，保持轨道顺序、隐藏、选区方向、定格源帧及画面关键帧。
+    /// 在指定项目帧先应用共享调色再合成导出画面，保持轨道顺序、隐藏、选区方向、定格源帧及画面关键帧。
     /// 复用输出缓冲并重置为黑色不透明底，返回切片在下一次渲染前有效；失败返回错误，不静默跳过。
     pub fn render(
         &mut self,
@@ -174,10 +174,11 @@ impl Renderer {
                 let source = self.sources.get_mut(&clip.id).unwrap();
                 let size = source.size;
                 let pixels = source.read(clip.source_frame(frame.floor() as i64))?;
+                let graded = crate::color_render::apply(pixels, size, size, &clip.color_at(frame))?;
                 composite::blend_pixels(
                     output,
                     (settings.width, settings.height),
-                    pixels,
+                    &graded,
                     size,
                     &clip.transform_at(frame),
                     (timeline.width, timeline.height),
