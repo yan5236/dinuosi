@@ -42,6 +42,7 @@ impl Desktop {
     /// 构造三栏与底部区域；预览控制只放中栏，左右面板延伸至工具栏上沿。
     /// 时间线与检查器委派独立视图，预览模式由用户的素材/时间线选择决定。
     /// 绘制前同步时间线横向尺寸，使首次显示和窗口缩放使用当帧宽度计算全览比例。
+    /// 曲线面板打开时压缩上部区域，水平坐标与时间线保持一致并保留轨道操作空间。
     pub(crate) fn editor(
         &mut self,
         layout: Layout,
@@ -50,6 +51,7 @@ impl Desktop {
     ) -> Div {
         self.timeline.bounds.size.width = px(layout.width);
         self.timeline.header = layout.track_header + crate::trim_handle::WIDTH;
+        let curve_height = (f32::from(window.viewport_size().height) * 0.24).clamp(150.0, 240.0);
         div()
             .size_full()
             .flex()
@@ -59,7 +61,12 @@ impl Desktop {
                 div()
                     .flex()
                     .flex_none()
-                    .h(px(layout.upper))
+                    .h(px(layout.upper
+                        - if self.timeline.curves.open {
+                            curve_height * 0.75
+                        } else {
+                            0.0
+                        }))
                     .child(
                         self.library(layout.left, cx)
                             .border_r_1()
@@ -87,6 +94,9 @@ impl Desktop {
                     ),
             )
             .child(self.timeline_toolbar(layout.toolbar, cx))
+            .when(self.timeline.curves.open, |s| {
+                s.child(self.curve_panel(curve_height, cx))
+            })
             .child(self.timeline_panel(layout, cx))
             .child(
                 div()
@@ -232,6 +242,20 @@ impl Desktop {
                     }))
             }))
             .child(div().flex_1())
+            .child(
+                crate::tooltip::Tooltip::tool(
+                    "keyframe-curves",
+                    Icon::Keyframe,
+                    !self.busy,
+                    crate::i18n::t("timeline", "Keyframe curves", cx),
+                )
+                .selected(self.timeline.curves.open)
+                .on_click(cx.listener(|this, _, window, cx| {
+                    if !this.busy {
+                        this.toggle_curve_panel(window, cx);
+                    }
+                })),
+            )
             .child(
                 crate::tooltip::Tooltip::tool(
                     "zoom-out",

@@ -10,5 +10,21 @@
   "Media track": "媒体轨道",
   "Audio track": "音频轨道",
   "Subtitle track": "字幕轨道",
-  "Delete keyframes": "删除关键帧"
+  "Delete keyframes": "删除关键帧",
+  "Keyframe curves": "关键帧曲线",
+  "Scale": "缩放",
+  "Position X": "位置 X",
+  "Position Y": "位置 Y",
+  "Rotation": "旋转",
+  "Opacity": "不透明度",
+  "Volume": "音量",
+  "Linear": "线性",
+  "Ease in": "缓入",
+  "Ease out": "缓出",
+  "Ease in/out": "缓入缓出",
+  "Free": "自由",
+  "Linked": "联动",
+  "Frame": "帧",
+  "Value": "数值",
+  "Close": "关闭"
 }

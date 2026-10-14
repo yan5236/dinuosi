@@ -128,6 +128,7 @@ fn volume_is_linear_and_invalid_inputs_do_not_mutate() {
         frame: 0,
         kind: K::Volume,
         values: [1.0, 0.0],
+        curves: [None; 2],
     });
     assert!(t.validate().is_err());
 }

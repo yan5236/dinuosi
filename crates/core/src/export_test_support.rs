@@ -162,11 +162,13 @@ pub(in crate::export) fn timeline(video: &Media, audio: &Media, image: &Media) -
             frame: 0,
             kind: KeyframeKind::Opacity,
             values: [50.0, 0.0],
+            curves: [None; 2],
         },
         Keyframe {
             frame: 30,
             kind: KeyframeKind::Opacity,
             values: [0.0, 0.0],
+            curves: [None; 2],
         },
     ];
     let id = timeline
@@ -189,11 +191,13 @@ pub(in crate::export) fn timeline(video: &Media, audio: &Media, image: &Media) -
             frame: 0,
             kind: KeyframeKind::Volume,
             values: [0.2, 0.0],
+            curves: [None; 2],
         },
         Keyframe {
             frame: 18,
             kind: KeyframeKind::Volume,
             values: [0.8, 0.0],
+            curves: [None; 2],
         },
     ];
     timeline

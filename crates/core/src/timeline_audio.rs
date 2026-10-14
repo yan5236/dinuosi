@@ -11,7 +11,7 @@ struct Layer {
     pcm: Pcm,
     decoder: Decoder,
     gain: f32,
-    keys: Vec<(f64, f64)>,
+    keys: Vec<crate::keyframes::Keyframe>,
     key_index: usize,
     fps: f64,
     offset: f64,
@@ -61,7 +61,8 @@ impl TimelineAudio {
                 || c.freeze_frame.is_some()
                 || (c.gain == 0.0
                     && !c.keyframes.iter().any(|k| {
-                        k.kind == crate::keyframes::KeyframeKind::Volume && k.values[0] > 0.0
+                        k.kind == crate::keyframes::KeyframeKind::Volume
+                            && (k.values[0] > 0.0 || k.curves[0].is_some())
                     }))
                 || (c.start + c.duration) as f64 / fps <= offset
             {
@@ -113,9 +114,13 @@ impl TimelineAudio {
                     .keyframes
                     .iter()
                     .filter(|k| k.kind == crate::keyframes::KeyframeKind::Volume)
-                    .map(|k| ((c.start + k.frame) as f64, k.values[0]))
+                    .map(|k| {
+                        let mut key = k.clone();
+                        key.frame += c.start;
+                        key
+                    })
                     .collect();
-                keys.sort_by(|a, b| a.0.total_cmp(&b.0));
+                keys.sort_by_key(|k| k.frame);
                 layers.push(Layer {
                     start: sample(c.start as f64 / fps - offset),
                     end: sample((c.start + c.duration) as f64 / fps - offset),
@@ -157,7 +162,7 @@ impl TimelineAudio {
 }
 impl Iterator for TimelineAudio {
     type Item = f32;
-    /// 在立体声采样对的同一时刻线性插值增益，再混合并限制振幅；跳转从 offset 开始求值。
+    /// 在立体声采样对的同一时刻按共享曲线求值增益，再混合并限制振幅；跳转从 offset 开始求值。
     /// 非活动片段不消费样本，音量游标仅前进，末尾结束迭代。
     fn next(&mut self) -> Option<f32> {
         if self.position >= self.end {
@@ -169,16 +174,23 @@ impl Iterator for TimelineAudio {
                 let frame = (layer.offset + (self.position / 2) as f64 / 48000.0) * layer.fps;
                 // 关键帧游标只前进，音频回调不分配内存，也不为每个采样遍历整条动画。
                 while layer.key_index + 1 < layer.keys.len()
-                    && layer.keys[layer.key_index + 1].0 <= frame
+                    && layer.keys[layer.key_index + 1].frame as f64 <= frame
                 {
                     layer.key_index += 1;
                 }
-                if let Some(&(a, gain)) = layer.keys.get(layer.key_index) {
+                if self.position.is_multiple_of(2)
+                    && let Some(a) = layer.keys.get(layer.key_index)
+                {
                     layer.gain = match layer.keys.get(layer.key_index + 1) {
-                        Some(&(b, next)) if frame > a => {
-                            (gain + (next - gain) * ((frame - a) / (b - a))) as f32
-                        }
-                        _ => gain as f32,
+                        Some(b) if frame > a.frame as f64 => crate::keyframe_curve::interpolate(
+                            a,
+                            b,
+                            0,
+                            (frame - a.frame as f64) / (b.frame - a.frame) as f64,
+                        )
+                        .clamp(0.0, 10.0)
+                            as f32,
+                        _ => a.values[0] as f32,
                     };
                 }
                 value += layer.pcm.next().unwrap_or(0.0) * layer.gain;

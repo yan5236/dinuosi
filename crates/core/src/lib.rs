@@ -5,6 +5,8 @@ pub mod export;
 mod export_cancel;
 mod export_capabilities;
 mod export_render;
+pub mod keyframe_curve;
+mod keyframe_curve_edit;
 pub mod keyframes;
 pub mod language;
 pub mod media;

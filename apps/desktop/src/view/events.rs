@@ -3,6 +3,7 @@ use super::*;
 impl Desktop {
     /// 按当前焦点与统一快捷键注册表路由；输入参数时只接受提交/取消，防止误删片段。
     /// 全屏模式只接受播放/退出与焦点导航；其余非输入状态下 Tab 遍历工具以显示 Tooltip。
+    /// 曲线输入优先接收提交/取消；拖动可取消，选中曲线节点的 Delete 只删除该属性节点。
     pub(super) fn workspace_key(
         &mut self,
         event: &gpui::KeyDownEvent,
@@ -29,6 +30,34 @@ impl Desktop {
             return;
         }
         let key = event.keystroke.key.as_str();
+        if self.timeline.curves.input.is_some() {
+            if key == "enter" {
+                self.commit_curve_input(cx);
+                self.focus_handle.focus(window);
+            } else if key == "escape" {
+                self.timeline.curves.input = None;
+                self.timeline.curves.blur = None;
+                self.focus_handle.focus(window);
+                cx.notify();
+            }
+            return;
+        }
+        if key == "escape"
+            && matches!(
+                self.timeline.gesture,
+                Some(crate::timeline_state::Gesture::Curve(_))
+            )
+        {
+            self.timeline.gesture = None;
+            if let Some(before) = self.timeline.before.take() {
+                self.timeline.model = before;
+            }
+            self.timeline.curves.selected = None;
+            self.refresh_timeline(cx);
+            cx.notify();
+            cx.stop_propagation();
+            return;
+        }
         if self.timeline.input.is_some()
             || self.timeline.volume_input.is_some()
             || self.timeline.speed_input.is_some()
@@ -81,9 +110,18 @@ impl Desktop {
             Some(Command::New) => self.show_dialog(DialogKind::Create, window, cx),
             Some(Command::Open) => self.import_project(window, cx),
             Some(Command::Home) => self.show_manager(window, cx),
+            Some(Command::Delete) if self.timeline.curves.open && self.curve_key().is_some() => {
+                self.delete_curve_key(cx);
+            }
             Some(Command::Delete) => self.delete_clips(cx),
-            Some(Command::Undo) => self.timeline_history(false, cx),
-            Some(Command::Redo) => self.timeline_history(true, cx),
+            Some(Command::Undo) => {
+                self.end_timeline_pointer(window, cx);
+                self.timeline_history(false, cx);
+            }
+            Some(Command::Redo) => {
+                self.end_timeline_pointer(window, cx);
+                self.timeline_history(true, cx);
+            }
             Some(Command::Play) if self.current.is_some() => {
                 if self.timeline.preview {
                     self.play_timeline(window, cx);

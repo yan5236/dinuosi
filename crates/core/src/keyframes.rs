@@ -1,4 +1,4 @@
-//! 片段局部帧上的独立参数关键帧；线性插值、端点保持及编辑规则不依赖界面。
+//! 片段局部帧上的独立参数关键帧；曲线求值、端点保持及编辑规则不依赖界面。
 use crate::{
     media::MediaKind,
     timeline::{Clip, Property, Timeline, Transform},
@@ -19,6 +19,8 @@ pub struct Keyframe {
     pub frame: i64,
     pub kind: KeyframeKind,
     pub values: [f64; 2],
+    /// 每个分量独立保存入/出切线；缺省保持旧项目的线性插值。
+    pub curves: [Option<crate::keyframe_curve::KeyframeCurve>; 2],
 }
 impl KeyframeKind {
     /// 返回稳定磁盘类型名；坐标用两个值，其余类型第二个值固定为零。
@@ -56,7 +58,7 @@ impl KeyframeKind {
         (self == Self::Volume) == (kind == MediaKind::Audio)
     }
     /// 返回各值的业务范围，防止非法存储或整体调整溢出。
-    fn range(self, component: usize) -> (f64, f64) {
+    pub fn range(self, component: usize) -> (f64, f64) {
         match self {
             Self::Position => Property::X.range(),
             Self::Volume if component == 0 => (0.0, 10.0),
@@ -95,7 +97,7 @@ impl Clip {
             KeyframeKind::Volume => self.gain = v[0],
         }
     }
-    /// 在项目绝对帧求值：同类关键帧之间逐值匀速插值，范围外保持最近端点。
+    /// 在项目绝对帧求值：同类关键帧之间逐值按贝塞尔切线插值，缺省线性，范围外保持最近端点。
     /// 支持音频的分数帧求值；源入点与其他动画类型不影响结果。
     pub fn keyframe_values(&self, kind: KeyframeKind, frame: f64) -> [f64; 2] {
         let local = frame - self.start as f64;
@@ -112,10 +114,10 @@ impl Clip {
         match (previous, next) {
             (Some(a), Some(b)) if a.frame != b.frame => {
                 let t = (local - a.frame as f64) / (b.frame - a.frame) as f64;
-                [
-                    a.values[0] + (b.values[0] - a.values[0]) * t,
-                    a.values[1] + (b.values[1] - a.values[1]) * t,
-                ]
+                std::array::from_fn(|i| {
+                    let (min, max) = kind.range(i);
+                    crate::keyframe_curve::interpolate(a, b, i, t).clamp(min, max)
+                })
             }
             (Some(k), _) | (_, Some(k)) => k.values,
             _ => self.base_values(kind),
@@ -133,7 +135,7 @@ impl Clip {
             ..self.transform.clone()
         }
     }
-    /// 返回当前帧线性音量；零值可安全序列化并且严格静音。
+    /// 返回当前帧的线性增益单位音量，插值使用同一曲线；零值可安全序列化并且严格静音。
     pub fn gain_at(&self, frame: f64) -> f64 {
         self.keyframe_values(KeyframeKind::Volume, frame)[0]
     }
@@ -160,11 +162,17 @@ impl Clip {
                 if !v.is_finite() || *v < min || *v > max {
                     return Err("关键帧参数无效".into());
                 }
+                if let Some(curve) = k.curves[i] {
+                    if i == 1 && k.kind != KeyframeKind::Position {
+                        return Err("关键帧曲线参数无效".into());
+                    }
+                    curve.validate((max - min).max(1.0) * 2.0)?;
+                }
             }
         }
         Ok(())
     }
-    /// 插入或替换此局部帧的同类型值；稳定排序确保保存和导航次序确定。
+    /// 插入或替换此局部帧的同类型值；新节点拆分原贝塞尔区间，稳定排序确保保存和导航次序确定。
     fn put_keyframe(&mut self, kind: KeyframeKind, frame: i64, values: [f64; 2]) {
         let local = frame - self.start;
         if let Some(k) = self
@@ -174,10 +182,12 @@ impl Clip {
         {
             k.values = values;
         } else {
+            let curves = crate::keyframe_curve::split_for_key(self, kind, local);
             self.keyframes.push(Keyframe {
                 frame: local,
                 kind,
                 values,
+                curves,
             });
             self.keyframes.sort_by_key(|k| (k.frame, k.kind));
         }

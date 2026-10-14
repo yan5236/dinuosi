@@ -3,6 +3,9 @@
 mod assets;
 mod audio_inspector;
 mod blade_cursor;
+mod curve_edit;
+mod curve_graph;
+mod curve_panel;
 mod dialogs;
 mod editor;
 mod export_controls;
@@ -62,6 +65,8 @@ mod windows;
 
 #[cfg(test)]
 mod audio_track_tests;
+#[cfg(test)]
+mod curve_tests;
 #[cfg(test)]
 mod editor_media_tests;
 #[cfg(test)]

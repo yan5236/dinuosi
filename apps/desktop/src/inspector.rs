@@ -362,7 +362,9 @@ impl Desktop {
     }
     /// 提交画面、音量或变速数值输入；变速绑定片段身份，非法数字显示真实错误且保持原参数。
     /// 轨道名称仅修改所选轨道；输入实体先取出，避免失焦回调重复提交。
+    /// 曲线节点输入先按其绑定的素材/属性身份提交，不将过期数字写入新选择。
     pub(crate) fn commit_inspector_input(&mut self, cx: &mut Context<Self>) {
+        self.commit_curve_input(cx);
         self.timeline.input_blur = None;
         if let Some((duration, id, input)) = self.timeline.speed_input.take()
             && self.speed_clip().is_some_and(|c| c.id == id)

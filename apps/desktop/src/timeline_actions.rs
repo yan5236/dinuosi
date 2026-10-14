@@ -10,6 +10,7 @@ impl Desktop {
     /// 刀片模式委派切割；默认选择完整关联组，Ctrl/Shift 切换整组，Alt 临时只选择单段。
     /// 点击的已选成员成为检查器主对象，显示与变速按其类型读取，不改变整组联动集合。
     /// 锁定片段仍可选择；整组有锁定片段或轨道时不启动移动/裁边，直接点击锁轨忽略输入。
+    /// 进入片段选择时清除曲线节点选择，恢复 Delete 的素材删除语义。
     pub(crate) fn begin_clip(
         &mut self,
         id: String,
@@ -30,6 +31,7 @@ impl Desktop {
             return;
         }
         self.commit_inspector_input(cx);
+        self.timeline.curves.selected = None;
         let Some(clip) = self.timeline.model.clips.iter().find(|c| c.id == id) else {
             return;
         };
@@ -91,6 +93,7 @@ impl Desktop {
     }
     /// 空白区开始框选且不移动播放头；Shift/Ctrl 保留已有选择，Alt 不展开关联，刀片工具忽略空白。
     /// 框选没有唯一点击目标，清除检查器主对象并沿用首个选中成员。
+    /// 框选同时清除曲线节点选择，避免旧节点拦截工作区删除操作。
     pub(crate) fn begin_marquee(
         &mut self,
         event: &MouseDownEvent,
@@ -98,6 +101,7 @@ impl Desktop {
         cx: &mut Context<Self>,
     ) {
         self.commit_inspector_input(cx);
+        self.timeline.curves.selected = None;
         if self.busy || self.timeline.blade {
             return;
         }
@@ -139,12 +143,17 @@ impl Desktop {
     }
     /// 处理活动手势的移动，片段修改从按下快照计算；音量按比例映射增益并停止旧声音。
     /// 裁边对当前选择中的关联成员使用共同帧增量；参数与预览变换只更新内存，释放时保存一次历史。
+    /// 曲线节点与切线委派独立适配器，使用按下时冻结的坐标范围及模型快照。
     pub(crate) fn move_timeline_pointer(&mut self, point: Point<Pixels>, cx: &mut Context<Self>) {
         let Some(gesture) = &self.timeline.gesture else {
             return;
         };
         self.timeline.pointer = point;
         match gesture {
+            Gesture::Curve(drag) => {
+                let drag = drag.clone();
+                self.move_curve_point(point, drag, cx);
+            }
             Gesture::Preview(_) => self.move_preview_transform(point, cx),
             Gesture::Marquee {
                 start,

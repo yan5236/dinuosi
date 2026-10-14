@@ -83,6 +83,8 @@ struct KeyframeV1 {
     frame: i64,
     kind: String,
     values: [f64; 2],
+    #[serde(default)]
+    curves: [Option<crate::keyframe_curve::KeyframeCurve>; 2],
 }
 /// 旧项目未保存音量时使用单位增益，即 0.0dB，不改变原有声音大小。
 fn default_gain() -> f64 {
@@ -177,6 +179,7 @@ impl TimelineV1 {
                             frame: k.frame,
                             kind: k.kind.name().into(),
                             values: k.values,
+                            curves: k.curves,
                         })
                         .collect(),
                 })
@@ -298,6 +301,7 @@ impl TimelineV1 {
                                     frame: k.frame,
                                     kind: crate::keyframes::KeyframeKind::parse(&k.kind)?,
                                     values: k.values,
+                                    curves: k.curves,
                                 })
                             })
                             .collect::<Result<Vec<_>, String>>()?,

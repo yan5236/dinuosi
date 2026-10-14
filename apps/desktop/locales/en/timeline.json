@@ -10,5 +10,21 @@
   "Media track": "Media",
   "Audio track": "Audio",
   "Subtitle track": "Subtitles",
-  "Delete keyframes": "Delete keyframes"
+  "Delete keyframes": "Delete keyframes",
+  "Keyframe curves": "Keyframe curves",
+  "Scale": "Scale",
+  "Position X": "Position X",
+  "Position Y": "Position Y",
+  "Rotation": "Rotation",
+  "Opacity": "Opacity",
+  "Volume": "Volume",
+  "Linear": "Linear",
+  "Ease in": "Ease in",
+  "Ease out": "Ease out",
+  "Ease in/out": "Ease in/out",
+  "Free": "Free",
+  "Linked": "Linked",
+  "Frame": "Frame",
+  "Value": "Value",
+  "Close": "Close"
 }

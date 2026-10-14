@@ -1,0 +1,256 @@
+//! 曲线编辑的单素材事务规则；身份、锁定、碰撞与参数校验集中于 Core。
+use crate::{
+    keyframe_curve::{Easing, KeyframeCurve},
+    keyframes::KeyframeKind,
+    timeline::{Clip, Timeline},
+};
+
+impl Clip {
+    /// 返回某个局部节点的相邻同类节点，裁剪范围外的锚点也参与曲线求值。
+    pub fn curve_neighbor(
+        &self,
+        kind: KeyframeKind,
+        frame: i64,
+        incoming: bool,
+    ) -> Option<&crate::keyframes::Keyframe> {
+        self.keyframes
+            .iter()
+            .filter(|k| {
+                k.kind == kind
+                    && if incoming {
+                        k.frame < frame
+                    } else {
+                        k.frame > frame
+                    }
+            })
+            .min_by_key(|k| k.frame.abs_diff(frame))
+    }
+
+    /// 读取显式切线，缺省时从相邻节点生成线性切线；无相邻节点返回 None。
+    pub fn curve_handle(
+        &self,
+        kind: KeyframeKind,
+        component: usize,
+        frame: i64,
+        incoming: bool,
+    ) -> Option<[f64; 2]> {
+        if component > usize::from(kind == KeyframeKind::Position) {
+            return None;
+        }
+        let key = self
+            .keyframes
+            .iter()
+            .find(|k| k.kind == kind && k.frame == frame)?;
+        let neighbor = self.curve_neighbor(kind, frame, incoming)?;
+        let curve = key.curves[component].unwrap_or_default();
+        Some(
+            if incoming {
+                curve.incoming
+            } else {
+                curve.outgoing
+            }
+            .unwrap_or([
+                1.0 / 3.0,
+                (neighbor.values[component] - key.values[component]) / 3.0,
+            ]),
+        )
+    }
+}
+
+impl Timeline {
+    /// 查找可编辑节点并检查素材/轨道锁；错误不修改数据，范围外锚点只读。
+    fn curve_target(
+        &self,
+        id: &str,
+        kind: KeyframeKind,
+        component: usize,
+        frame: i64,
+    ) -> Result<(usize, usize), String> {
+        let ci = self
+            .clips
+            .iter()
+            .position(|c| c.id == id)
+            .ok_or("关键帧不存在")?;
+        let c = &self.clips[ci];
+        if c.locked
+            || self.tracks[c.track].locked
+            || !kind.accepts(c.kind)
+            || component > usize::from(kind == KeyframeKind::Position)
+            || frame < 0
+            || frame >= c.duration
+        {
+            return Err("关键帧不可编辑".into());
+        }
+        let ki = c
+            .keyframes
+            .iter()
+            .position(|k| k.kind == kind && k.frame == frame)
+            .ok_or("关键帧不存在")?;
+        Ok((ci, ki))
+    }
+
+    /// 将单个节点移动到片段局部帧并修改一个分量；同类碰撞拒绝，位置另一分量与切线保留。
+    /// 参数超界、非有限或素材锁定时原子失败；调用方记录历史和持久化。
+    pub fn edit_curve_node(
+        &mut self,
+        id: &str,
+        kind: KeyframeKind,
+        component: usize,
+        frame: i64,
+        target: i64,
+        value: f64,
+    ) -> Result<(), String> {
+        let (ci, ki) = self.curve_target(id, kind, component, frame)?;
+        let c = &mut self.clips[ci];
+        let (min, max) = kind.range(component);
+        if target < 0 || target >= c.duration || !value.is_finite() || !(min..=max).contains(&value)
+        {
+            return Err("关键帧参数无效".into());
+        }
+        if c.keyframes
+            .iter()
+            .enumerate()
+            .any(|(i, k)| i != ki && k.kind == kind && k.frame == target)
+        {
+            return Err("该时间已有同类关键帧".into());
+        }
+        c.keyframes[ki].frame = target;
+        c.keyframes[ki].values[component] = value;
+        c.keyframes.sort_by_key(|k| (k.frame, k.kind));
+        Ok(())
+    }
+
+    /// 对选中节点右侧区间应用常用缓动；末节点使用左侧区间，只修改本分量的相关切线。
+    /// 单节点没有区间时无副作用，线性清除该区间两端切线，预设保留另一侧及另一属性。
+    pub fn ease_curve(
+        &mut self,
+        id: &str,
+        kind: KeyframeKind,
+        component: usize,
+        frame: i64,
+        easing: Easing,
+    ) -> Result<(), String> {
+        let (ci, ki) = self.curve_target(id, kind, component, frame)?;
+        let c = &self.clips[ci];
+        let right = c.curve_neighbor(kind, frame, false);
+        let Some(other) = right.or_else(|| c.curve_neighbor(kind, frame, true)) else {
+            return Ok(());
+        };
+        let oi = c
+            .keyframes
+            .iter()
+            .position(|k| k.kind == kind && k.frame == other.frame)
+            .unwrap();
+        let (ai, bi) = if right.is_some() { (ki, oi) } else { (oi, ki) };
+        let handles = match easing {
+            Easing::Linear => [None, None],
+            Easing::EaseIn => [Some([0.42, 0.0]), Some([0.0, 0.0])],
+            Easing::EaseOut => [Some([0.0, 0.0]), Some([0.42, 0.0])],
+            Easing::EaseInOut => [Some([0.42, 0.0]), Some([0.42, 0.0])],
+        };
+        let keys = &mut self.clips[ci].keyframes;
+        for (index, input, handle) in [(ai, false, handles[0]), (bi, true, handles[1])] {
+            let curve = keys[index].curves[component].get_or_insert_with(KeyframeCurve::default);
+            if input {
+                curve.incoming = handle;
+            } else {
+                curve.outgoing = handle;
+            }
+            curve.linked = false;
+            if curve.incoming.is_none() && curve.outgoing.is_none() {
+                keys[index].curves[component] = None;
+            }
+        }
+        Ok(())
+    }
+
+    /// 启用自由/联动切线并显式建立可拖动手柄；端点重合的零手柄展开为水平切线。
+    /// 切换联动时沿用右侧斜率使两侧切线连续，已有非零切线保持原长度。
+    pub fn link_curve_handles(
+        &mut self,
+        id: &str,
+        kind: KeyframeKind,
+        component: usize,
+        frame: i64,
+        linked: bool,
+    ) -> Result<(), String> {
+        let (ci, ki) = self.curve_target(id, kind, component, frame)?;
+        let c = &self.clips[ci];
+        let expand = |handle: Option<[f64; 2]>| {
+            handle.map(|h| if h == [0.0, 0.0] { [1.0 / 3.0, 0.0] } else { h })
+        };
+        let curve = KeyframeCurve {
+            incoming: expand(c.curve_handle(kind, component, frame, true)),
+            outgoing: expand(c.curve_handle(kind, component, frame, false)),
+            linked,
+        };
+        self.clips[ci].keyframes[ki].curves[component] = Some(curve);
+        if linked {
+            if let Some(handle) = curve.outgoing {
+                self.edit_curve_handle(id, kind, component, frame, false, handle)?;
+            } else if let Some(handle) = curve.incoming {
+                self.edit_curve_handle(id, kind, component, frame, true, handle)?;
+            }
+        }
+        Ok(())
+    }
+
+    /// 修改一侧切线；联动模式按真实帧间隔反向同步另一侧斜率，零横长退化为零横长手柄。
+    /// 切线长度限相邻时间范围，参数差值有有限上界；求值允许过冲并在共享入口夹紧业务范围。
+    pub fn edit_curve_handle(
+        &mut self,
+        id: &str,
+        kind: KeyframeKind,
+        component: usize,
+        frame: i64,
+        incoming: bool,
+        handle: [f64; 2],
+    ) -> Result<(), String> {
+        let (ci, ki) = self.curve_target(id, kind, component, frame)?;
+        let (min, max) = kind.range(component);
+        let limit = (max - min).max(1.0) * 2.0;
+        KeyframeCurve {
+            incoming: Some(handle),
+            ..Default::default()
+        }
+        .validate(limit)?;
+        let c = &self.clips[ci];
+        let neighbor = c
+            .curve_neighbor(kind, frame, incoming)
+            .ok_or("关键帧不存在")?;
+        let gap = neighbor.frame.abs_diff(frame) as f64;
+        let opposite_gap = c
+            .curve_neighbor(kind, frame, !incoming)
+            .map(|k| k.frame.abs_diff(frame) as f64);
+        let mut curve = c.keyframes[ki].curves[component].unwrap_or(KeyframeCurve {
+            incoming: c.curve_handle(kind, component, frame, true),
+            outgoing: c.curve_handle(kind, component, frame, false),
+            linked: false,
+        });
+        if incoming {
+            curve.incoming = Some(handle);
+        } else {
+            curve.outgoing = Some(handle);
+        }
+        if curve.linked
+            && let Some(other_gap) = opposite_gap
+        {
+            let other = if incoming {
+                &mut curve.outgoing
+            } else {
+                &mut curve.incoming
+            };
+            let length = other.map_or(1.0 / 3.0, |h| h[0]);
+            *other = Some(if handle[0] == 0.0 {
+                [0.0, -handle[1]]
+            } else {
+                [
+                    length,
+                    (-handle[1] * length * other_gap / (handle[0] * gap)).clamp(-limit, limit),
+                ]
+            });
+        }
+        self.clips[ci].keyframes[ki].curves[component] = Some(curve);
+        Ok(())
+    }
+}

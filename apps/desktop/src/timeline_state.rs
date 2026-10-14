@@ -11,6 +11,7 @@ pub enum DropTarget {
 }
 
 pub enum Gesture {
+    Curve(crate::curve_graph::CurveDrag),
     Preview(crate::preview_transform::PreviewDrag),
     Track {
         start: Point<Pixels>,
@@ -68,6 +69,7 @@ pub enum InspectorTab {
 
 #[derive(Default)]
 pub struct TimelineSession {
+    pub curves: crate::curve_panel::CurveSession,
     pub model: Timeline,
     pub history: History,
     pub selected: BTreeSet<String>,
