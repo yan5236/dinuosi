@@ -148,7 +148,7 @@ fn preview_transform_mouse_updates_inspector_and_persistence(cx: &mut TestAppCon
         );
         assert!(
             (v.property_value(Property::Y)
-                - 12.0 / f64::from(f32::from(g.canvas.size.height)) * 1080.0)
+                + 12.0 / f64::from(f32::from(g.canvas.size.height)) * 1080.0)
                 .abs()
                 < 0.01
         );

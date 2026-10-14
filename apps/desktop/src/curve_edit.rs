@@ -193,7 +193,7 @@ impl Desktop {
     }
 
     /// 提交精确帧/参数，失效身份忽略；非法、越界及重复帧输入保持旧数据并显示真实错误。
-    /// Enter/失焦只提交一次，输入先取出避免回调重入；保存失败由现有事务完整回滚。
+    /// Enter/失焦只提交一次，Y 正向输入转换回旧项目坐标；保存失败由现有事务完整回滚。
     pub(crate) fn commit_curve_input(&mut self, cx: &mut Context<Self>) {
         self.timeline.curves.blur = None;
         let Some(input) = self.timeline.curves.input.take() else {
@@ -233,6 +233,8 @@ impl Desktop {
                 text.parse::<f64>().map(|v| {
                     if input.channel == 5 {
                         10.0_f64.powf(v / 20.0)
+                    } else if input.channel == 2 {
+                        Self::property_coordinate(dinuosi_core::timeline::Property::Y, v)
                     } else {
                         v
                     }

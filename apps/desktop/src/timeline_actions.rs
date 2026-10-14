@@ -144,6 +144,7 @@ impl Desktop {
     /// 处理活动手势的移动，片段修改从按下快照计算；音量按比例映射增益并停止旧声音。
     /// 裁边对当前选择中的关联成员使用共同帧增量；参数与预览变换只更新内存，释放时保存一次历史。
     /// 曲线节点与切线委派独立适配器，使用按下时冻结的坐标范围及模型快照。
+    /// 检查器滑块输入按界面坐标转换，Y 向上为正；预览手势继续使用存储坐标。
     pub(crate) fn move_timeline_pointer(&mut self, point: Point<Pixels>, cx: &mut Context<Self>) {
         let Some(gesture) = &self.timeline.gesture else {
             return;
@@ -273,7 +274,10 @@ impl Desktop {
                 let _ = self.timeline.model.set_property_at(
                     &self.timeline.selected,
                     *property,
-                    (min + ratio as f64 * (max - min)).round(),
+                    Self::property_coordinate(
+                        *property,
+                        (min + ratio as f64 * (max - min)).round(),
+                    ),
                     self.keyframe_frame(),
                     self.auto_keyframe(cx),
                 );
@@ -454,7 +458,7 @@ impl Desktop {
         }
     }
     /// 停止播放并按当前项目帧修改检查器参数；核心处理类型隔离、自动关键帧及范围校验。
-    /// 成功沿用保存与单次历史，失败显示真实错误并保持原参数。
+    /// 输入为界面参数（Y 向上为正），转换到旧项目坐标后保存；失败显示真实错误并保持原参数。
     pub(crate) fn change_property(
         &mut self,
         property: Property,
@@ -466,7 +470,7 @@ impl Desktop {
         if let Err(error) = self.timeline.model.set_property_at(
             &self.timeline.selected,
             property,
-            value,
+            Self::property_coordinate(property, value),
             self.keyframe_frame(),
             self.auto_keyframe(cx),
         ) {

@@ -188,6 +188,28 @@ fn storage_roundtrip_legacy_and_invalid_curve() {
     assert_eq!(store.load_timeline(&entry).unwrap(), t);
     let mut json: serde_json::Value =
         serde_json::from_slice(&std::fs::read(&entry.path).unwrap()).unwrap();
+    for key in json["timeline"]["clips"][0]["keyframes"]
+        .as_array_mut()
+        .unwrap()
+    {
+        for curve in key["curves"].as_array_mut().unwrap() {
+            if let Some(curve) = curve.as_object_mut() {
+                curve.remove("value_offset");
+            }
+        }
+    }
+    std::fs::write(&entry.path, serde_json::to_vec(&json).unwrap()).unwrap();
+    assert_eq!(
+        store.load_timeline(&entry).unwrap(),
+        t,
+        "旧切线对象缺少端点差仍兼容"
+    );
+    for invalid in [1.0, 1001.0] {
+        json["timeline"]["clips"][0]["keyframes"][0]["curves"][0]["value_offset"] = invalid.into();
+        std::fs::write(&entry.path, serde_json::to_vec(&json).unwrap()).unwrap();
+        assert!(store.load_timeline(&entry).is_err());
+    }
+    json["timeline"]["clips"][0]["keyframes"][0]["curves"][0]["value_offset"] = 0.0.into();
     json["timeline"]["clips"][0]["keyframes"][0]["curves"][0]["outgoing"][0] = 2.0.into();
     std::fs::write(&entry.path, serde_json::to_vec(&json).unwrap()).unwrap();
     assert!(store.load_timeline(&entry).is_err());
@@ -203,4 +225,111 @@ fn storage_roundtrip_legacy_and_invalid_curve() {
     t.clips[0].keyframes[0].curves[1] = Some(KeyframeCurve::default());
     assert!(t.validate().is_err());
     std::fs::remove_dir_all(root).unwrap();
+}
+
+/// 在正/负过冲区反复插入合法采样值，逐四分之一帧保持动画，保存重开仍保留原始曲线几何。
+#[test]
+fn inserting_clamped_keys_preserves_overshoot_and_storage() {
+    let root =
+        std::env::temp_dir().join(format!("dinuosi-curve-overshoot-{}", uuid::Uuid::new_v4()));
+    std::fs::create_dir_all(&root).unwrap();
+    let store = ProjectStore::new(root.join("recent.json"));
+    let entry = store.create("过冲", &root).unwrap();
+    for (base, handle) in [(0.0, 200.0), (100.0, -200.0)] {
+        let (mut t, id) = fixture(false);
+        let ids = [id.clone()].into();
+        t.set_property(&ids, Property::Opacity, base).unwrap();
+        t.toggle_keyframe(&ids, K::Opacity, 30);
+        t.toggle_keyframe(&ids, K::Opacity, 90);
+        t.edit_curve_handle(&id, K::Opacity, 0, 0, false, [1.0 / 3.0, handle])
+            .unwrap();
+        t.edit_curve_handle(&id, K::Opacity, 0, 60, true, [1.0 / 3.0, handle])
+            .unwrap();
+        let original = t.clone();
+        for frame in [60, 45, 75, 53] {
+            t.toggle_keyframe(&ids, K::Opacity, frame);
+            t.validate().unwrap();
+            for quarter in 120..=360 {
+                let frame = quarter as f64 / 4.0;
+                assert!(
+                    (t.clips[0].transform_at(frame).opacity
+                        - original.clips[0].transform_at(frame).opacity)
+                        .abs()
+                        < 1e-7,
+                    "frame={frame}"
+                );
+            }
+        }
+        store.save_timeline(&entry, &t).unwrap();
+        let reopened = store.load_timeline(&entry).unwrap();
+        for quarter in 120..=360 {
+            let frame = quarter as f64 / 4.0;
+            assert!(
+                (reopened.clips[0].transform_at(frame).opacity
+                    - original.clips[0].transform_at(frame).opacity)
+                    .abs()
+                    < 1e-7
+            );
+        }
+        t.edit_curve_node(&id, K::Opacity, 0, 30, 30, 50.0).unwrap();
+        assert_eq!(t.clips[0].transform_at(60.0).opacity, 50.0);
+        assert_eq!(
+            t.clips[0]
+                .keyframes
+                .iter()
+                .find(|k| k.kind == K::Opacity && k.frame == 30)
+                .unwrap()
+                .curves[0]
+                .unwrap()
+                .value_offset,
+            0.0
+        );
+        t.validate().unwrap();
+    }
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+/// 移动位置节点时间时，X/Y 与受影响相邻节点仍保持联动斜率；自由切线及无效写入保持不变。
+#[test]
+fn retiming_nodes_keeps_linked_tangents_for_both_components() {
+    let (mut t, id) = fixture(false);
+    let ids = [id.clone()].into();
+    for frame in [30, 60, 90, 120] {
+        t.toggle_keyframe(&ids, K::Position, frame);
+    }
+    for frame in [30, 60] {
+        for component in [0, 1] {
+            t.link_curve_handles(&id, K::Position, component, frame, true)
+                .unwrap();
+            t.edit_curve_handle(&id, K::Position, component, frame, false, [0.25, 30.0])
+                .unwrap();
+        }
+    }
+    t.edit_curve_node(&id, K::Position, 0, 30, 20, 10.0)
+        .unwrap();
+    let c = &t.clips[0];
+    for frame in [20, 60] {
+        for component in [0, 1] {
+            let a = c.curve_handle(K::Position, component, frame, true).unwrap();
+            let b = c
+                .curve_handle(K::Position, component, frame, false)
+                .unwrap();
+            let left = (frame - c.curve_neighbor(K::Position, frame, true).unwrap().frame) as f64;
+            let right = (c.curve_neighbor(K::Position, frame, false).unwrap().frame - frame) as f64;
+            assert!((a[1] / (-left * a[0]) - b[1] / (right * b[0])).abs() < 1e-8);
+        }
+    }
+    // 极陡联动手柄触及纵向上限时缩短长度，不能靠夹紧差值破坏斜率。
+    t.edit_curve_handle(&id, K::Position, 0, 20, false, [0.0001, 400_000.0])
+        .unwrap();
+    let a = t.clips[0].curve_handle(K::Position, 0, 20, true).unwrap();
+    let b = t.clips[0].curve_handle(K::Position, 0, 20, false).unwrap();
+    let slope = b[1] / (40.0 * b[0]);
+    assert!((a[1] / (-20.0 * a[0]) / slope - 1.0).abs() < 1e-8);
+    for handle in [[0.0, 20.0], [1e-310, 20.0], [1e-310, 0.0]] {
+        t.edit_curve_handle(&id, K::Position, 0, 20, false, handle)
+            .unwrap();
+        t.validate().unwrap();
+    }
+    t.validate().unwrap();
 }

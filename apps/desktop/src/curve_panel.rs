@@ -76,8 +76,13 @@ impl Desktop {
     }
 
     /// 曲线数值沿用检查器单位；音量显示 dB，零增益显示负无穷，其余显示百分比/像素/角度。
+    /// Y 分量从旧项目坐标转换为向上为正的界面坐标。
     pub(crate) fn curve_value_label(channel: usize, value: f64) -> String {
         match channel {
+            2 => format!(
+                "{:.2}",
+                Self::property_coordinate(dinuosi_core::timeline::Property::Y, value)
+            ),
             5 if value <= 0.0 => "−∞ dB".into(),
             5 => format!("{:.2} dB", 20.0 * value.log10()),
             0 | 4 => format!("{value:.2}%"),

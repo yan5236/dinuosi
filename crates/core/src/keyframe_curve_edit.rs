@@ -26,7 +26,7 @@ impl Clip {
             .min_by_key(|k| k.frame.abs_diff(frame))
     }
 
-    /// 读取显式切线，缺省时从相邻节点生成线性切线；无相邻节点返回 None。
+    /// 读取相对原始贝塞尔端点的切线，缺省按相邻未夹紧端点生成线性切线；无相邻节点返回 None。
     pub fn curve_handle(
         &self,
         kind: KeyframeKind,
@@ -51,9 +51,73 @@ impl Clip {
             }
             .unwrap_or([
                 1.0 / 3.0,
-                (neighbor.values[component] - key.values[component]) / 3.0,
+                (neighbor.curve_value(component) - key.curve_value(component)) / 3.0,
             ]),
         )
+    }
+
+    /// 按当前左右帧间距同步联动切线；优先保留指定侧，超出纵向限值时同比缩短另一侧以保持斜率。
+    /// 缺少任一相邻节点或主切线时原样返回，供节点改时与手柄编辑共用，不修改片段。
+    fn synced_curve(
+        &self,
+        kind: KeyframeKind,
+        frame: i64,
+        component: usize,
+        mut curve: KeyframeCurve,
+        incoming: bool,
+    ) -> KeyframeCurve {
+        if !curve.linked {
+            return curve;
+        }
+        let primary = if incoming {
+            curve.incoming
+        } else {
+            curve.outgoing
+        };
+        let incoming = if primary.is_some() {
+            incoming
+        } else {
+            !incoming
+        };
+        let Some(handle) = (if incoming {
+            curve.incoming
+        } else {
+            curve.outgoing
+        }) else {
+            return curve;
+        };
+        let Some(neighbor) = self.curve_neighbor(kind, frame, incoming) else {
+            return curve;
+        };
+        let Some(opposite) = self.curve_neighbor(kind, frame, !incoming) else {
+            return curve;
+        };
+        let gap = neighbor.frame.abs_diff(frame) as f64;
+        let other_gap = opposite.frame.abs_diff(frame) as f64;
+        let other = if incoming {
+            &mut curve.outgoing
+        } else {
+            &mut curve.incoming
+        };
+        let length = other.map_or(1.0 / 3.0, |h| h[0]);
+        let (min, max) = kind.range(component);
+        let limit = (max - min).max(1.0) * 2.0;
+        *other = Some(if handle[0] == 0.0 {
+            [0.0, -handle[1]]
+        } else if handle[1] == 0.0 {
+            [length, 0.0]
+        } else {
+            let factor = length / handle[0] * (other_gap / gap);
+            let max_factor = limit / handle[1].abs();
+            if !factor.is_finite() {
+                [handle[0] * (gap / other_gap), -handle[1]]
+            } else if factor > max_factor {
+                [length * (max_factor / factor), -handle[1].signum() * limit]
+            } else {
+                [length, -handle[1] * factor]
+            }
+        });
+        curve
     }
 }
 
@@ -89,7 +153,8 @@ impl Timeline {
         Ok((ci, ki))
     }
 
-    /// 将单个节点移动到片段局部帧并修改一个分量；同类碰撞拒绝，位置另一分量与切线保留。
+    /// 将单个节点移动到片段局部帧并修改一个分量；同类碰撞拒绝，位置另一分量保留。
+    /// 改时后按新间距同步受影响联动切线（含相邻节点及位置两分量），主动改值清除该分量的越界端点差。
     /// 参数超界、非有限或素材锁定时原子失败；调用方记录历史和持久化。
     pub fn edit_curve_node(
         &mut self,
@@ -114,9 +179,42 @@ impl Timeline {
         {
             return Err("该时间已有同类关键帧".into());
         }
+        let mut affected = vec![target];
+        if frame != target {
+            for incoming in [true, false] {
+                if let Some(neighbor) = c.curve_neighbor(kind, frame, incoming) {
+                    affected.push(neighbor.frame);
+                }
+            }
+        }
         c.keyframes[ki].frame = target;
+        if c.keyframes[ki].values[component] != value
+            && let Some(curve) = &mut c.keyframes[ki].curves[component]
+        {
+            curve.value_offset = 0.0;
+        }
         c.keyframes[ki].values[component] = value;
         c.keyframes.sort_by_key(|k| (k.frame, k.kind));
+        if frame != target {
+            for incoming in [true, false] {
+                if let Some(neighbor) = c.curve_neighbor(kind, target, incoming) {
+                    affected.push(neighbor.frame);
+                }
+            }
+            for index in 0..c.keyframes.len() {
+                if c.keyframes[index].kind != kind || !affected.contains(&c.keyframes[index].frame)
+                {
+                    continue;
+                }
+                for component in 0..=usize::from(kind == KeyframeKind::Position) {
+                    if let Some(curve) = c.keyframes[index].curves[component].filter(|c| c.linked) {
+                        let frame = c.keyframes[index].frame;
+                        c.keyframes[index].curves[component] =
+                            Some(c.synced_curve(kind, frame, component, curve, false));
+                    }
+                }
+            }
+        }
         Ok(())
     }
 
@@ -157,7 +255,7 @@ impl Timeline {
                 curve.outgoing = handle;
             }
             curve.linked = false;
-            if curve.incoming.is_none() && curve.outgoing.is_none() {
+            if curve.incoming.is_none() && curve.outgoing.is_none() && curve.value_offset == 0.0 {
                 keys[index].curves[component] = None;
             }
         }
@@ -183,6 +281,7 @@ impl Timeline {
             incoming: expand(c.curve_handle(kind, component, frame, true)),
             outgoing: expand(c.curve_handle(kind, component, frame, false)),
             linked,
+            value_offset: c.keyframes[ki].curves[component].map_or(0.0, |c| c.value_offset),
         };
         self.clips[ci].keyframes[ki].curves[component] = Some(curve);
         if linked {
@@ -215,41 +314,20 @@ impl Timeline {
         }
         .validate(limit)?;
         let c = &self.clips[ci];
-        let neighbor = c
-            .curve_neighbor(kind, frame, incoming)
+        c.curve_neighbor(kind, frame, incoming)
             .ok_or("关键帧不存在")?;
-        let gap = neighbor.frame.abs_diff(frame) as f64;
-        let opposite_gap = c
-            .curve_neighbor(kind, frame, !incoming)
-            .map(|k| k.frame.abs_diff(frame) as f64);
         let mut curve = c.keyframes[ki].curves[component].unwrap_or(KeyframeCurve {
             incoming: c.curve_handle(kind, component, frame, true),
             outgoing: c.curve_handle(kind, component, frame, false),
             linked: false,
+            value_offset: 0.0,
         });
         if incoming {
             curve.incoming = Some(handle);
         } else {
             curve.outgoing = Some(handle);
         }
-        if curve.linked
-            && let Some(other_gap) = opposite_gap
-        {
-            let other = if incoming {
-                &mut curve.outgoing
-            } else {
-                &mut curve.incoming
-            };
-            let length = other.map_or(1.0 / 3.0, |h| h[0]);
-            *other = Some(if handle[0] == 0.0 {
-                [0.0, -handle[1]]
-            } else {
-                [
-                    length,
-                    (-handle[1] * length * other_gap / (handle[0] * gap)).clamp(-limit, limit),
-                ]
-            });
-        }
+        let curve = c.synced_curve(kind, frame, component, curve, incoming);
         self.clips[ci].keyframes[ki].curves[component] = Some(curve);
         Ok(())
     }

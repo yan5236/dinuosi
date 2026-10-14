@@ -244,3 +244,159 @@ fn curve_audio_and_locked_selection(cx: &mut TestAppContext) {
     assert_eq!(store.load_timeline(&entry).unwrap(), before);
     std::fs::remove_dir_all(root).unwrap();
 }
+
+/// 旧项目保持存储和画面位置；Y 检查器、精确输入、微调、节点与切线拖动统一为向上正值。
+#[gpui::test]
+fn positive_y_controls_move_up_and_preserve_legacy_storage(cx: &mut TestAppContext) {
+    let root = std::env::temp_dir().join(format!("dinuosi-y-ui-{}", std::process::id()));
+    std::fs::create_dir_all(&root).unwrap();
+    let store = ProjectStore::new(root.join("recent.json"));
+    let entry = store.create("Y 坐标", &root).unwrap();
+    let (desktop, cx) =
+        cx.add_window_view(|w, cx| Desktop::new(store.clone(), Some(entry.clone()), w, cx));
+    cx.simulate_resize(size(px(1440.0), px(900.0)));
+    cx.run_until_parked();
+    desktop.update_in(cx, |v, _, cx| {
+        let before = v.timeline.model.clone();
+        let id = v
+            .timeline
+            .model
+            .insert(
+                ("legacy.png".into(), MediaKind::Image),
+                "旧图像".into(),
+                0,
+                0,
+                0..150,
+                150,
+            )
+            .unwrap();
+        v.timeline.selected = [id].into();
+        v.timeline
+            .model
+            .set_property(&v.timeline.selected, Property::Y, -100.0)
+            .unwrap();
+        v.timeline
+            .model
+            .toggle_keyframe(&v.timeline.selected, K::Position, 0);
+        v.timeline
+            .model
+            .set_property_at(&v.timeline.selected, Property::Y, -200.0, 60, true)
+            .unwrap();
+        v.zoom = 0.5;
+        v.session.timeline_position = 0.0;
+        v.commit_timeline(before, cx);
+    });
+    cx.run_until_parked();
+    let legacy = store.load_timeline(&entry).unwrap();
+    assert_eq!(
+        desktop.read_with(cx, |v, _| v.property_value(Property::Y)),
+        100.0
+    );
+    click(cx, "keyframe-curves");
+    click(cx, "curve-channel-2");
+    let first = cx.debug_bounds("curve-node-0").unwrap().center();
+    let last = cx.debug_bounds("curve-node-60").unwrap().center();
+    assert!(last.y < first.y, "Y 正值较大的节点必须位于上方");
+    assert_eq!(store.load_timeline(&entry).unwrap(), legacy);
+    click(cx, "curve-node-0");
+    click(cx, "curve-value");
+    cx.simulate_keystrokes("ctrl-a");
+    cx.simulate_input("150");
+    cx.simulate_keystrokes("enter");
+    cx.run_until_parked();
+    assert_eq!(
+        store.load_timeline(&entry).unwrap().clips[0]
+            .transform_at(0.0)
+            .y,
+        -150.0
+    );
+    assert_eq!(
+        desktop.read_with(cx, |v, _| v.property_value(Property::Y)),
+        150.0
+    );
+    let from = cx.debug_bounds("curve-node-0").unwrap().center();
+    let to = point(from.x, from.y - px(10.0));
+    cx.simulate_mouse_down(from, MouseButton::Left, Modifiers::none());
+    cx.simulate_mouse_move(to, MouseButton::Left, Modifiers::none());
+    cx.simulate_mouse_up(to, MouseButton::Left, Modifiers::none());
+    cx.run_until_parked();
+    assert!(
+        store.load_timeline(&entry).unwrap().clips[0]
+            .transform_at(0.0)
+            .y
+            < -150.0
+    );
+    click(cx, "curve-linked-false");
+    let before = store.load_timeline(&entry).unwrap();
+    let from = cx.debug_bounds("curve-out-0").unwrap().center();
+    let to = point(from.x, from.y - px(10.0));
+    cx.simulate_mouse_down(from, MouseButton::Left, Modifiers::none());
+    cx.simulate_mouse_move(to, MouseButton::Left, Modifiers::none());
+    cx.simulate_mouse_up(to, MouseButton::Left, Modifiers::none());
+    cx.run_until_parked();
+    let after = store.load_timeline(&entry).unwrap();
+    assert!(
+        after.clips[0].keyframes[0].curves[1]
+            .unwrap()
+            .outgoing
+            .unwrap()[1]
+            < before.clips[0].keyframes[0].curves[1]
+                .unwrap()
+                .outgoing
+                .unwrap()[1]
+    );
+    click(cx, "inspector-value-Y");
+    cx.simulate_keystrokes("ctrl-a");
+    cx.simulate_input("300");
+    cx.simulate_keystrokes("enter");
+    cx.run_until_parked();
+    assert_eq!(
+        store.load_timeline(&entry).unwrap().clips[0]
+            .transform_at(0.0)
+            .y,
+        -300.0
+    );
+    click(cx, "inspector-step-Y-1");
+    assert_eq!(
+        store.load_timeline(&entry).unwrap().clips[0]
+            .transform_at(0.0)
+            .y,
+        -301.0
+    );
+    cx.simulate_keystrokes("ctrl-z");
+    cx.run_until_parked();
+    assert_eq!(
+        store.load_timeline(&entry).unwrap().clips[0]
+            .transform_at(0.0)
+            .y,
+        -300.0
+    );
+    assert_eq!(Desktop::curve_value_label(2, -300.0), "300.00");
+    let transform = store.load_timeline(&entry).unwrap().clips[0].transform_at(0.0);
+    let canvas = gpui::Bounds::new(point(px(0.0), px(0.0)), size(px(640.0), px(360.0)));
+    let geometry =
+        crate::preview_geometry::Geometry::new(canvas, &transform, (640, 360), (1920, 1080));
+    assert!(
+        geometry.center.y < canvas.center().y,
+        "预览选择框必须随正 Y 上移"
+    );
+    let mut pixels = [0, 0, 0, 255].repeat(8 * 8);
+    let source = [255; 2 * 2 * 4];
+    let transform = dinuosi_core::timeline::Transform {
+        y: Desktop::property_coordinate(Property::Y, 2.0),
+        ..Default::default()
+    };
+    dinuosi_core::composite::blend_pixels(
+        &mut pixels,
+        (8, 8),
+        &source,
+        (2, 2),
+        &transform,
+        (8, 8),
+        (2.0, 2.0),
+    )
+    .unwrap();
+    assert_eq!(pixels[11 * 4], 255, "导出共用像素合成路径必须随正 Y 上移");
+    assert_eq!(pixels[(5 * 8 + 3) * 4], 0);
+    std::fs::remove_dir_all(root).unwrap();
+}

@@ -15,25 +15,38 @@ pub(crate) struct CurveView {
     pub last: f64,
     pub min: f64,
     pub max: f64,
+    pub inverted: bool,
 }
 impl CurveView {
-    /// 将项目帧/真实参数转换成视口比例；允许视口外结果以便绘制层统一裁切。
+    /// 将项目帧/存储参数转换成视口比例；Y 坐标反向投影，使向上移动与界面正值增大一致。
     pub fn ratio(self, frame: f64, value: f64) -> (f32, f32) {
         (
             ((frame - self.first) / (self.last - self.first)) as f32,
-            ((self.max - value) / (self.max - self.min)) as f32,
+            (if self.inverted {
+                value - self.min
+            } else {
+                self.max - value
+            } / (self.max - self.min)) as f32,
         )
     }
-    /// 从画布窗口坐标反算项目帧和参数；保留分数帧供求值，节点提交时再整帧取整。
+    /// 从窗口坐标按当前轴方向反算项目帧与存储参数；保留分数帧，节点提交时再整帧取整。
     pub fn value(self, bounds: Bounds<Pixels>, p: Point<Pixels>) -> (f64, f64) {
         let x = f32::from(p.x - bounds.left()) / f32::from(bounds.size.width).max(1.0);
         let y = f32::from(p.y - bounds.top()) / f32::from(bounds.size.height).max(1.0);
         (
             self.first + x as f64 * (self.last - self.first),
-            self.max - y as f64 * (self.max - self.min),
+            self.axis_value(y as f64),
         )
     }
-    /// 根据当前缩放和所有锚点/切线确定数值范围，常量段留出可拖动空间，不改变关键帧。
+    /// 从纵轴比例反算存储参数，供刻度和拖动共用；Y 的显示符号由检查器单位转换处理。
+    fn axis_value(self, ratio: f64) -> f64 {
+        if self.inverted {
+            self.min + ratio * (self.max - self.min)
+        } else {
+            self.max - ratio * (self.max - self.min)
+        }
+    }
+    /// 根据当前缩放、合法锚点和原始几何切线确定数值范围；Y 轴反向投影，常量段保留拖动空间。
     fn new(desktop: &Desktop, clip: Option<&Clip>, channel: usize) -> Self {
         let (kind, component, _) = CHANNELS[channel];
         let mut values = Vec::new();
@@ -45,7 +58,7 @@ impl CurveView {
                         [curve.incoming, curve.outgoing]
                             .into_iter()
                             .flatten()
-                            .map(|h| k.values[component] + h[1]),
+                            .map(|h| k.curve_value(component) + h[1]),
                     );
                 }
             }
@@ -65,6 +78,7 @@ impl CurveView {
             last: (desktop.timeline.scroll_x + desktop.timeline_view_width()) as f64 / pps * fps,
             min,
             max,
+            inverted: channel == 2,
         }
     }
 }
@@ -111,7 +125,7 @@ impl Desktop {
             .size_full()
             .relative()
             .children([0.0, 0.5, 1.0].map(|ratio| {
-                let value = view.max - ratio * (view.max - view.min);
+                let value = view.axis_value(ratio);
                 div()
                     .absolute()
                     .right(px(f32::from(self.timeline.bounds.size.width)
@@ -377,7 +391,7 @@ impl Desktop {
     }
 }
 
-/// 将入/出切线的相邻时间比例和参数差值换成绘图比例；无相邻节点时不绘制无效手柄。
+/// 将原始端点切线换成当前轴方向的绘图比例，保留过冲几何；无相邻节点时不绘制无效手柄。
 fn handle_position(
     c: &Clip,
     key: &dinuosi_core::keyframes::Keyframe,
@@ -390,6 +404,6 @@ fn handle_position(
     let neighbor = c.curve_neighbor(kind, key.frame, incoming)?;
     Some(view.ratio(
         (c.start + key.frame) as f64 + (neighbor.frame - key.frame) as f64 * h[0],
-        key.values[component] + h[1],
+        key.curve_value(component) + h[1],
     ))
 }

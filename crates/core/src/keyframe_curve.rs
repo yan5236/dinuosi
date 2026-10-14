@@ -8,6 +8,16 @@ pub struct KeyframeCurve {
     pub incoming: Option<[f64; 2]>,
     pub outgoing: Option<[f64; 2]>,
     pub linked: bool,
+    /// 插入越界采样点时保留原贝塞尔端点与合法参数值的差；旧项目缺省为零。
+    #[serde(default)]
+    pub value_offset: f64,
+}
+
+impl Keyframe {
+    /// 读取未夹紧的贝塞尔端点，仅供几何求值；业务参数仍从 values 读取并保持合法范围。
+    pub fn curve_value(&self, component: usize) -> f64 {
+        self.values[component] + self.curves[component].map_or(0.0, |c| c.value_offset)
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -27,22 +37,18 @@ fn cubic(a: f64, b: f64, c: f64, d: f64, t: f64) -> f64 {
 /// 按真实时间反解贝塞尔参数再求值；缺省切线等价线性，不把时间比例误当作贝塞尔参数。
 /// 二分处理垂直/零长切线，支持常量段和过冲；业务范围由 Clip 的共享求值入口夹紧。
 pub(crate) fn interpolate(a: &Keyframe, b: &Keyframe, component: usize, time: f64) -> f64 {
-    let delta = b.values[component] - a.values[component];
+    let start = a.curve_value(component);
+    let end = b.curve_value(component);
+    let delta = end - start;
     let out = a.curves[component].and_then(|c| c.outgoing);
     let input = b.curves[component].and_then(|c| c.incoming);
     if out.is_none() && input.is_none() {
-        return a.values[component] + delta * time;
+        return start + delta * time;
     }
     let out = out.unwrap_or([1.0 / 3.0, delta / 3.0]);
     let input = input.unwrap_or([1.0 / 3.0, -delta / 3.0]);
     let parameter = parameter_at(time, out[0], 1.0 - input[0]);
-    cubic(
-        a.values[component],
-        a.values[component] + out[1],
-        b.values[component] + input[1],
-        b.values[component],
-        parameter,
-    )
+    cubic(start, start + out[1], end + input[1], end, parameter)
 }
 
 /// 对归一化单调时间曲线二分求参数；时间端点直接返回，避免切分产生极小负长度。
@@ -67,10 +73,12 @@ fn parameter_at(time: f64, first: f64, second: f64) -> f64 {
 
 /// 用 De Casteljau 拆分当前区间，插入采样节点时保留原曲线；自动改值沿用拆分后的局部切线。
 /// 仅改变相邻节点相接的一侧，其他分量/切线联动模式保留；无区间或线性区间不新增曲线数据。
+/// values 为实际记录的合法参数；仅记录原采样值时保留越界几何，主动改值则使用新端点。
 pub(crate) fn split_for_key(
     clip: &mut crate::timeline::Clip,
     kind: crate::keyframes::KeyframeKind,
     frame: i64,
+    values: [f64; 2],
 ) -> [Option<KeyframeCurve>; 2] {
     let mut curves = [None; 2];
     let Some(a) = clip.curve_neighbor(kind, frame, true) else {
@@ -99,6 +107,8 @@ pub(crate) fn split_for_key(
         let b = &clip.keyframes[bi];
         if a.curves[i].and_then(|c| c.outgoing).is_none()
             && b.curves[i].and_then(|c| c.incoming).is_none()
+            && a.curve_value(i) == a.values[i]
+            && b.curve_value(i) == b.values[i]
         {
             continue;
         }
@@ -107,10 +117,10 @@ pub(crate) fn split_for_key(
         let t = parameter_at(time, out[0], 1.0 - input[0]);
         let mix = |a: [f64; 2], b: [f64; 2]| [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
         let p = [
-            [0.0, a.values[i]],
-            [out[0], a.values[i] + out[1]],
-            [1.0 - input[0], b.values[i] + input[1]],
-            [1.0, b.values[i]],
+            [0.0, a.curve_value(i)],
+            [out[0], a.curve_value(i) + out[1]],
+            [1.0 - input[0], b.curve_value(i) + input[1]],
+            [1.0, b.curve_value(i)],
         ];
         let q = [mix(p[0], p[1]), mix(p[1], p[2]), mix(p[2], p[3])];
         let r = [mix(q[0], q[1]), mix(q[1], q[2])];
@@ -129,6 +139,14 @@ pub(crate) fn split_for_key(
             incoming: Some([incoming[0].clamp(0.0, 1.0), incoming[1]]),
             outgoing: Some([outgoing[0].clamp(0.0, 1.0), outgoing[1]]),
             linked: true,
+            value_offset: {
+                let (min, max) = kind.range(i);
+                if !(min..=max).contains(&s[1]) && (s[1].clamp(min, max) - values[i]).abs() < 1e-9 {
+                    s[1] - values[i]
+                } else {
+                    0.0
+                }
+            },
         });
     }
     curves
@@ -137,6 +155,9 @@ pub(crate) fn split_for_key(
 impl KeyframeCurve {
     /// 拒绝外部文件中的非有限切线、逆向时间和过大数值；零长切线允许且不会造成除零。
     pub(crate) fn validate(self, limit: f64) -> Result<(), String> {
+        if !self.value_offset.is_finite() || self.value_offset.abs() > limit {
+            return Err("关键帧曲线参数无效".into());
+        }
         for [time, value] in [self.incoming, self.outgoing].into_iter().flatten() {
             if !time.is_finite()
                 || !(0.0..=1.0).contains(&time)

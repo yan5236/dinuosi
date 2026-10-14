@@ -123,20 +123,32 @@ impl Desktop {
             )
             .child(self.keyframe_controls(dinuosi_core::keyframes::KeyframeKind::Position, cx))
     }
-    /// 按播放头帧优先读取点击的画面片段插值参数，主对象非画面时沿用首个选中画面；写入仍作用于同类多选。
+    /// 在界面向上为正与旧项目向下为正的 Y 坐标之间双向转换；其他参数原样返回，不改存储契约。
+    pub(crate) fn property_coordinate(property: Property, value: f64) -> f64 {
+        if property == Property::Y && value != 0.0 {
+            -value
+        } else {
+            value
+        }
+    }
+
+    /// 按播放头帧优先读取点击画面片段的界面参数，Y 向上为正；主对象非画面时沿用首个选中画面。
     pub(crate) fn property_value(&self, property: Property) -> f64 {
-        self.inspector_clip()
-            .filter(|c| c.kind != dinuosi_core::media::MediaKind::Audio)
-            .or_else(|| {
-                self.timeline.model.clips.iter().find(|c| {
-                    c.kind != dinuosi_core::media::MediaKind::Audio
-                        && self.timeline.selected.contains(&c.id)
+        Self::property_coordinate(
+            property,
+            self.inspector_clip()
+                .filter(|c| c.kind != dinuosi_core::media::MediaKind::Audio)
+                .or_else(|| {
+                    self.timeline.model.clips.iter().find(|c| {
+                        c.kind != dinuosi_core::media::MediaKind::Audio
+                            && self.timeline.selected.contains(&c.id)
+                    })
                 })
-            })
-            .map_or_else(
-                || dinuosi_core::timeline::Transform::default().get(property),
-                |c| c.transform_at(self.keyframe_frame() as f64).get(property),
-            )
+                .map_or_else(
+                    || dinuosi_core::timeline::Transform::default().get(property),
+                    |c| c.transform_at(self.keyframe_frame() as f64).get(property),
+                ),
+        )
     }
     /// 绘制标签、滑块及数值微调控件；每个连续拖动只提交一次核心历史。
     fn inspector_row(

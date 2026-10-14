@@ -167,12 +167,16 @@ impl Clip {
                         return Err("关键帧曲线参数无效".into());
                     }
                     curve.validate((max - min).max(1.0) * 2.0)?;
+                    if (k.curve_value(i).clamp(min, max) - v).abs() > 1e-8 {
+                        return Err("关键帧曲线参数无效".into());
+                    }
                 }
             }
         }
         Ok(())
     }
-    /// 插入或替换此局部帧的同类型值；新节点拆分原贝塞尔区间，稳定排序确保保存和导航次序确定。
+    /// 插入或替换此局部帧的同类型值；新节点保留越界曲线几何，主动替换分量时清除其几何差。
+    /// 稳定排序确保保存和导航次序确定，不修改另一位置分量的端点或切线。
     fn put_keyframe(&mut self, kind: KeyframeKind, frame: i64, values: [f64; 2]) {
         let local = frame - self.start;
         if let Some(k) = self
@@ -180,9 +184,16 @@ impl Clip {
             .iter_mut()
             .find(|k| k.kind == kind && k.frame == local)
         {
+            for (i, value) in values.iter().enumerate() {
+                if *value != k.values[i]
+                    && let Some(curve) = &mut k.curves[i]
+                {
+                    curve.value_offset = 0.0;
+                }
+            }
             k.values = values;
         } else {
-            let curves = crate::keyframe_curve::split_for_key(self, kind, local);
+            let curves = crate::keyframe_curve::split_for_key(self, kind, local, values);
             self.keyframes.push(Keyframe {
                 frame: local,
                 kind,
@@ -193,7 +204,7 @@ impl Clip {
         }
     }
     /// 应用单个参数编辑：已有帧直接更新，同类已有动画且自动开启时仅在实际改变后新增。
-    /// 自动关闭时在帧间按差值整体调整本类型；未启用动画时写静态值，不影响其他类型。
+    /// 自动关闭时在帧间按差值整体调整本类型并清除该分量旧越界端点差；未启用动画时写静态值。
     fn edit_animated(
         &mut self,
         kind: KeyframeKind,
@@ -222,6 +233,9 @@ impl Clip {
             let (min, max) = kind.range(component);
             for k in self.keyframes.iter_mut().filter(|k| k.kind == kind) {
                 k.values[component] = (k.values[component] + delta).clamp(min, max);
+                if let Some(curve) = &mut k.curves[component] {
+                    curve.value_offset = 0.0;
+                }
             }
         } else {
             self.set_base(kind, values);
