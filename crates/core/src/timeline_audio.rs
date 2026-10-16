@@ -57,7 +57,8 @@ impl TimelineAudio {
             if cancel.is_some_and(|cancel| cancel.load(std::sync::atomic::Ordering::Relaxed)) {
                 return Err("导出已取消".into());
             }
-            if t.tracks[c.track].muted
+            if c.kind == MediaKind::Text
+                || t.tracks[c.track].muted
                 || c.freeze_frame.is_some()
                 || (c.gain == 0.0
                     && !c.keyframes.iter().any(|k| {

@@ -22,6 +22,7 @@ impl Timeline {
                 kind,
                 name: match kind {
                     TrackKind::Subtitle => "字幕轨道",
+                    TrackKind::Text => "文本轨道",
                     TrackKind::Audio => "音频轨道",
                     _ => "媒体轨道",
                 }
@@ -80,6 +81,9 @@ impl Timeline {
     ) -> Result<String, String> {
         self.accept_track(track)?;
         let (source, kind) = source;
+        if kind == MediaKind::Text {
+            return Err("生成文字必须通过文本接口添加".into());
+        }
         if kind != MediaKind::Audio && !self.tracks[track].kind.accepts(kind) {
             return Err("此轨道不能接收此类素材".into());
         }
@@ -114,6 +118,7 @@ impl Timeline {
             speed: None,
             transform: Transform::default(),
             color: crate::color::Grade::default(),
+            text: None,
             kind,
             gain: 1.0,
             keyframes: Vec::new(),
@@ -124,6 +129,7 @@ impl Timeline {
 
     /// 原子移动整组选中片段，保留时间间距，零点/一天边界整组夹紧；主轨也可留空隙。
     /// 非法、锁定或类型不匹配目标拒绝整个操作；重叠片段优先复用紧邻上方空轨道，否则新建，不覆盖已有素材。
+    /// 文字以结束帧限制一天边界，其他媒体保留起点边界；整组使用最严格的可移动增量。
     pub fn move_clips(
         &mut self,
         ids: &BTreeSet<String>,
@@ -135,18 +141,34 @@ impl Timeline {
             if c.locked {
                 return Err("片段已锁定".into());
             }
-            self.accept_track(c.track)?;
+            if self.tracks[c.track].locked {
+                return Err("轨道已锁定".into());
+            }
             let target = c.track as isize + track_delta;
             if target < 0 {
                 return Err("无法移动到此轨道".into());
             }
-            self.accept_track(target as usize)?;
-            if !self.tracks[target as usize].kind.accepts(c.kind) {
+            if self.tracks.get(target as usize).is_none_or(|t| {
+                t.locked
+                    || !t.kind.accepts(c.kind)
+                    || (c.kind == MediaKind::Text && t.kind != c.track_kind())
+            }) {
                 return Err("此轨道不能接收此类素材".into());
             }
         }
         let min = selected.iter().map(|c| c.start).min().unwrap_or(0);
-        let max = selected.iter().map(|c| c.start).max().unwrap_or(0);
+        let max = selected
+            .iter()
+            .map(|c| {
+                c.start
+                    + if c.kind == MediaKind::Text {
+                        c.duration
+                    } else {
+                        0
+                    }
+            })
+            .max()
+            .unwrap_or(0);
         let delta = delta.clamp(-min, 86400 * self.fps as i64 - max);
         let mut next = self.clone();
         for c in next.clips.iter_mut().filter(|c| ids.contains(&c.id)) {
@@ -164,6 +186,7 @@ impl Timeline {
     /// 变速按精确源边界重映射曲线，延伸使用端点倍率并夹紧源范围；关键帧随左裁边调整局部时间。
     /// 图片左右均可延长，不改变源入点；起点保持在零至一天内，时长遵守项目的一天范围。
     /// 左裁边同步平移关键帧局部位置，保留范围外锚点，使保留画面的动画连续。
+    /// 文字右裁边的最大时长为一天减起点，确保结束帧始终通过文本校验。
     /// 延长后若与同轨片段相交，裁剪片段优先复用上方空轨道，否则新建；锁轨或不存在返回错误。
     pub fn trim(&mut self, id: &str, left: bool, delta: i64) -> Result<(), String> {
         let c = self
@@ -206,7 +229,7 @@ impl Timeline {
             return Ok(());
         }
         if left {
-            let (min, max) = if c.kind == MediaKind::Image {
+            let (min, max) = if matches!(c.kind, MediaKind::Image | MediaKind::Text) {
                 let limit = 86400 * self.fps as i64;
                 (
                     (-c.start).max(c.duration - limit),
@@ -225,12 +248,14 @@ impl Timeline {
             for key in &mut c.keyframes {
                 key.frame -= delta;
             }
-            if c.kind != MediaKind::Image && !c.reversed {
+            if !matches!(c.kind, MediaKind::Image | MediaKind::Text) && !c.reversed {
                 c.source_in += delta;
             }
             c.duration -= delta;
         } else {
-            let max = if c.kind == MediaKind::Image {
+            let max = if c.kind == MediaKind::Text {
+                86400 * self.fps as i64 - c.start
+            } else if c.kind == MediaKind::Image {
                 86400 * self.fps as i64
             } else if c.reversed {
                 c.duration + c.source_in
@@ -450,7 +475,7 @@ impl Timeline {
                 && c.start < other.start + other.duration
         }) {
             let track = c.track;
-            let kind = TrackKind::for_media(c.kind);
+            let kind = c.track_kind();
             if track > 0
                 && self.tracks[track - 1].kind == kind
                 && !self.tracks[track - 1].locked

@@ -1418,6 +1418,7 @@ dependencies = [
 name = "dinuosi-core"
 version = "0.1.0"
 dependencies = [
+ "cosmic-text",
  "dinuosi-media",
  "rustysynth",
  "serde",

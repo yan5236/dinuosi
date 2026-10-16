@@ -128,8 +128,12 @@ pub fn tool_button(id: impl Into<SharedString>, icon: Icon, enabled: bool) -> St
 
 /// 绘制原生窗口操作入口；管理页只显示最小化和关闭，剪辑页额外显示最大化。
 /// Windows 通过系统命中区域执行操作，避免点击回调与系统处理重复切换；其他平台使用 GPUI 回调。
-/// 只关闭当前窗口，不访问磁盘；关闭剪辑窗口后的管理窗口恢复由 windows 模块处理。
-pub fn window_controls(window: &Window, show_maximize: bool) -> Div {
+/// 非 Windows 的关闭交给所属窗口验证并执行，确保剪辑窗口先保存草稿；管理窗口恢复由 windows 模块处理。
+pub fn window_controls(
+    window: &Window,
+    show_maximize: bool,
+    on_close: impl Fn(&gpui::ClickEvent, &mut Window, &mut gpui::App) + 'static,
+) -> Div {
     let maximize = if window.is_maximized() {
         Icon::Restore
     } else {
@@ -166,7 +170,7 @@ pub fn window_controls(window: &Window, show_maximize: bool) -> Div {
                 .h(px(36.0))
                 .window_control_area(WindowControlArea::Close)
                 .when(!cfg!(target_os = "windows"), |button| {
-                    button.on_click(|_, window, _| window.remove_window())
+                    button.on_click(on_close)
                 }),
         )
 }

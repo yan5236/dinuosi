@@ -211,6 +211,16 @@ impl FrameCache {
                 .iter()
                 .filter(|c| c.track == track && frame >= c.start && frame < c.start + c.duration)
             {
+                if clip.kind == MediaKind::Text {
+                    crate::text_render::blend(
+                        &mut out,
+                        (FRAME_WIDTH, FRAME_HEIGHT),
+                        clip,
+                        timeline,
+                        frame as f64,
+                    )?;
+                    continue;
+                }
                 let Some(m) = media
                     .iter()
                     .find(|m| m.path == clip.source)

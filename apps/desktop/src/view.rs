@@ -35,6 +35,22 @@ pub struct Desktop {
     pub(crate) blade_cursor: crate::blade_cursor::BladeCursor,
 }
 impl Desktop {
+    /// 关闭前先保存文字草稿；忙碌或提交失败时保留窗口和输入，允许查看错误、重试或取消。
+    pub(crate) fn prepare_close(&mut self, cx: &mut Context<Self>) -> bool {
+        if self.busy || !self.commit_text_input(cx) {
+            return false;
+        }
+        self.commit_inspector_input(cx);
+        true
+    }
+
+    /// 应用内关闭入口复用原生关闭前的提交检查；保存失败保留窗口和草稿，成功才移除当前窗口。
+    pub(crate) fn close_window(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.prepare_close(cx) {
+            window.remove_window();
+        }
+    }
+
     /// 初始化窗口角色、共享偏好和快捷键焦点；后台加载最近列表，损坏设置或索引显示错误。
     /// 原生关闭在磁盘操作期间被阻止，避免窗口销毁后遗失错误反馈或重复创建。
     pub fn new(
@@ -61,7 +77,8 @@ impl Desktop {
         focus_handle.focus(window);
         let weak = cx.weak_entity();
         window.on_window_should_close(cx, move |_, cx| {
-            weak.read_with(cx, |view, _| !view.busy).unwrap_or(true)
+            weak.update(cx, |view, cx| view.prepare_close(cx))
+                .unwrap_or(true)
         });
         let load_store = store.clone();
         let load_entry = current.clone();
@@ -167,6 +184,7 @@ impl Desktop {
     }
     /// 执行共享项目命令于后台，成功后刷新真实列表；创建/打开通过独立窗口切换进入剪辑主体。
     /// 失败保留当前窗口和表单输入，错误显示在弹窗或工作区；busy 防止重复磁盘操作。
+    /// 将切换窗口的命令先提交当前文字草稿，提交失败时不执行项目命令或销毁原会话。
     pub(crate) fn run_project(
         &mut self,
         command: ProjectCommand,
@@ -174,7 +192,7 @@ impl Desktop {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.busy {
+        if self.busy || (enter && !self.prepare_close(cx)) {
             return;
         }
         self.busy = true;
@@ -253,9 +271,9 @@ impl Desktop {
         .detach();
         cx.notify();
     }
-    /// 从剪辑窗口返回独立管理窗口；成功创建管理窗口后销毁剪辑窗口，失败保留剪辑会话。
+    /// 从剪辑窗口返回独立管理窗口；先保存草稿，提交或目标窗口创建失败时保留剪辑会话。
     fn show_manager(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.busy || self.current.is_none() {
+        if self.current.is_none() || !self.prepare_close(cx) {
             return;
         }
         if let Err(error) = crate::windows::replace(self.store.clone(), None, window, cx) {
@@ -273,7 +291,8 @@ impl Desktop {
 }
 impl Render for Desktop {
     /// 渲染当前窗口角色与浮层；工作区快捷键在根节点接收冒泡，焦点置于零尺寸节点以保留系统拖动。
-    /// 弹窗存在时隔离工作区快捷键；全屏观看仅挂载播放器，避免编辑元素接收输入。
+    /// 弹窗隔离工作区输入，调色器独立捕获拖动；点击正文外部先提交会话，避免旧快照覆盖后续操作。
+    /// 全屏观看仅挂载播放器，避免编辑元素接收输入。
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         for image in self.session.retired_frames.drain(..) {
             if !self
@@ -302,7 +321,13 @@ impl Render for Desktop {
             .on_mouse_down(
                 gpui::MouseButton::Left,
                 cx.listener(|this, _, window, cx| {
-                    if this.timeline.input.is_some()
+                    if this.timeline.text.font_menu {
+                        this.timeline.text.font_menu = false;
+                        cx.notify();
+                    }
+                    if this.timeline.text.body.is_some()
+                        || this.timeline.text.field.is_some()
+                        || this.timeline.input.is_some()
                         || this.timeline.volume_input.is_some()
                         || this.timeline.speed_input.is_some()
                         || this.timeline.rename.is_some()
@@ -397,6 +422,9 @@ impl Render for Desktop {
                     })
                 },
             )
+            .when(self.timeline.text.picker.is_some(), |s| {
+                s.child(self.text_color_popover(cx))
+            })
             .when(self.dialog.is_some(), |s| s.child(self.dialog_view(cx)))
             .when(self.timeline.marker_dialog.is_some(), |s| {
                 s.child(self.marker_dialog_view(cx))

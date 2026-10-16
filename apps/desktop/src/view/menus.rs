@@ -86,10 +86,16 @@ impl Desktop {
                 .mr(px(18.0))
                 .on_click(cx.listener(|this, _, window, cx| this.open_export(window, cx))),
             )
-            .child(ui::window_controls(window, true))
+            .child(ui::window_controls(
+                window,
+                true,
+                cx.listener(|this, _, window, cx| {
+                    this.close_window(window, cx);
+                }),
+            ))
     }
     /// 构造文件菜单，沿用原有样式；项目入口调用持久化流程，设置入口打开或聚焦通用设置窗口。
-    /// 浮层遮挡底层点击；关闭窗口期间检查 busy，关闭成功后由窗口观察器重新打开管理窗口。
+    /// 浮层遮挡底层点击；关闭前提交草稿，成功后由窗口观察器重新打开管理窗口。
     pub(super) fn file_menu(&self, top: f32, cx: &mut Context<Self>) -> Div {
         div()
             .occlude()
@@ -151,14 +157,13 @@ impl Desktop {
             .child(
                 div()
                     .id("menu-close")
+                    .debug_selector(|| "menu-close".into())
                     .p(px(10.0))
                     .cursor_pointer()
                     .hover(|s| s.bg(rgb(LINE)))
                     .child(crate::i18n::t("editor", "Close window", cx))
-                    .on_click(cx.listener(|this, _, window, _| {
-                        if !this.busy {
-                            window.remove_window();
-                        }
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        this.close_window(window, cx);
                     })),
             )
     }

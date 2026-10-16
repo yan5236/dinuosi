@@ -199,7 +199,7 @@ impl Timeline {
             .enumerate()
             .filter(|(_, c)| {
                 ids.contains(&c.id)
-                    && c.kind != MediaKind::Image
+                    && matches!(c.kind, MediaKind::Video | MediaKind::Audio)
                     && !c.locked
                     && !next.tracks[c.track].locked
             })

@@ -20,18 +20,20 @@ pub enum Filter {
     Video,
     Audio,
     Image,
+    Text,
     Motion,
     Effects,
 }
 
 impl Filter {
-    /// 返回草图规定的分类顺序及专用 SVG，不增加素材计数或额外状态文字。
-    pub fn items() -> [(Self, &'static str, Icon); 6] {
+    /// 返回既有分类及文字入口的顺序与专用 SVG，不增加素材计数或额外状态文字。
+    pub fn items() -> [(Self, &'static str, Icon); 7] {
         [
             (Self::All, "All", Icon::AllMedia),
             (Self::Video, "Video", Icon::Video),
             (Self::Audio, "Audio", Icon::Audio),
             (Self::Image, "Images", Icon::Image),
+            (Self::Text, "Text", Icon::Text),
             (Self::Motion, "Motion", Icon::Motion),
             (Self::Effects, "Effects", Icon::Effects),
         ]
@@ -95,11 +97,14 @@ impl Desktop {
                             .child(crate::i18n::t("library", label, cx))
                             .on_click(cx.listener(move |this, _, _, cx| {
                                 this.session.filter = filter;
+                                if filter == Filter::Text { this.load_text_presets(cx); }
                                 cx.notify();
                             }))
                     })),
             )
-            .child(
+            .child(if self.session.filter == Filter::Text {
+                self.text_library(cx).into_any_element()
+            } else {
                 div()
                     .id("media-drop-zone")
                     .debug_selector(|| "media-drop-zone".into())
@@ -261,8 +266,9 @@ impl Desktop {
                                         }),
                                 ),
                             ),
-                    ),
-            )
+                    )
+                    .into_any_element()
+            })
     }
 
     /// 打开原生多选文件对话框；取消不改变项目，所有选择和拖入复用同一导入入口。

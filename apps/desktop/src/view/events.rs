@@ -31,6 +31,52 @@ impl Desktop {
             return;
         }
         let key = event.keystroke.key.as_str();
+        if self.timeline.text.picker.is_some() {
+            if matches!(key, "escape" | "enter") {
+                self.finish_text_color(key == "escape", cx);
+                self.focus_handle.focus(window);
+            }
+            cx.stop_propagation();
+            return;
+        }
+        if key == "escape" && self.timeline.text.font_menu {
+            self.timeline.text.font_menu = false;
+            cx.notify();
+            cx.stop_propagation();
+            return;
+        }
+        if self
+            .timeline
+            .text
+            .preset_draft
+            .as_ref()
+            .is_some_and(|d| d.input.read(cx).focus.is_focused(window))
+        {
+            if key == "enter" {
+                self.save_text_preset(window, cx);
+            } else if key == "escape" {
+                self.timeline.text.preset_draft = None;
+                self.focus_handle.focus(window);
+                cx.notify();
+            }
+            return;
+        }
+        if self.timeline.text.body.is_some() || self.timeline.text.field.is_some() {
+            if key == "escape" {
+                self.cancel_text_input(cx);
+                self.focus_handle.focus(window);
+            } else if key == "enter" && self.timeline.text.field.is_some() {
+                self.commit_text_input(cx);
+                self.focus_handle.focus(window);
+            } else if (event.keystroke.modifiers.control || event.keystroke.modifiers.platform)
+                && matches!(key, "z" | "y")
+            {
+                self.commit_text_input(cx);
+                self.timeline_history(key == "y" || event.keystroke.modifiers.shift, cx);
+                self.focus_handle.focus(window);
+            }
+            return;
+        }
         if self.timeline.color.picker.is_some() && key == "escape" {
             self.cancel_hsl_picker();
             cx.notify();

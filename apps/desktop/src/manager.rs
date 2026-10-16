@@ -27,7 +27,13 @@ impl Desktop {
                     .px(px(24.0))
                     .child(brand(48.0))
                     .child(ui::title_drag())
-                    .child(ui::window_controls(window, false)),
+                    .child(ui::window_controls(
+                        window,
+                        false,
+                        cx.listener(|this, _, window, cx| {
+                            this.close_window(window, cx);
+                        }),
+                    )),
             )
             .child(
                 div()

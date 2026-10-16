@@ -39,7 +39,8 @@ pub(crate) struct ColorDrag {
 impl Desktop {
     /// 返回检查器主画面片段的调色，音频或失效选择返回 None；不改变完整选择集合。
     pub(crate) fn color_clip(&self) -> Option<&dinuosi_core::timeline::Clip> {
-        self.inspector_clip().filter(|c| c.kind != MediaKind::Audio)
+        self.inspector_clip()
+            .filter(|c| matches!(c.kind, MediaKind::Video | MediaKind::Image))
     }
     /// 夹紧会话步骤索引，切换到步骤较少的片段或删除步骤后读取末步。
     pub(crate) fn color_stage(&self) -> usize {

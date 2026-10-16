@@ -14,7 +14,7 @@ impl Desktop {
                     && if freeze {
                         c.kind == MediaKind::Video
                     } else {
-                        c.kind != MediaKind::Image
+                        matches!(c.kind, MediaKind::Video | MediaKind::Audio)
                     }
             })
     }
@@ -31,7 +31,7 @@ impl Desktop {
                     && if freeze {
                         c.kind == MediaKind::Video
                     } else {
-                        c.kind != MediaKind::Image
+                        matches!(c.kind, MediaKind::Video | MediaKind::Audio)
                     }
             })
             .peekable();

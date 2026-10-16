@@ -8,6 +8,8 @@ use gpui::{
 };
 use std::ops::Range;
 use unicode_segmentation::UnicodeSegmentation;
+#[path = "input_multiline.rs"]
+mod multiline;
 
 pub struct TextInput {
     pub(crate) text: String,
@@ -24,6 +26,10 @@ pub struct TextInput {
     pub(crate) control_id: &'static str,
     pub(crate) show_border: bool,
     pub(crate) compact: bool,
+    pub(crate) multiline: bool,
+    lines: Vec<(usize, ShapedLine)>,
+    scroll_y: Pixels,
+    reveal_caret: bool,
 }
 
 impl TextInput {
@@ -51,6 +57,10 @@ impl TextInput {
             control_id: "project-name",
             show_border: true,
             compact: false,
+            multiline: false,
+            lines: Vec::new(),
+            scroll_y: px(0.0),
+            reveal_caret: true,
         }
     }
 
@@ -81,7 +91,7 @@ impl TextInput {
         self.utf16_to_byte(range.start)..self.utf16_to_byte(range.end)
     }
 
-    /// 替换 IME 指定范围、组合范围或当前选择；单行输入将换行与制表符转换为空格。
+    /// 替换 IME 指定范围、组合范围或当前选择；单行转为空格，多行保留换行并规范 CRLF。
     /// 返回插入范围，供组合文本和候选选择使用；光标移至插入末尾并触发重绘。
     fn replace(
         &mut self,
@@ -93,16 +103,23 @@ impl TextInput {
             .map(|r| self.byte_range(r))
             .or(self.marked.clone())
             .unwrap_or_else(|| self.selection());
-        let text = text.replace(['\r', '\n', '\t'], " ");
+        let text = if self.multiline {
+            text.replace("\r\n", "\n")
+                .replace('\r', "\n")
+                .replace('\t', "    ")
+        } else {
+            text.replace(['\r', '\n', '\t'], " ")
+        };
         self.text.replace_range(range.clone(), &text);
         self.caret = range.start + text.len();
         self.anchor = self.caret;
         self.marked = None;
+        self.reveal_caret = true;
         cx.notify();
         range.start..self.caret
     }
 
-    /// 处理单行编辑键及剪贴板；方向移动和删除以字素为单位，保留 Enter/Escape/Tab 给弹窗。
+    /// 处理公共编辑键及剪贴板，多行导航交给对应布局；删除以字素为单位，单行保留提交/取消键。
     fn key_down(
         &mut self,
         event: &gpui::KeyDownEvent,
@@ -110,6 +127,9 @@ impl TextInput {
         cx: &mut Context<Self>,
     ) {
         let key = event.keystroke.key.as_str();
+        if self.multiline && self.multiline_key(event, window, cx) {
+            return;
+        }
         let modifiers = event.keystroke.modifiers;
         let command = modifiers.control || modifiers.platform;
         let range = self.selection();
@@ -171,6 +191,7 @@ impl TextInput {
             }
             _ => return,
         }
+        self.reveal_caret = true;
         cx.stop_propagation();
         cx.notify();
         self.focus.focus(window);
@@ -178,6 +199,9 @@ impl TextInput {
 
     /// 将鼠标位置映射到已排版字符边界，考虑长名称的水平滚动。
     fn index_at(&self, position: Point<Pixels>) -> usize {
+        if self.multiline {
+            return self.multiline_index(position);
+        }
         match (&self.layout, self.bounds) {
             (Some(line), Some(bounds)) => line
                 .closest_index_for_x(position.x - bounds.left() + self.scroll)
@@ -269,6 +293,9 @@ impl EntityInputHandler for TextInput {
     ) -> Option<Bounds<Pixels>> {
         let range = self.byte_range(range);
         let bounds = self.bounds?;
+        if self.multiline {
+            return self.multiline_range_bounds(range);
+        }
         let line = self.layout.as_ref()?;
         Some(Bounds::from_corners(
             point(
@@ -298,6 +325,9 @@ impl Render for TextInput {
     /// 绘制与现有灰阶一致的名称框、选择背景、组合下划线及光标；注册 GPUI 原生 IME 处理器。
     /// 鼠标支持点击、Shift 选择与拖选；长名称滚动到当前光标，不改变文本内容。
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        if self.multiline {
+            return self.render_multiline(cx).into_any_element();
+        }
         let input = cx.entity();
         let paint_input = input.clone();
         div()
@@ -439,5 +469,6 @@ impl Render for TextInput {
                 .w_full()
                 .h(px(20.0)),
             )
+            .into_any_element()
     }
 }

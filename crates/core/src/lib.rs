@@ -1,5 +1,6 @@
 //! 不依赖 GUI 的项目领域模型、媒体处理及版本化项目存储。
 
+pub mod captions;
 pub mod color;
 mod color_animation;
 pub mod color_render;
@@ -21,6 +22,9 @@ mod midi;
 mod project_settings;
 pub mod speed;
 mod storage;
+pub mod text;
+mod text_effects;
+pub mod text_render;
 pub mod timeline;
 pub mod timeline_audio;
 mod timeline_edit;

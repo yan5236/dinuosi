@@ -18,6 +18,7 @@ pub(crate) fn track_name(track: &dinuosi_core::timeline::Track, cx: &gpui::App) 
         dinuosi_core::timeline::TrackKind::Media => "Media track",
         dinuosi_core::timeline::TrackKind::Audio => "Audio track",
         dinuosi_core::timeline::TrackKind::Subtitle => "Subtitle track",
+        dinuosi_core::timeline::TrackKind::Text => "Text track",
     };
     crate::i18n::t("timeline", key, cx).to_owned()
 }
@@ -47,7 +48,8 @@ impl Desktop {
             .child(
                 svg()
                     .path(match track.kind {
-                        dinuosi_core::timeline::TrackKind::Subtitle => Icon::Text.path(),
+                        dinuosi_core::timeline::TrackKind::Subtitle
+                        | dinuosi_core::timeline::TrackKind::Text => Icon::Text.path(),
                         dinuosi_core::timeline::TrackKind::Audio => Icon::Audio.path(),
                         _ => Icon::Video.path(),
                     })
@@ -130,7 +132,11 @@ impl Desktop {
                 .on_click(cx.listener(move |this, _, _, cx| this.toggle_track(index, 1, cx))),
             )
             .when(
-                track.kind != dinuosi_core::timeline::TrackKind::Subtitle,
+                !matches!(
+                    track.kind,
+                    dinuosi_core::timeline::TrackKind::Subtitle
+                        | dinuosi_core::timeline::TrackKind::Text
+                ),
                 |s| {
                     s.child(
                         Tooltip::tool(

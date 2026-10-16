@@ -13,6 +13,7 @@ impl Desktop {
     /// 保持草图的“基本”页签、图片、视频的变换布局；选中音频仅显示音量滑块及右侧 dB 值。
     /// 空选择显示项目概览并隐藏变速，标记页签显示排序标记；变速连接源区间和时长，锁定片段禁用写入。
     /// 调色仅对图片/视频主对象显示，沿用当前检查器宽度、选择和独立片段事务。
+    /// 字幕页仅限空选择或字幕主对象；切换到其他媒体后，隐藏入口并回到该对象的基本检查器。
     /// 关联组按实际点击成员决定画面或音频布局；无有效主对象时沿用首个选中片段。
     pub(crate) fn inspector(&self, width: f32, cx: &mut Context<Self>) -> Div {
         let audio = self
@@ -34,7 +35,11 @@ impl Desktop {
             .flex_col()
             .child(self.inspector_tabs(self.timeline.selected.is_empty(), cx))
             .child(
-                if self.timeline.inspector_tab == crate::timeline_state::InspectorTab::Color
+                if self.timeline.inspector_tab == crate::timeline_state::InspectorTab::Captions
+                    && self.captions_tab_visible()
+                {
+                    self.captions_inspector(cx)
+                } else if self.timeline.inspector_tab == crate::timeline_state::InspectorTab::Color
                     && self.color_clip().is_some()
                 {
                     self.color_inspector(cx)
@@ -51,6 +56,8 @@ impl Desktop {
                     self.markers_inspector(cx)
                 } else if self.timeline.selected.is_empty() {
                     self.project_inspector(cx)
+                } else if self.text_clip().is_some() {
+                    self.text_inspector(width, enabled, cx)
                 } else if audio {
                     self.audio_inspector(enabled, cx)
                 } else {
@@ -83,7 +90,7 @@ impl Desktop {
     }
     /// 为坐标标签及 X/Y 分别保留独立布局和完整数值框，避免相邻文字被合并、挤压。
     /// 宽检查器横向排列，窄于 360px 时仅将 X/Y 成组竖排；坐标共用一个右侧关键帧控件。
-    fn position_row(&self, width: f32, enabled: bool, cx: &mut Context<Self>) -> Div {
+    pub(crate) fn position_row(&self, width: f32, enabled: bool, cx: &mut Context<Self>) -> Div {
         let narrow = width < 360.0;
         div()
             .debug_selector(|| "inspector-position-row".into())
@@ -156,7 +163,7 @@ impl Desktop {
         )
     }
     /// 绘制标签、滑块及数值微调控件；每个连续拖动只提交一次核心历史。
-    fn inspector_row(
+    pub(crate) fn inspector_row(
         &self,
         label: &'static str,
         property: Property,
@@ -383,6 +390,7 @@ impl Desktop {
     /// 调色输入同样绑定片段和步骤身份，先提交有限数值再释放失焦订阅。
     /// 普通编辑或切换选择先退出 HSL 取样并释放像素，防止旧吸管目标误写。
     pub(crate) fn commit_inspector_input(&mut self, cx: &mut Context<Self>) {
+        self.commit_text_input(cx);
         self.cancel_hsl_picker();
         self.commit_color_input(cx);
         self.commit_curve_input(cx);

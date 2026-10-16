@@ -129,7 +129,11 @@ impl Desktop {
                                 .overflow_hidden()
                                 .whitespace_nowrap()
                                 .when(clip.link.is_some(), |s| s.underline())
-                                .child(clip.name.clone()),
+                                .child(if clip.text.is_some() {
+                                    format!("T  {}", clip.name)
+                                } else {
+                                    clip.name.clone()
+                                }),
                         ),
                 ),
             div()

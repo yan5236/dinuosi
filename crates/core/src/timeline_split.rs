@@ -44,7 +44,7 @@ impl Timeline {
                 clip.slice_speed(0.0, left_duration as f64);
             } else {
                 right.duration -= left_duration;
-                if right.kind != MediaKind::Image {
+                if !matches!(right.kind, MediaKind::Image | MediaKind::Text) {
                     if clip.reversed {
                         clip.source_in += right.duration;
                     } else {

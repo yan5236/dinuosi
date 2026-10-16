@@ -224,6 +224,9 @@ pub fn export(
 fn sources(timeline: &Timeline, items: &[Media]) -> Result<Vec<Media>, String> {
     let mut sources = Vec::new();
     for clip in &timeline.clips {
+        if clip.kind == media::MediaKind::Text {
+            continue;
+        }
         let track = &timeline.tracks[clip.track];
         if (!track.visible || clip.kind == media::MediaKind::Audio) && track.muted {
             continue;

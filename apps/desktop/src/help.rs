@@ -147,7 +147,9 @@ impl Render for About {
                     .items_center()
                     .child(crate::i18n::t("help", "About", cx))
                     .child(ui::title_drag())
-                    .child(ui::window_controls(window, false)),
+                    .child(ui::window_controls(window, false, |_, window, _| {
+                        window.remove_window()
+                    })),
             )
             .child(
                 div()

@@ -51,6 +51,8 @@ struct ClipV1 {
     transform: [f64; 5],
     #[serde(default, skip_serializing_if = "Option::is_none")]
     color: Option<crate::color::Grade>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    text: Option<crate::text::Text>,
     #[serde(default)]
     mirror_horizontal: bool,
     #[serde(default)]
@@ -124,6 +126,7 @@ impl TimelineV1 {
                             TrackKind::Media => "media",
                             TrackKind::Audio => "audio",
                             TrackKind::Subtitle => "subtitle",
+                            TrackKind::Text => "text",
                         }
                         .into(),
                     ),
@@ -164,6 +167,7 @@ impl TimelineV1 {
                         c.transform.rotation,
                     ],
                     color: (c.color != crate::color::Grade::default()).then(|| c.color.clone()),
+                    text: c.text.clone(),
                     mirror_horizontal: c.transform.mirror_horizontal,
                     mirror_vertical: c.transform.mirror_vertical,
                     kind: Some(
@@ -171,6 +175,7 @@ impl TimelineV1 {
                             MediaKind::Audio => "audio",
                             MediaKind::Video => "video",
                             MediaKind::Image => "image",
+                            MediaKind::Text => "text",
                         }
                         .into(),
                     ),
@@ -211,6 +216,7 @@ impl TimelineV1 {
                 Some("media") => Ok(TrackKind::Media),
                 Some("audio") => Ok(TrackKind::Audio),
                 Some("subtitle") => Ok(TrackKind::Subtitle),
+                Some("text") => Ok(TrackKind::Text),
                 None if legacy => Ok([TrackKind::Subtitle, TrackKind::Media, TrackKind::Main][i]),
                 _ => Err("轨道类型无效".to_owned()),
             })
@@ -244,6 +250,7 @@ impl TimelineV1 {
                                 TrackKind::Media => "媒体轨道",
                                 TrackKind::Audio => "音频轨道",
                                 TrackKind::Subtitle => "字幕轨道",
+                                TrackKind::Text => "文本轨道",
                             },
                     ),
                     name: v.name,
@@ -260,6 +267,7 @@ impl TimelineV1 {
                         Some("audio") => MediaKind::Audio,
                         Some("image") => MediaKind::Image,
                         Some("video") => MediaKind::Video,
+                        Some("text") => MediaKind::Text,
                         None => {
                             media::probe(&c.source)
                                 .unwrap_or_else(|_| media::offline(c.source.clone()))
@@ -297,6 +305,7 @@ impl TimelineV1 {
                         },
                         kind,
                         color: c.color.unwrap_or_default(),
+                        text: c.text,
                         gain: c.gain,
                         keyframes: c
                             .keyframes

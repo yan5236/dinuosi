@@ -10,7 +10,7 @@ fn click(cx: &mut VisualTestContext, selector: &'static str) {
     cx.run_until_parked();
 }
 
-/// 验证无选择隐藏入口；常规倍率、时长、声音变调、滑块与曲线拖动均保存且可撤销，图片不显示变速。
+/// 验证无选择隐藏变速且原位置可打开全局字幕；倍率、时长、变调和曲线保存可撤销，图片不显示变速。
 #[gpui::test]
 fn speed_controls_persist_and_hide_without_selection(cx: &mut TestAppContext) {
     let root = std::env::temp_dir().join(format!("dinuosi-speed-ui-{}", std::process::id()));
@@ -152,11 +152,12 @@ fn speed_controls_persist_and_hide_without_selection(cx: &mut TestAppContext) {
         cx.notify();
     });
     cx.run_until_parked();
-    // GPUI 0.2.2 不清理移除元素的 debug_bounds，点击旧入口坐标验证本帧已不存在它的事件处理器。
+    // GPUI 保留旧 debug_bounds；原变速位置现在是全局字幕，点击应进入字幕而非触发已移除的变速入口。
     cx.simulate_click(old_tab, Modifiers::none());
     cx.run_until_parked();
     assert!(desktop.read_with(cx, |v, _| v.speed_clip().is_none()
-        && v.timeline.inspector_tab == crate::timeline_state::InspectorTab::Basic));
+        && v.timeline.inspector_tab == crate::timeline_state::InspectorTab::Captions));
+    assert!(cx.debug_bounds("caption-list").is_some());
     desktop.update_in(cx, |v, _, cx| {
         let before = v.timeline.model.clone();
         let image = v

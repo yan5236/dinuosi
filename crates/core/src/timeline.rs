@@ -109,36 +109,39 @@ pub struct Clip {
     pub speed: Option<crate::speed::Speed>,
     pub transform: Transform,
     pub color: crate::color::Grade,
+    /// 生成文字的正文、排版和字幕分组；文件媒体必须为空。
+    pub text: Option<crate::text::Text>,
     pub kind: MediaKind,
     /// 线性音频增益：1 为 0dB，0 为负无穷，10 为 20dB；避免 JSON 保存无穷数值。
     pub gain: f64,
     pub keyframes: Vec<crate::keyframes::Keyframe>,
 }
 
-/// 轨道职责与显示名分离；字幕类型保留，但新项目仅创建主轨。
+/// 轨道职责与显示名分离；图片/视频、音频、普通文本和字幕分别建轨，新项目仅创建主轨。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TrackKind {
     Main,
     Media,
     Audio,
     Subtitle,
+    Text,
 }
 
 impl TrackKind {
-    /// 按素材类型返回自由轨道职责；视频与图片共用媒体轨道，音频使用独立音频轨道。
+    /// 按素材类型返回自由轨道职责；普通文本有独立轨道，字幕分组由片段进一步指定。
     pub fn for_media(kind: MediaKind) -> Self {
-        if kind == MediaKind::Audio {
-            Self::Audio
-        } else {
-            Self::Media
+        match kind {
+            MediaKind::Audio => Self::Audio,
+            MediaKind::Text => Self::Text,
+            _ => Self::Media,
         }
     }
-    /// 判断轨道可接收的素材类型；主轨和媒体轨道仅支持图片、视频，字幕不接收这些素材。
+    /// 判断轨道可接收的类型；主轨/媒体只接收图片视频，音频与文字各自独立；字幕身份另行校验。
     pub fn accepts(self, kind: MediaKind) -> bool {
         match self {
-            Self::Main | Self::Media => kind != MediaKind::Audio,
+            Self::Main | Self::Media => matches!(kind, MediaKind::Image | MediaKind::Video),
             Self::Audio => kind == MediaKind::Audio,
-            Self::Subtitle => false,
+            Self::Subtitle | Self::Text => kind == MediaKind::Text,
         }
     }
 }
@@ -262,16 +265,22 @@ impl Timeline {
                 || clip.start < 0
                 || clip.start > 86400 * self.fps as i64
                 || clip.duration < 1
+                || (clip.kind == MediaKind::Text
+                    && clip
+                        .start
+                        .checked_add(clip.duration)
+                        .is_none_or(|end| end > 86400 * self.fps as i64))
                 || clip.source_in < 0
                 || clip.source_frames < 1
                 || clip.source_in > clip.source_frames
                 || clip.source_frames > 86400 * self.fps as i64
-                || (clip.kind == MediaKind::Image && clip.reversed)
+                || (matches!(clip.kind, MediaKind::Image | MediaKind::Text) && clip.reversed)
                 || clip.freeze_frame.is_some_and(|frame| {
                     clip.kind != MediaKind::Video || frame < 0 || frame >= clip.source_frames
                 })
-                || (clip.kind == MediaKind::Image && clip.duration > 86400 * self.fps as i64)
-                || (clip.kind != MediaKind::Image
+                || (matches!(clip.kind, MediaKind::Image | MediaKind::Text)
+                    && clip.duration > 86400 * self.fps as i64)
+                || (!matches!(clip.kind, MediaKind::Image | MediaKind::Text)
                     && clip.speed.is_none()
                     && clip.duration > clip.source_frames - clip.source_in)
             {
@@ -279,7 +288,7 @@ impl Timeline {
             }
             if let Some(speed) = &clip.speed {
                 speed.validate(clip.source_frames)?;
-                if clip.kind == MediaKind::Image
+                if matches!(clip.kind, MediaKind::Image | MediaKind::Text)
                     || (clip.kind == MediaKind::Audio && !speed.curve.is_empty())
                     || clip.duration > 86400 * self.fps as i64
                     || clip.source_in != speed.source[0].floor() as i64
@@ -290,6 +299,7 @@ impl Timeline {
             if !self.tracks[clip.track].kind.accepts(clip.kind) {
                 return Err("素材类型与轨道不匹配".into());
             }
+            clip.validate_text(self.tracks[clip.track].kind)?;
             if !clip.gain.is_finite() || !(0.0..=10.0).contains(&clip.gain) {
                 return Err("音量参数无效".into());
             }

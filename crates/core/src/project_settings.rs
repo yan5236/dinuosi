@@ -32,7 +32,11 @@ impl Timeline {
             clip.start = convert(clip.start);
             clip.duration = end - clip.start;
             clip.source_in = convert(clip.source_in);
-            clip.source_frames = convert(clip.source_frames);
+            clip.source_frames = if clip.kind == crate::media::MediaKind::Text {
+                1
+            } else {
+                convert(clip.source_frames)
+            };
             if let Some(speed) = &mut clip.speed {
                 for bound in &mut speed.source {
                     *bound = (*bound * fps as f64 / self.fps as f64).min(clip.source_frames as f64);

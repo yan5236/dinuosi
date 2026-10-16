@@ -161,6 +161,16 @@ impl Renderer {
                     && frame >= clip.start as f64
                     && frame < (clip.start + clip.duration) as f64
             }) {
+                if clip.kind == MediaKind::Text {
+                    crate::text_render::blend(
+                        output,
+                        (settings.width, settings.height),
+                        clip,
+                        timeline,
+                        frame,
+                    )?;
+                    continue;
+                }
                 let source_media = media
                     .iter()
                     .find(|m| m.path == clip.source)
@@ -197,6 +207,41 @@ impl Renderer {
 mod tests {
     use super::*;
     use crate::{export::Encoder, timeline::Timeline};
+    /// 同一输出尺寸下文字预览与导出逐字节一致，含中文斜体、多行、位置与旋转；无需媒体源。
+    #[test]
+    fn text_preview_and_export_use_identical_pixels() {
+        let mut timeline = Timeline {
+            width: 640,
+            height: 360,
+            ..Default::default()
+        };
+        let mut text = crate::text::Text::new("专业文本\nTitle 01".into(), (640, 360), false);
+        text.style.italic = true;
+        text.style.size = 32.0;
+        text.style.outline = 2;
+        text.style.shadow = Some(Default::default());
+        text.style.background = Some(Default::default());
+        timeline.add_text(0, 90, text).unwrap();
+        timeline.clips[0].transform.x = 33.0;
+        timeline.clips[0].transform.rotation = 12.0;
+        let expected = crate::composite::render(&timeline, 0, &[]).unwrap();
+        let mut renderer = Renderer::new();
+        let settings = ExportSettings::for_timeline(&timeline, Encoder::Mpeg4);
+        let frame = renderer
+            .render(&timeline, 0.0, &[], &settings, &CancellationList::default())
+            .unwrap();
+        assert_eq!(frame, expected);
+        timeline.tracks[0].visible = false;
+        assert!(
+            renderer
+                .render(&timeline, 0.0, &[], &settings, &CancellationList::default())
+                .unwrap()
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .all(|p| *p == [0, 0, 0, 255])
+        );
+    }
     /// 连续帧复用同一输出分配且清除旧颜色；改变输出尺寸时长度与黑色底保持正确。
     #[test]
     fn renderer_reuses_and_clears_output_between_frames() {

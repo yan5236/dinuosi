@@ -65,12 +65,14 @@ pub enum InspectorTab {
     #[default]
     Basic,
     Markers,
+    Captions,
     Speed,
     Color,
 }
 
 #[derive(Default)]
 pub struct TimelineSession {
+    pub text: crate::text_edit::TextSession,
     pub color: crate::color_edit::ColorSession,
     pub curves: crate::curve_panel::CurveSession,
     pub model: Timeline,
@@ -197,7 +199,11 @@ impl Desktop {
             .tracks
             .iter()
             .map(|t| {
-                if t.kind == dinuosi_core::timeline::TrackKind::Subtitle {
+                if matches!(
+                    t.kind,
+                    dinuosi_core::timeline::TrackKind::Subtitle
+                        | dinuosi_core::timeline::TrackKind::Text
+                ) {
                     34.0 * scale
                 } else {
                     58.0 * scale

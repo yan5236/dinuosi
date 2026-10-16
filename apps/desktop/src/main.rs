@@ -3,6 +3,8 @@
 mod assets;
 mod audio_inspector;
 mod blade_cursor;
+mod caption_files;
+mod captions_inspector;
 mod color_controls;
 mod color_edit;
 mod color_graph;
@@ -51,6 +53,19 @@ mod speed_curve;
 mod speed_input;
 mod speed_inspector;
 mod switch;
+#[cfg(test)]
+mod text_close_tests;
+mod text_color_picker;
+mod text_edit;
+mod text_effects;
+mod text_fields;
+#[cfg(test)]
+mod text_fix_tests;
+mod text_inspector;
+mod text_library;
+mod text_presets;
+#[cfg(test)]
+mod text_tests;
 mod timeline_actions;
 mod timeline_blade;
 mod timeline_clip;

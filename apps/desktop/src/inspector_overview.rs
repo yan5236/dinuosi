@@ -44,7 +44,8 @@ impl Desktop {
                     .child(div().flex_1().min_w_0().text_color(rgb(TEXT)).child(value))
             }))
     }
-    /// 根据当前选择生成“基本/项目”“标记点”“变速”页签；仅选中视频/音频才显示变速，切换前提交输入。
+    /// 字幕页签只在空选择或主对象是字幕时显示；变速和调色沿用对象类型限制，标记保持全局可用。
+    /// 原页签不适用于新选择时高亮基本页；手动切换前提交输入并恢复工作区焦点。
     pub(crate) fn inspector_tabs(&self, empty: bool, cx: &mut Context<Self>) -> Div {
         div()
             .h(px(37.0))
@@ -57,15 +58,18 @@ impl Desktop {
                 [
                     InspectorTab::Basic,
                     InspectorTab::Markers,
+                    InspectorTab::Captions,
                     InspectorTab::Speed,
                     InspectorTab::Color,
                 ]
                 .into_iter()
                 .filter(|tab| *tab != InspectorTab::Speed || self.speed_clip().is_some())
                 .filter(|tab| *tab != InspectorTab::Color || self.color_clip().is_some())
+                .filter(|tab| *tab != InspectorTab::Captions || self.captions_tab_visible())
                 .map(|tab| {
                     let id = match tab {
                         InspectorTab::Markers => "inspector-markers-tab",
+                        InspectorTab::Captions => "inspector-captions-tab",
                         InspectorTab::Speed => "inspector-speed-tab",
                         InspectorTab::Color => "inspector-color-tab",
                         InspectorTab::Basic => "inspector-basic-tab",
@@ -86,17 +90,24 @@ impl Desktop {
                                     && ((self.timeline.inspector_tab == InspectorTab::Speed
                                         && self.speed_clip().is_none())
                                         || (self.timeline.inspector_tab == InspectorTab::Color
-                                            && self.color_clip().is_none()))),
+                                            && self.color_clip().is_none())
+                                        || (self.timeline.inspector_tab
+                                            == InspectorTab::Captions
+                                            && !self.captions_tab_visible()))),
                             |s| s.border_b_1().border_color(rgb(TEXT)),
                         )
                         .child(crate::i18n::t(
                             "inspector",
-                            if tab == InspectorTab::Color {
+                            if tab == InspectorTab::Captions {
+                                "Subtitles"
+                            } else if tab == InspectorTab::Color {
                                 "Color"
                             } else if tab == InspectorTab::Markers {
                                 "Markers"
                             } else if tab == InspectorTab::Speed {
                                 "Speed"
+                            } else if self.text_clip().is_some() {
+                                "Text"
                             } else if empty {
                                 "Project"
                             } else {

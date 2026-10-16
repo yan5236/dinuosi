@@ -318,7 +318,9 @@ impl Render for Settings {
                     .items_center()
                     .child(crate::i18n::t("settings", "Settings", cx))
                     .child(ui::title_drag())
-                    .child(ui::window_controls(window, false)),
+                    .child(ui::window_controls(window, false, |_, window, _| {
+                        window.remove_window()
+                    })),
             )
             .child(div().px(px(18.0)).pb(px(16.0)).child(self.search.clone()))
             .child(

@@ -15,6 +15,8 @@ pub enum MediaKind {
     Video,
     Audio,
     Image,
+    /// 时间线生成的文字，不对应磁盘媒体文件，也不参与声音解码。
+    Text,
 }
 
 #[derive(Clone)]

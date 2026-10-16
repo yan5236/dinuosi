@@ -79,13 +79,11 @@ impl Desktop {
             DropTarget::Insert(index) => {
                 next.create_track(
                     index,
-                    TrackKind::for_media(
-                        before
-                            .clips
-                            .iter()
-                            .find(|c| self.timeline.selected.contains(&c.id))?
-                            .kind,
-                    ),
+                    before
+                        .clips
+                        .iter()
+                        .find(|c| self.timeline.selected.contains(&c.id))?
+                        .track_kind(),
                 )
                 .ok()?;
                 (index, origin + usize::from(origin >= index))

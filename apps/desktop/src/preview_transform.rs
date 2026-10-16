@@ -53,15 +53,22 @@ impl Desktop {
         clips
             .into_iter()
             .filter_map(|clip| {
-                let media = self
-                    .session
-                    .media
-                    .iter()
-                    .find(|m| m.path == clip.source && !m.offline)?;
-                let fitted = dinuosi_core::composite::fitted_size(
-                    media.source_size,
-                    (model.width, model.height),
-                );
+                let fitted = if let Some(text) = &clip.text {
+                    let raster =
+                        dinuosi_core::text_render::raster(text, (model.width, model.height))
+                            .ok()?;
+                    (raster.size.0 as f64, raster.size.1 as f64)
+                } else {
+                    let media = self
+                        .session
+                        .media
+                        .iter()
+                        .find(|m| m.path == clip.source && !m.offline)?;
+                    dinuosi_core::composite::fitted_size(
+                        media.source_size,
+                        (model.width, model.height),
+                    )
+                };
                 Some(PreviewShape {
                     id: clip.id.clone(),
                     geometry: Geometry::new(

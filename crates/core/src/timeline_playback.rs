@@ -37,7 +37,7 @@ impl Timeline {
     pub fn reverse_clips(&mut self, ids: &BTreeSet<String>) {
         for c in self.clips.iter_mut().filter(|c| {
             ids.contains(&c.id)
-                && c.kind != MediaKind::Image
+                && matches!(c.kind, MediaKind::Video | MediaKind::Audio)
                 && !c.locked
                 && !self.tracks[c.track].locked
         }) {
