@@ -125,7 +125,10 @@ impl Desktop {
     /// 在检查器提供单一“保存样式”入口；命名时显示输入及保存/取消，不新增说明性文案。
     pub(crate) fn text_preset_save(&self, enabled: bool, cx: &mut Context<Self>) -> Div {
         div()
-            .my(px(10.0))
+            .mt(px(4.0))
+            .flex()
+            .flex_col()
+            .items_end()
             .when_some(self.timeline.text.preset_draft.as_ref(), |s, draft| {
                 s.child(draft.input.clone()).child(
                     div()
@@ -157,19 +160,11 @@ impl Desktop {
             })
             .when(self.timeline.text.preset_draft.is_none(), |s| {
                 s.child(
-                    div()
-                        .id("text-save-style")
-                        .debug_selector(|| "text-save-style".into())
+                    crate::ui::panel_button("text-save-style", false, enabled)
                         .focusable()
                         .tab_index(0)
-                        .h(px(28.0))
                         .border_1()
                         .border_color(rgb(LINE))
-                        .rounded(px(3.0))
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .cursor_pointer()
                         .child(crate::i18n::t("text", "Save style", cx))
                         .on_click(cx.listener(move |this, _, window, cx| {
                             if enabled {

@@ -102,7 +102,7 @@ impl Desktop {
             .child(
                 div()
                     .debug_selector(|| "inspector-position-label".into())
-                    .w(px(63.0))
+                    .w(px(crate::ui::LABEL_WIDTH))
                     .flex_none()
                     .child(crate::i18n::t("inspector", "Position", cx)),
             )
@@ -175,12 +175,12 @@ impl Desktop {
         let ratio = ((value - min) / (max - min)) as f32;
         let slider = self.inspector_slider(Some(property), ratio, enabled, cx);
         div()
-            .h(px(37.0))
+            .h(px(crate::ui::PARAMETER_HEIGHT))
             .flex()
             .items_center()
             .gap(px(6.0))
             .text_size(px(12.0))
-            .child(div().w(px(63.0)).flex_none().child(label))
+            .child(div().w(px(crate::ui::LABEL_WIDTH)).flex_none().child(label))
             .child(slider)
             .child(self.property_number(property, enabled, cx))
             .child(self.keyframe_controls(

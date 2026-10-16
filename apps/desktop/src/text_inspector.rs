@@ -60,7 +60,7 @@ impl Desktop {
                         div()
                             .id("text-body-display")
                             .debug_selector(|| "text-body-display".into())
-                            .h(px(116.0))
+                            .h(px(crate::ui::TEXT_BODY_HEIGHT))
                             .w_full()
                             .p(px(8.0))
                             .rounded(px(4.0))
@@ -76,10 +76,10 @@ impl Desktop {
                             ),
                     )
                 })
-                .child(div().h(px(12.0)))
+                .child(crate::ui::panel_divider())
                 .child(self.text_field_row(TextField::Start, "Start", enabled, cx))
                 .child(self.text_field_row(TextField::End, "End", enabled, cx))
-                .child(div().h(px(8.0)))
+                .child(crate::ui::panel_divider())
                 .child(self.text_field_row(TextField::Font, "Font", enabled, cx))
                 .when(self.timeline.text.font_menu, |s| {
                     s.child(
@@ -175,12 +175,12 @@ impl Desktop {
                         ),
                 )
                 .child(self.text_field_row(TextField::Color, "Color", enabled, cx))
-                .child(self.text_outline_controls(enabled, cx))
                 .child(self.text_field_row(TextField::Width, "Text width", enabled, cx))
                 .child(self.text_field_row(TextField::LineHeight, "Line spacing", enabled, cx))
+                .child(crate::ui::panel_divider())
+                .child(self.text_outline_controls(enabled, cx))
                 .child(self.text_effect_controls(enabled, cx))
-                .child(self.text_preset_save(enabled, cx))
-                .child(div().h(px(12.0)))
+                .child(crate::ui::panel_divider())
                 .child(self.inspector_row(
                     crate::i18n::t("inspector", "Opacity", cx),
                     Property::Opacity,
@@ -199,7 +199,9 @@ impl Desktop {
                     Property::Rotation,
                     enabled,
                     cx,
-                )),
+                ))
+                .child(crate::ui::panel_divider())
+                .child(self.text_preset_save(enabled, cx)),
         )
     }
 
@@ -221,13 +223,13 @@ impl Desktop {
             .as_ref()
             .filter(|e| e.id == clip.id && e.field == field);
         div()
-            .h(px(34.0))
+            .h(px(crate::ui::PARAMETER_HEIGHT))
             .flex()
             .items_center()
             .gap(px(8.0))
             .child(
                 div()
-                    .w(px(63.0))
+                    .w(px(crate::ui::LABEL_WIDTH))
                     .flex_none()
                     .text_color(rgb(MUTED))
                     .child(crate::i18n::t("text", label, cx)),
@@ -236,18 +238,25 @@ impl Desktop {
                 div()
                     .flex_1()
                     .min_w_0()
+                    .flex()
+                    .justify_end()
+                    .child(div()
+                    .w(px(if field == TextField::Font { 180.0 } else { 112.0 }))
+                    .max_w_full()
                     .when_some(input, |s, edit| s.child(edit.input.clone()))
                     .when(input.is_none(), |s| {
                         s.child(
                             div()
                                 .id(field.id())
                                 .debug_selector(move || field.id().into())
-                                .h(px(25.0))
+                                .h(px(crate::ui::CONTROL_HEIGHT))
                                 .px(px(7.0))
                                 .flex()
                                 .items_center()
                                 .gap(px(5.0))
-                                .bg(rgb(0x202023))
+                                .bg(rgb(crate::ui::BACKGROUND))
+                                .border_1()
+                                .border_color(rgb(LINE))
                                 .rounded(px(3.0))
                                 .overflow_hidden()
                                 .cursor_text()
@@ -303,7 +312,7 @@ impl Desktop {
                                     this.begin_text_field(field, window, cx)
                                 })),
                         )
-                    }),
+                    })),
             )
             .when(field == TextField::Font, |s| {
                 s.child(
@@ -349,20 +358,8 @@ impl Desktop {
         cx: &mut Context<Self>,
         action: impl Fn(&mut Self, &mut Context<Self>) + 'static,
     ) -> gpui::Stateful<Div> {
-        div()
-            .id(id)
-            .debug_selector(move || id.into())
-            .h(px(25.0))
+        crate::ui::panel_button(id, active, enabled)
             .min_w(px(28.0))
-            .px(px(7.0))
-            .flex()
-            .items_center()
-            .justify_center()
-            .rounded(px(3.0))
-            .border_1()
-            .border_color(rgb(if active { TEXT } else { LINE }))
-            .when(active, |s| s.bg(rgb(LINE)))
-            .cursor_pointer()
             .child(label)
             .on_click(cx.listener(move |this, _, _, cx| {
                 if enabled {

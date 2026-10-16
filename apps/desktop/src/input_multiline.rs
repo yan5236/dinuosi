@@ -131,7 +131,7 @@ impl TextInput {
     }
 
     /// 绘制可折行正文、跨行选择、组合下划线和光标；内容在固定灰阶框内裁切并跟随光标滚动。
-    /// 鼠标拖选、滚轮、IME 和剪贴板真实接入，不通过显示换行符伪装多行编辑。
+    /// 高度与正文展示态共用，避免失焦提交时参数在鼠标按下与抬起之间位移；保留拖选、滚轮与 IME。
     pub(super) fn render_multiline(&mut self, cx: &mut Context<Self>) -> gpui::Stateful<gpui::Div> {
         let entity = cx.entity();
         let paint = entity.clone();
@@ -142,7 +142,7 @@ impl TextInput {
                 move || id.into()
             })
             .w_full()
-            .h(px(116.0))
+            .h(px(crate::ui::TEXT_BODY_HEIGHT))
             .p(px(8.0))
             .rounded(px(4.0))
             .bg(rgb(PANEL))

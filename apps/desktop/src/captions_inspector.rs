@@ -1,7 +1,7 @@
 //! 全局字幕检查器：跨组列出全部字幕，列表独占剩余高度，逐句编辑和删除复用现有事务。
 use crate::{
     timeline_state::InspectorTab,
-    ui::{LINE, MUTED, TEXT},
+    ui::{LINE, MUTED},
     view::Desktop,
 };
 use dinuosi_icons::Icon;
@@ -18,7 +18,7 @@ impl Desktop {
     }
 
     /// 在空选择或字幕主对象上下文中，按起点和轨道列出项目全部字幕，不显示字体与效果设置。
-    /// 点击句子同步播放头并进入原生正文输入；锁定句保留浏览能力，删除控件禁用。
+    /// 点击整行同步播放头，点击正文进入原生输入；锁定句保留浏览能力，删除控件禁用。
     pub(crate) fn captions_inspector(&self, cx: &mut Context<Self>) -> Div {
         let mut captions: Vec<_> = self
             .timeline
@@ -57,25 +57,19 @@ impl Desktop {
                     .flex_none()
                     .children(targets.into_iter().map(|(label, target)| {
                         let id = target.map(|i| captions[i].id.clone());
-                        div()
-                            .id(label)
-                            .px(px(6.0))
-                            .py(px(4.0))
-                            .cursor_pointer()
-                            .text_color(rgb(if id.is_some() { TEXT } else { MUTED }))
+                        crate::ui::panel_button(label, false, id.is_some() && !self.busy)
                             .child(crate::i18n::t("text", label, cx))
                             .on_click(cx.listener(move |this, _, window, cx| {
-                                if let Some(id) = &id {
-                                    this.edit_caption(id.clone(), window, cx);
+                                if !this.busy
+                                    && let Some(id) = &id
+                                {
+                                    this.select_caption(id.clone(), window, cx);
                                 }
                             }))
                     }))
                     .child(div().flex_1())
                     .child(
-                        div()
-                            .id("text-add-caption")
-                            .debug_selector(|| "text-add-caption".into())
-                            .cursor_pointer()
+                        crate::ui::panel_button("text-add-caption", false, !self.busy)
                             .child(crate::i18n::t("text", "Add subtitle", cx))
                             .on_click(cx.listener(|this, _, window, cx| {
                                 this.add_text_clip(true, None, window, cx)
@@ -92,34 +86,54 @@ impl Desktop {
                     .children(captions.into_iter().enumerate().map(|(i, c)| {
                         let id = c.id.clone();
                         let delete_id = id.clone();
+                        let row_id = id.clone();
                         let locked = c.locked || self.timeline.model.tracks[c.track].locked;
                         let edit = self.timeline.text.body.as_ref().filter(|e| e.id == id);
                         div()
                             .id(SharedString::from(format!("caption-{id}")))
                             .debug_selector(move || format!("caption-row-{i}"))
-                            .p(px(6.0))
-                            .border_b_1()
+                            .px(px(10.0))
+                            .py(px(8.0))
+                            .mb(px(6.0))
+                            .rounded(px(4.0))
+                            .border_1()
                             .border_color(rgb(LINE))
-                            .when(self.timeline.selected.contains(&id), |s| s.bg(rgb(LINE)))
+                            .bg(rgb(crate::ui::PANEL))
+                            .cursor_pointer()
+                            .hover(|s| s.bg(rgb(0x303033)))
+                            .when(self.timeline.selected.contains(&id), |s| {
+                                s.bg(rgb(0x38383c)).border_color(rgb(MUTED))
+                            })
+                            .on_click(cx.listener(move |this, _, window, cx| {
+                                if !this.busy {
+                                    this.select_caption(row_id.clone(), window, cx);
+                                }
+                            }))
                             .child(
                                 div()
                                     .flex()
                                     .items_center()
                                     .gap(px(6.0))
-                                    .child(div().flex_1().min_w_0().text_color(rgb(MUTED)).child(
-                                        format!(
-                                            "{}   {} — {}",
-                                            i + 1,
-                                            crate::timeline_markers::timecode(
-                                                c.start,
-                                                self.timeline.model.fps
-                                            ),
-                                            crate::timeline_markers::timecode(
-                                                c.start + c.duration,
-                                                self.timeline.model.fps
-                                            )
-                                        ),
-                                    ))
+                                    .child(
+                                        div()
+                                            .flex_1()
+                                            .min_w_0()
+                                            .text_size(px(11.0))
+                                            .font_family(crate::ui::MONO_FONT)
+                                            .text_color(rgb(MUTED))
+                                            .child(format!(
+                                                "{}   {} — {}",
+                                                i + 1,
+                                                crate::timeline_markers::timecode(
+                                                    c.start,
+                                                    self.timeline.model.fps
+                                                ),
+                                                crate::timeline_markers::timecode(
+                                                    c.start + c.duration,
+                                                    self.timeline.model.fps
+                                                )
+                                            )),
+                                    )
                                     .child(
                                         crate::tooltip::Tooltip::tool(
                                             format!("caption-delete-{i}"),
@@ -135,7 +149,14 @@ impl Desktop {
                                         ),
                                     ),
                             )
-                            .when_some(edit, |s, e| s.child(e.input.clone()))
+                            .when_some(edit, |s, e| {
+                                s.child(
+                                    div()
+                                        .id(SharedString::from(format!("caption-editor-{i}")))
+                                        .on_click(|_, _, cx| cx.stop_propagation())
+                                        .child(e.input.clone()),
+                                )
+                            })
                             .when(edit.is_none(), |s| {
                                 s.child(
                                     div()
@@ -146,6 +167,7 @@ impl Desktop {
                                         .child(c.text.as_ref().unwrap().body.clone())
                                         .on_click(cx.listener(move |this, _, window, cx| {
                                             this.edit_caption(id.clone(), window, cx);
+                                            cx.stop_propagation();
                                         })),
                                 )
                             })

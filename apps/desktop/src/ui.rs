@@ -12,6 +12,39 @@ pub const LINE: u32 = 0x414145;
 pub const TEXT: u32 = 0xd7d7da;
 pub const MUTED: u32 = 0x929297;
 pub const DISABLED: u32 = 0x69696f;
+pub const CONTROL_HEIGHT: f32 = 24.0;
+pub const PARAMETER_HEIGHT: f32 = 38.0;
+pub const LABEL_WIDTH: f32 = 63.0;
+pub const TEXT_BODY_HEIGHT: f32 = 88.0;
+
+/// 创建检查器与曲线工具栏共用的紧凑按钮；仅提供视觉和焦点状态，由调用方校验并执行操作。
+pub fn panel_button(id: impl Into<SharedString>, selected: bool, enabled: bool) -> Stateful<Div> {
+    let id = id.into();
+    div()
+        .debug_selector(|| id.to_string())
+        .id(id)
+        .h(px(CONTROL_HEIGHT))
+        .px(px(8.0))
+        .flex_none()
+        .flex()
+        .items_center()
+        .justify_center()
+        .rounded(px(4.0))
+        .text_size(px(12.0))
+        .text_color(rgb(if selected { TEXT } else { MUTED }))
+        .bg(rgb(if selected { LINE } else { PANEL }))
+        .opacity(if enabled { 1.0 } else { 0.4 })
+        .when(enabled, |s| {
+            s.cursor_pointer()
+                .hover(|s| s.bg(rgb(0x38383c)).text_color(rgb(TEXT)))
+                .focus(|s| s.bg(rgb(LINE)))
+        })
+}
+
+/// 分隔检查器中的现有参数组，统一留白与细线，不添加说明文字或新的交互入口。
+pub fn panel_divider() -> Div {
+    div().h(px(1.0)).my(px(6.0)).bg(rgb(LINE)).flex_none()
+}
 pub const UI_FONT: &str = if cfg!(target_os = "windows") {
     "Microsoft YaHei UI"
 } else if cfg!(target_os = "macos") {

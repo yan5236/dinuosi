@@ -1,7 +1,7 @@
 //! 独立关键帧面板：常用预设与精确节点输入，共用时间线视口，不展开素材轨道。
 use crate::{
     input::TextInput,
-    ui::{LINE, MUTED, PANEL, TEXT},
+    ui::{LINE, PANEL},
     view::Desktop,
 };
 use dinuosi_core::{keyframe_curve::Easing, keyframes::KeyframeKind as K, timeline::Clip};
@@ -255,27 +255,8 @@ impl Desktop {
         action: CurveAction,
         cx: &mut Context<Self>,
     ) -> gpui::Stateful<Div> {
-        let debug = id.clone();
-        div()
-            .id(gpui::SharedString::from(id))
-            .debug_selector(move || debug.clone())
-            .h(px(24.0))
-            .px(px(8.0))
-            .flex_none()
-            .flex()
-            .items_center()
-            .justify_center()
-            .text_size(px(11.0))
-            .text_color(rgb(if selected { TEXT } else { MUTED }))
-            .bg(rgb(if selected { LINE } else { PANEL }))
-            .opacity(if enabled { 1.0 } else { 0.35 })
-            .when(enabled, |s| {
-                s.focusable()
-                    .tab_index(0)
-                    .cursor_pointer()
-                    .hover(|s| s.bg(rgb(LINE)))
-                    .focus(|s| s.bg(rgb(LINE)))
-            })
+        crate::ui::panel_button(id, selected, enabled)
+            .when(enabled, |s| s.focusable().tab_index(0))
             .child(
                 if let CurveAction::Channel(index) = action
                     && let K::Color(stage, control) = CHANNELS[index].0
@@ -361,6 +342,9 @@ impl Desktop {
                     .h(px(24.0))
                     .w(px(80.0))
                     .bg(rgb(crate::ui::BACKGROUND))
+                    .border_1()
+                    .border_color(rgb(LINE))
+                    .rounded(px(3.0))
                     .flex()
                     .items_center()
                     .justify_center()

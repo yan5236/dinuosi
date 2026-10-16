@@ -136,7 +136,7 @@ fn deleting_focused_text_does_not_resurrect_it(cx: &mut TestAppContext) {
     std::fs::remove_dir_all(root).unwrap();
 }
 
-/// 全局列表覆盖不同字幕组，直接编辑正文、精确删除非选中句和锁定保护；撤销删除不恢复旧正文。
+/// 全局列表覆盖跨组整行定位、不抢正文焦点、精确删除与锁定保护；撤销删除不恢复旧正文。
 #[gpui::test]
 fn global_captions_edit_delete_lock_and_undo(cx: &mut TestAppContext) {
     let root = std::env::temp_dir().join(format!("dinuosi-global-captions-{}", std::process::id()));
@@ -174,9 +174,34 @@ fn global_captions_edit_delete_lock_and_undo(cx: &mut TestAppContext) {
     assert!(cx.debug_bounds("caption-body-0").is_some());
     assert!(cx.debug_bounds("caption-body-1").is_some());
     assert!(cx.debug_bounds("text-size").is_none());
+    let row = cx.debug_bounds("caption-row-1").unwrap();
+    cx.simulate_click(row.origin + point(px(5.0), px(5.0)), Modifiers::none());
+    cx.run_until_parked();
+    desktop.read_with(cx, |v, _| {
+        assert_eq!(v.timeline.primary_clip.as_ref(), Some(&b));
+        assert_eq!(
+            v.session.timeline_position,
+            120.0 / v.timeline.model.fps as f64
+        );
+        assert!(v.timeline.text.body.is_none());
+    });
     click(cx, "caption-body-1");
+    assert!(desktop.read_with(cx, |v, _| v.timeline.text.body.is_some()));
     cx.simulate_keystrokes("ctrl-a");
     cx.simulate_input("第二组已编辑");
+    let row = cx.debug_bounds("caption-row-0").unwrap();
+    cx.simulate_click(row.origin + point(px(5.0), px(5.0)), Modifiers::none());
+    cx.run_until_parked();
+    desktop.read_with(cx, |v, _| {
+        assert_eq!(v.timeline.primary_clip.as_ref(), Some(&a));
+        assert_eq!(v.session.timeline_position, 0.0);
+        assert!(v.timeline.text.body.is_none());
+    });
+    click(cx, "Next");
+    desktop.read_with(cx, |v, _| {
+        assert_eq!(v.timeline.primary_clip.as_ref(), Some(&b));
+        assert!(v.timeline.text.body.is_none());
+    });
     click(cx, "caption-delete-0");
     let saved = store.load_timeline(&entry).unwrap();
     assert!(!saved.clips.iter().any(|c| c.id == a));

@@ -86,7 +86,7 @@ impl Desktop {
         let value = self.color_grade().stages[self.color_stage()].get(control);
         let enabled = self.color_enabled();
         div()
-            .h(px(38.0))
+            .h(px(crate::ui::PARAMETER_HEIGHT))
             .flex()
             .items_center()
             .gap(px(6.0))
@@ -94,13 +94,13 @@ impl Desktop {
             .opacity(if enabled { 1.0 } else { 0.4 })
             .child(
                 div()
-                    .w(px(68.0))
+                    .w(px(crate::ui::LABEL_WIDTH))
                     .flex_none()
                     .text_color(rgb(TEXT))
                     .child(crate::i18n::t("color", label, cx)),
             )
             .child(self.color_slider(control, cx))
-            .child(self.color_number(control, value, enabled, 66.0, cx))
+            .child(self.color_number(control, value, enabled, 76.0, cx))
             .child(self.keyframe_controls(
                 dinuosi_core::keyframes::KeyframeKind::Color(self.color_stage(), control),
                 cx,
@@ -141,7 +141,7 @@ impl Desktop {
                     .left_0()
                     .right_0()
                     .top(px(11.0))
-                    .h(px(3.0))
+                    .h(px(2.0))
                     .rounded(px(2.0))
                     .overflow_hidden()
                     .bg(rgb(0x48484d))
@@ -160,7 +160,7 @@ impl Desktop {
                         .left(gpui::relative(ratio.min(zero)))
                         .w(gpui::relative((ratio - zero).abs()))
                         .top(px(11.0))
-                        .h(px(3.0))
+                        .h(px(2.0))
                         .bg(rgb(0x96969d)),
                 )
             })
@@ -179,11 +179,13 @@ impl Desktop {
                 div()
                     .absolute()
                     .left(gpui::relative(ratio))
-                    .ml(px(-4.0))
-                    .top(px(8.0))
-                    .size(px(9.0))
-                    .rounded(px(5.0))
-                    .bg(rgb(TEXT)),
+                    .ml(px(-5.0))
+                    .top(px(6.0))
+                    .size(px(11.0))
+                    .rounded(px(6.0))
+                    .bg(rgb(crate::ui::PANEL))
+                    .border_1()
+                    .border_color(rgb(TEXT)),
             )
             .child(self.color_hitbox(ColorTarget::Scalar(control), cx))
     }
@@ -217,11 +219,11 @@ impl Desktop {
                 div()
                     .id(gpui::ElementId::Name(id.into()))
                     .debug_selector(move || selector.clone())
-                    .w(px(width - 14.0))
+                    .w(px(width - 17.0))
                     .h_full()
                     .border_1()
-                    .border_color(rgb(0x353539))
-                    .bg(rgb(0x222225))
+                    .border_color(rgb(crate::ui::LINE))
+                    .bg(rgb(crate::ui::BACKGROUND))
                     .font_family(crate::ui::MONO_FONT)
                     .overflow_hidden()
                     .when(active.is_none(), |s| {
@@ -243,7 +245,7 @@ impl Desktop {
             )
             .child(
                 div()
-                    .w(px(14.0))
+                    .w(px(17.0))
                     .flex()
                     .flex_col()
                     .children([1.0, -1.0].into_iter().map(|direction| {
@@ -262,6 +264,8 @@ impl Desktop {
                             .items_center()
                             .justify_center()
                             .cursor_pointer()
+                            .border_1()
+                            .border_color(rgb(crate::ui::LINE))
                             .child(
                                 svg()
                                     .path(if direction > 0.0 {
