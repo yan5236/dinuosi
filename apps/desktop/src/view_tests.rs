@@ -49,7 +49,7 @@ fn manager_modal_validation_and_native_controls(cx: &mut TestAppContext) {
     assert!(cx.read(|app| desktop.read(app).dialog.is_none()));
 }
 
-/// 验证独立剪辑窗口在原有尺寸下保留三栏与缩放交互；空项目没有媒体伪数据。
+/// 验证独立剪辑窗口默认三栏扣除缝隙并遵守最小宽度；空项目没有媒体伪数据，时间轴缩放仍有效。
 #[gpui::test]
 fn editor_layout_and_zoom_remain_consistent(cx: &mut TestAppContext) {
     let entry = ProjectEntry {
@@ -74,13 +74,19 @@ fn editor_layout_and_zoom_remain_consistent(cx: &mut TestAppContext) {
                 "window-close",
             ],
         );
-        assert!(
-            (f32::from(cx.debug_bounds("素材库").unwrap().right()) - width * 0.302).abs() < 1.0
+        let library = cx.debug_bounds("素材库").unwrap();
+        let preview = cx.debug_bounds("preview-panel").unwrap();
+        let inspector = cx.debug_bounds("inspector-panel").unwrap();
+        assert!((f32::from(library.size.width) - width * 0.302).abs() < 1.0);
+        assert_eq!(
+            preview.left() - library.right(),
+            px(crate::editor_layout::GAP)
         );
-        assert!(
-            (f32::from(cx.debug_bounds("preview-panel").unwrap().right()) - width * 0.741).abs()
-                < 1.0
+        assert_eq!(
+            inspector.left() - preview.right(),
+            px(crate::editor_layout::GAP)
         );
+        assert_eq!(inspector.right(), px(width));
         let zoom = desktop.read_with(cx, |view, _| view.zoom);
         let zoom_in = cx.debug_bounds("zoom-in").unwrap().center();
         cx.simulate_click(zoom_in, Modifiers::none());

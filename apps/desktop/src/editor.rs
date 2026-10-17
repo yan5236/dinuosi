@@ -3,46 +3,16 @@
 use dinuosi_icons::Icon;
 use gpui::{Context, Div, Window, div, prelude::*, px, rgb};
 
+pub(crate) use crate::editor_layout::Layout;
+use crate::editor_layout::Split;
 use crate::ui::{LINE, MUTED, separator};
 use crate::view::Desktop;
-
-/// 草图主要边界的逻辑像素位置，随窗口尺寸按相同比例缩放。
-#[derive(Clone, Copy)]
-pub(crate) struct Layout {
-    pub title: f32,
-    upper: f32,
-    toolbar: f32,
-    pub width: f32,
-    footer: f32,
-    left: f32,
-    preview: f32,
-    right: f32,
-    pub track_header: f32,
-}
-
-impl Layout {
-    /// 将草图的归一化分界换算为逻辑像素；窗口最小尺寸由启动入口限制。
-    /// 三栏宽度相加等于可用宽度，避免窗口缩放时累计取整偏差。
-    pub fn new(width: f32, height: f32) -> Self {
-        Self {
-            title: height * 0.067,
-            upper: height * 0.506,
-            toolbar: height * 0.041,
-            width,
-            footer: height * 0.037,
-            left: width * 0.302,
-            preview: width * 0.439,
-            right: width * 0.259,
-            track_header: width * 0.15,
-        }
-    }
-}
 
 impl Desktop {
     /// 构造三栏与底部区域；预览控制只放中栏，左右面板延伸至工具栏上沿。
     /// 时间线与检查器委派独立视图，预览模式由用户的素材/时间线选择决定。
     /// 绘制前同步时间线横向尺寸，使首次显示和窗口缩放使用当帧宽度计算全览比例。
-    /// 曲线面板打开时压缩上部区域，水平坐标与时间线保持一致并保留轨道操作空间。
+    /// 缝隙提供三栏宽度、上下工作区和曲线高度拖动；尺寸约束由窗口布局统一计算。
     pub(crate) fn editor(
         &mut self,
         layout: Layout,
@@ -51,7 +21,6 @@ impl Desktop {
     ) -> Div {
         self.timeline.bounds.size.width = px(layout.width);
         self.timeline.header = layout.track_header + crate::trim_handle::WIDTH;
-        let curve_height = (f32::from(window.viewport_size().height) * 0.24).clamp(150.0, 240.0);
         div()
             .size_full()
             .flex()
@@ -61,17 +30,9 @@ impl Desktop {
                 div()
                     .flex()
                     .flex_none()
-                    .h(px(layout.upper
-                        - if self.timeline.curves.open {
-                            curve_height * 0.75
-                        } else {
-                            0.0
-                        }))
-                    .child(
-                        self.library(layout.left, cx)
-                            .border_r_1()
-                            .border_color(rgb(LINE)),
-                    )
+                    .h(px(layout.upper))
+                    .child(self.library(layout.left, cx).overflow_hidden())
+                    .child(self.panel_splitter(Split::Library, layout, cx))
                     .child(
                         div()
                             .debug_selector(|| "preview-panel".into())
@@ -80,6 +41,7 @@ impl Desktop {
                             .flex_none()
                             .w(px(layout.preview))
                             .h_full()
+                            .overflow_hidden()
                             .child(self.preview_display(cx))
                             .when(
                                 !self.timeline.preview && self.session.selected.is_some(),
@@ -87,15 +49,14 @@ impl Desktop {
                             )
                             .child(self.preview_controls(layout.preview, cx)),
                     )
-                    .child(
-                        self.inspector(layout.right, cx)
-                            .border_l_1()
-                            .border_color(rgb(LINE)),
-                    ),
+                    .child(self.panel_splitter(Split::Inspector, layout, cx))
+                    .child(self.inspector(layout.right, cx)),
             )
+            .child(self.panel_splitter(Split::Timeline, layout, cx))
             .child(self.timeline_toolbar(layout.toolbar, cx))
             .when(self.timeline.curves.open, |s| {
-                s.child(self.curve_panel(curve_height, cx))
+                s.child(self.curve_panel(layout.curve, cx).overflow_hidden())
+                    .child(self.panel_splitter(Split::Curve, layout, cx))
             })
             .child(self.timeline_panel(layout, cx))
             .child(
@@ -288,25 +249,5 @@ impl Desktop {
                 .clamp(0.0, self.timeline_width() - self.timeline_view_width())
         };
         cx.notify();
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// 在最小、默认和大屏尺寸验证三栏与上下分界，防止缩放后布局退化。
-    #[test]
-    fn layout_preserves_reference_boundaries_at_supported_sizes() {
-        for (width, height) in [(1040.0, 640.0), (1440.0, 900.0), (2560.0, 1440.0)] {
-            let layout = Layout::new(width, height);
-            assert!((layout.left + layout.preview + layout.right - width).abs() < 0.01);
-            assert!(((layout.title + layout.upper) / height - 0.573).abs() < 0.001);
-            assert!((layout.track_header / width - 0.15).abs() < 0.001);
-            assert!(
-                height - layout.title - layout.upper - layout.toolbar.max(34.0) - layout.footer
-                    > height * 0.27
-            );
-        }
     }
 }

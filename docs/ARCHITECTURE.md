@@ -32,7 +32,7 @@ assets/brand → 编译嵌入 Desktop
 - Core 的 `ProjectStore::import_media` 统一批量探测、去重、逐项失败反馈和原子保存引用；`load_media` 统一重开探测、别名与离线保留。`rename_media` 保存显示别名，`remove_media` 仅移除路径引用；均不改写源素材并在索引失败时恢复项目。Desktop 文件选择器和拖放均调用同一导入接口。
 - Command 将项目生命周期操作委派给 Core；本层不实现磁盘读写，也不依赖 GUI。
 - Desktop 保存当前窗口的导航、素材解码结果、预览选区、音量、标尺缩放、框选和指针状态；项目及源路径引用由 Core 原子保存。导入不复制源文件，重开项目重新探测路径，失联引用保留为离线素材。
-- Desktop 的 `view.rs` 负责会话与项目管理，`editor.rs` 负责剪辑区域和比例布局，`ui.rs` 提供灰阶与窗口操作。`library.rs` 管理引用式素材库，`media.rs` 只将 Core 元数据和 BGRA 像素适配为 GPUI 图像，`playback.rs` 消费 Core 解码器并通过 Rodio 输出声音、维护设备播放时钟，预览会话/绘制与指针交互各自独立；不引入 WebView，也不修改 GPUI。
+- Desktop 的 `view.rs` 负责会话与项目管理，`editor.rs` 组合剪辑区域，`editor_layout.rs` 管理窗口会话中的面板尺寸、最小边界及分隔拖动，`ui.rs` 提供灰阶与窗口操作。`library.rs` 管理引用式素材库，`media.rs` 只将 Core 元数据和 BGRA 像素适配为 GPUI 图像，`playback.rs` 消费 Core 解码器并通过 Rodio 输出声音、维护设备播放时钟，预览会话/绘制与指针交互各自独立；不引入 WebView，也不修改 GPUI。
 - Icons 不依赖 GPUI；以素材 `spec.json` 为来源，在 `OUT_DIR` 生成类型化枚举、中文标签、逻辑资源路径及原始 SVG 内容。
 - Cursor 不依赖 GPUI 或媒体，校验窗口所属线程与像素输入，将现有 Razor SVG 栅格结果创建为 Windows 原生光标；仅在时间线内容区处理系统光标消息，保留 GPUI 的窗口移动、尺寸和输入处理。窗口关闭或会话释放时移除回调并销毁私有光标；Core/Desktop 继续禁止 unsafe。
 - GPUI 的 AssetSource 提供内嵌 SVG 与 PNG；SVG 使用 GPUI 单色渲染并由界面文字色着色，双色 Logo 使用原始 PNG 保留品牌色。

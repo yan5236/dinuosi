@@ -26,6 +26,7 @@ impl Desktop {
                 && !self.timeline.model.tracks[c.track].locked
         });
         div()
+            .debug_selector(|| "inspector-panel".into())
             .w(px(width))
             .h_full()
             .flex_none()

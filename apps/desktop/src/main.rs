@@ -20,6 +20,7 @@ mod curve_panel;
 mod dialogs;
 mod edit_menu;
 mod editor;
+mod editor_layout;
 mod export_controls;
 mod export_dialog;
 mod export_view;

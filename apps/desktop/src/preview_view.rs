@@ -251,6 +251,7 @@ impl Desktop {
     }
 
     /// 按素材或时间线模式绘制时间码、逐帧定位和播放；全屏入口切换为独立观看布局。
+    /// 窄面板按完整控件组换行并增高控制栏，保证素材预览的添加按钮不会挤掉音量或全屏入口。
     pub(crate) fn preview_controls(&self, width: f32, cx: &mut Context<Self>) -> Div {
         let enabled = self.timeline.preview && !self.timeline.model.clips.is_empty()
             || self
@@ -259,9 +260,13 @@ impl Desktop {
                 .and_then(|i| self.session.media.get(i))
                 .is_some_and(|m| !m.offline);
         div()
-            .h(px(42.0))
+            .debug_selector(|| "preview-controls".into())
+            .min_h(px(42.0))
             .flex_none()
             .flex()
+            .flex_wrap()
+            .gap_y(px(4.0))
+            .py(px(6.0))
             .items_center()
             .justify_between()
             .px(px(8.0))
@@ -269,6 +274,7 @@ impl Desktop {
             .border_color(rgb(LINE))
             .child(
                 div()
+                    .flex_none()
                     .font_family(crate::ui::MONO_FONT)
                     .text_size(px(10.0))
                     .child(format!(
@@ -309,6 +315,7 @@ impl Desktop {
             .child(
                 div()
                     .flex()
+                    .flex_none()
                     .items_center()
                     .child(
                         tool("preview-back", Icon::SkipBack, enabled).on_click(cx.listener(
@@ -349,6 +356,7 @@ impl Desktop {
             .child(
                 div()
                     .flex()
+                    .flex_none()
                     .items_center()
                     .gap(px(2.0))
                     .child(

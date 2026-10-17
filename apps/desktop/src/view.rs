@@ -33,6 +33,7 @@ pub struct Desktop {
     pub(crate) session: crate::preview::EditorSession,
     pub(crate) timeline: crate::timeline_state::TimelineSession,
     pub(crate) blade_cursor: crate::blade_cursor::BladeCursor,
+    pub(crate) panels: crate::editor_layout::Panels,
 }
 impl Desktop {
     /// 关闭前先保存文字草稿；忙碌或提交失败时保留窗口和输入，允许查看错误、重试或取消。
@@ -118,6 +119,7 @@ impl Desktop {
         .detach();
         let mut desktop = Self {
             blade_cursor: Default::default(),
+            panels: Default::default(),
             focus_handle,
             store,
             current,
@@ -303,7 +305,11 @@ impl Render for Desktop {
             return self.fullscreen_preview(cx).into_any_element();
         }
         let dimensions = window.viewport_size();
-        let layout = crate::editor::Layout::new(dimensions.width.into(), dimensions.height.into());
+        let layout = if self.current.is_some() {
+            self.panel_layout(window)
+        } else {
+            crate::editor::Layout::new(dimensions.width.into(), dimensions.height.into())
+        };
         div()
             .relative()
             .size_full()
@@ -335,10 +341,14 @@ impl Render for Desktop {
                 cx.listener(|this, event: &gpui::MouseMoveEvent, window, cx| {
                     this.update_blade_pointer(event.position, cx);
                     if event.pressed_button == Some(gpui::MouseButton::Left) {
+                        if this.move_panel_splitter(event.position, cx) {
+                            return;
+                        }
                         this.move_pointer(event.position.x, cx);
                         this.move_timeline_pointer(event.position, cx);
                         this.update_timeline_autoscroll(event.position, cx);
                     } else {
+                        this.end_panel_splitter(cx);
                         this.end_pointer(window, cx);
                         this.end_timeline_pointer(window, cx);
                     }
@@ -348,6 +358,8 @@ impl Render for Desktop {
                 gpui::MouseButton::Left,
                 cx.listener(|this, event: &gpui::MouseUpEvent, window, cx| {
                     this.timeline.pointer = event.position;
+                    this.move_panel_splitter(event.position, cx);
+                    this.end_panel_splitter(cx);
                     this.end_pointer(window, cx);
                     this.end_timeline_pointer(window, cx);
                 }),
@@ -356,6 +368,8 @@ impl Render for Desktop {
                 gpui::MouseButton::Left,
                 cx.listener(|this, event: &gpui::MouseUpEvent, window, cx| {
                     this.timeline.pointer = event.position;
+                    this.move_panel_splitter(event.position, cx);
+                    this.end_panel_splitter(cx);
                     this.end_pointer(window, cx);
                     this.end_timeline_pointer(window, cx);
                 }),
@@ -369,6 +383,7 @@ impl Render for Desktop {
             })
             .children(self.library_drag_overlay())
             .child(self.blade_cursor_region(cx))
+            .children(self.panel_drag_overlay(cx))
             .when(
                 self.menu_open
                     || self.timeline.edit_menu.is_some()

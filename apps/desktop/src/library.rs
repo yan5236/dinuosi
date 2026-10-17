@@ -54,6 +54,7 @@ impl Desktop {
     /// 创建左侧分类与右侧缩略图列表，接收资源管理器的多文件拖放；点击素材切换实时预览。
     /// 分类图标固定为 18px 且禁止收缩；英文分类栏扩宽，缩略图网格按剩余宽度计算。
     /// 文件素材以源路径打开公共库菜单，文本样式以独立身份复用同一菜单。
+    /// 上方区域缩矮时分类栏独立滚动，避免底部分类被面板边界裁掉。
     pub(crate) fn library(&self, width: f32, cx: &mut Context<Self>) -> Div {
         let query = self.session.search.read(cx).text.to_lowercase();
         let filter_width = if crate::i18n::locale(cx) == "en" {
@@ -71,10 +72,12 @@ impl Desktop {
             .bg(rgb(PANEL))
             .child(
                 div()
+                    .id("library-filter-list")
                     .debug_selector(|| "library-filters".into())
                     .w(px(filter_width))
                     .flex_none()
                     .h_full()
+                    .overflow_y_scroll()
                     .border_r_1()
                     .border_color(rgb(LINE))
                     .pt(px(8.0))
