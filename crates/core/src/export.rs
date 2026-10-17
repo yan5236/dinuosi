@@ -136,13 +136,18 @@ pub struct ExportSettings {
     pub encoder: Encoder,
 }
 impl ExportSettings {
-    /// 用项目画布和输出默认值创建参数；编码器仍必须从当前机器能力检测结果选择。
+    /// 用项目画布、帧率与质量档位生成有效码率；编码器仍必须从当前机器能力检测结果选择。
     pub fn for_timeline(timeline: &Timeline, encoder: Encoder) -> Self {
         Self {
             width: timeline.width,
             height: timeline.height,
             fps: timeline.fps,
-            bitrate_kbps: timeline.bitrate_kbps,
+            bitrate_kbps: timeline.bitrate_mode.bitrate(
+                timeline.width,
+                timeline.height,
+                timeline.fps,
+                timeline.bitrate_kbps,
+            ),
             container: Container::Mp4,
             encoder,
         }

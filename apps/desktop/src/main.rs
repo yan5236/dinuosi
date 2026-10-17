@@ -18,6 +18,7 @@ mod curve_edit;
 mod curve_graph;
 mod curve_panel;
 mod dialogs;
+mod edit_menu;
 mod editor;
 mod export_controls;
 mod export_dialog;
@@ -46,6 +47,7 @@ mod preview_transform;
 mod preview_view;
 mod settings;
 mod settings_dropdown;
+mod settings_project;
 mod settings_view;
 mod shortcuts;
 mod sliders;
@@ -63,12 +65,15 @@ mod text_fields;
 mod text_fix_tests;
 mod text_inspector;
 mod text_library;
+#[cfg(test)]
+mod text_preset_menu_tests;
 mod text_presets;
 #[cfg(test)]
 mod text_tests;
 mod timeline_actions;
 mod timeline_blade;
 mod timeline_clip;
+mod timeline_clipboard;
 mod timeline_commit;
 mod timeline_drag;
 mod timeline_keyframes;
@@ -85,6 +90,9 @@ mod timeline_view;
 mod tooltip;
 mod trim_handle;
 mod ui;
+mod video_presets;
+#[cfg(test)]
+mod video_settings_tests;
 mod view;
 mod waveform;
 mod windows;
@@ -93,6 +101,8 @@ mod windows;
 mod audio_track_tests;
 #[cfg(test)]
 mod curve_tests;
+#[cfg(test)]
+mod edit_menu_tests;
 #[cfg(test)]
 mod editor_media_tests;
 #[cfg(test)]

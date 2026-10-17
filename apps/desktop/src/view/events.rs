@@ -5,6 +5,8 @@ impl Desktop {
     /// 全屏模式只接受播放/退出与焦点导航；其余非输入状态下 Tab 遍历工具以显示 Tooltip。
     /// 曲线/调色输入优先接收提交/取消；两类拖动都可取消，选中动画曲线节点的 Delete 只删除该属性节点。
     /// Esc 优先退出 HSL 取样模式并释放像素，不落入片段选择或项目快捷键。
+    /// 素材剪切/复制/粘贴使用统一快捷键配置，输入会话优先返回，防止文字操作误改时间线。
+    /// 素材及样式库右键菜单隔离时间线快捷键，Escape 关闭并恢复工作区焦点。
     pub(super) fn workspace_key(
         &mut self,
         event: &gpui::KeyDownEvent,
@@ -31,6 +33,15 @@ impl Desktop {
             return;
         }
         let key = event.keystroke.key.as_str();
+        if self.session.media_menu.is_some() {
+            if key == "escape" {
+                self.session.media_menu = None;
+                self.focus_handle.focus(window);
+                cx.notify();
+            }
+            cx.stop_propagation();
+            return;
+        }
         if self.timeline.text.picker.is_some() {
             if matches!(key, "escape" | "enter") {
                 self.finish_text_color(key == "escape", cx);
@@ -178,6 +189,9 @@ impl Desktop {
                 self.delete_curve_key(cx);
             }
             Some(Command::Delete) => self.delete_clips(cx),
+            Some(Command::Cut) => self.copy_timeline_clips(true, cx),
+            Some(Command::Copy) => self.copy_timeline_clips(false, cx),
+            Some(Command::Paste) => self.paste_timeline_clips(cx),
             Some(Command::Undo) => {
                 self.end_timeline_pointer(window, cx);
                 self.timeline_history(false, cx);

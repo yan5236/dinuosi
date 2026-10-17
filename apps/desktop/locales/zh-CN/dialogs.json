@@ -19,5 +19,7 @@
   "Edit marker": "修改标记点",
   "Marker name": "标记点名称",
   "Color": "颜色",
-  "Confirm": "确定"
+  "Confirm": "确定",
+  "Rename style": "重命名样式",
+  "Style name": "样式名称"
 }

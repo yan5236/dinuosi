@@ -70,6 +70,32 @@ impl ProjectStore {
         Ok(presets)
     }
 
+    /// 按稳定身份重命名用户预设，只替换去除首尾空白后的名称，保留身份和完整样式。
+    /// 名称非法、与其他样式重名或身份不存在时返回错误；原子写入失败保留旧库及已应用片段。
+    pub fn rename_text_preset(&self, id: &str, name: &str) -> Result<Vec<TextPreset>, String> {
+        let mut presets = self.load_text_presets()?;
+        let index = presets
+            .iter()
+            .position(|p| p.id == id)
+            .ok_or("文本样式不存在")?;
+        presets[index].name = name.trim().to_owned();
+        presets[index].validate()?;
+        if presets
+            .iter()
+            .any(|p| p.id != id && p.name.to_lowercase() == presets[index].name.to_lowercase())
+        {
+            return Err("文本样式名称已存在".into());
+        }
+        atomic_json(
+            &self.index_path.with_file_name("text-presets.json"),
+            &PresetsV1 {
+                version: 1,
+                presets: presets.clone(),
+            },
+        )?;
+        Ok(presets)
+    }
+
     /// 按稳定身份移除用户预设，不改变任何已应用到片段的样式；未知身份返回错误，失败保留旧文件。
     pub fn remove_text_preset(&self, id: &str) -> Result<Vec<TextPreset>, String> {
         let mut presets = self.load_text_presets()?;

@@ -9,11 +9,17 @@ use dinuosi_icons::Icon;
 use gpui::{Context, Div, Window, div, prelude::*, px, rgb, svg};
 use std::path::PathBuf;
 
+#[derive(Clone)]
+pub(crate) enum LibraryTarget {
+    Media(PathBuf),
+    TextPreset(String),
+}
+
 impl Desktop {
-    /// 在右键位置绘制改名和移除菜单，并限制在当前窗口内；通过源路径识别素材。
-    /// 移除只调用核心引用保存接口，不接触源文件。
+    /// 文件素材与文本样式共用改名/移除菜单及灰阶外观，浮层限制在窗口内且没有默认高亮。
+    /// 目标使用源路径或样式稳定身份；移除不接触源文件，也不修改已应用的时间线样式。
     pub(crate) fn media_actions(&self, window: &Window, cx: &mut Context<Self>) -> Div {
-        let (path, position) = self.session.media_menu.as_ref().expect("菜单存在时绘制");
+        let (target, position) = self.session.media_menu.as_ref().expect("菜单存在时绘制");
         let viewport = window.viewport_size();
         div()
             .absolute()
@@ -47,7 +53,7 @@ impl Desktop {
                 ]
                 .into_iter()
                 .map(|(rename, id, label, icon)| {
-                    let path = path.clone();
+                    let target = target.clone();
                     div()
                         .id(id)
                         .debug_selector(move || id.into())
@@ -61,9 +67,41 @@ impl Desktop {
                         .child(svg().path(icon.path()).size(px(16.0)).text_color(rgb(TEXT)))
                         .child(label)
                         .on_click(cx.listener(move |this, _, window, cx| {
+                            if this.busy {
+                                return;
+                            }
+                            if let LibraryTarget::TextPreset(id) = &target {
+                                if rename {
+                                    if let Some(item) = this
+                                        .timeline
+                                        .text
+                                        .presets
+                                        .iter()
+                                        .find(|p| &p.preset.id == id)
+                                    {
+                                        this.show_dialog(
+                                            DialogKind::RenameTextPreset {
+                                                id: id.clone(),
+                                                name: item.preset.name.clone(),
+                                            },
+                                            window,
+                                            cx,
+                                        );
+                                    }
+                                } else {
+                                    this.remove_text_preset(id, cx);
+                                    this.session.media_menu = None;
+                                    this.focus_handle.focus(window);
+                                    cx.notify();
+                                }
+                                return;
+                            }
+                            let LibraryTarget::Media(path) = &target else {
+                                return;
+                            };
                             if rename {
                                 if let Some(media) =
-                                    this.session.media.iter().find(|m| m.path == path)
+                                    this.session.media.iter().find(|m| &m.path == path)
                                 {
                                     this.show_dialog(
                                         DialogKind::RenameMedia {

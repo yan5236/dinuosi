@@ -27,7 +27,7 @@ fn button(id: impl Into<gpui::ElementId>, text: impl Into<gpui::SharedString>) -
 }
 
 /// 每个设置行左侧显示字段名，右侧提供固定区域控件，避免长文本挤出边界。
-fn row(label: &'static str, control: impl IntoElement) -> Div {
+pub(crate) fn row(label: &'static str, control: impl IntoElement) -> Div {
     div()
         .flex()
         .items_center()
@@ -95,26 +95,7 @@ impl Settings {
                     .text_color(rgb(MUTED))
                     .child(crate::i18n::t("settings", "No plugins", cx)),
             ),
-            Tab::Project => content
-                .child(row(
-                    crate::i18n::t("settings", "Main track resolution", cx),
-                    div()
-                        .w(px(278.0))
-                        .flex()
-                        .items_center()
-                        .gap(px(8.0))
-                        .child(self.fields[0].clone())
-                        .child("×")
-                        .child(self.fields[1].clone()),
-                ))
-                .child(row(
-                    crate::i18n::t("settings", "Frame rate (fps)", cx),
-                    div().w(px(160.0)).child(self.fields[2].clone()),
-                ))
-                .child(row(
-                    crate::i18n::t("settings", "Bitrate (kbps)", cx),
-                    div().w(px(160.0)).child(self.fields[3].clone()),
-                )),
+            Tab::Project => self.project_body(cx),
             Tab::Shortcuts => {
                 let query = self.search.read(cx).text.trim().to_lowercase();
                 content
@@ -301,8 +282,9 @@ impl Render for Settings {
             .on_mouse_down(
                 gpui::MouseButton::Left,
                 cx.listener(|this, _, _, cx| {
-                    if this.general_menu.is_some() {
+                    if this.general_menu.is_some() || this.project_menu.is_some() {
                         this.general_menu = None;
+                        this.project_menu = None;
                         cx.notify();
                     }
                 }),
@@ -371,6 +353,8 @@ impl Render for Settings {
                                             .on_click(cx.listener(move |this, _, window, cx| {
                                                 this.tab = tab;
                                                 this.recording = None;
+                                                this.general_menu = None;
+                                                this.project_menu = None;
                                                 this.error = None;
                                                 this.focus.focus(window);
                                                 cx.notify();

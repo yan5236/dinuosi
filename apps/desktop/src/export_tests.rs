@@ -61,7 +61,7 @@ fn export_modal_parameters_do_not_edit_project(cx: &mut TestAppContext) {
     let button = visual.debug_bounds("export-fps").unwrap().center();
     visual.simulate_click(button, Modifiers::none());
     visual.run_until_parked();
-    let button = visual.debug_bounds("export-fps-0").unwrap().center();
+    let button = visual.debug_bounds("export-fps-1").unwrap().center();
     visual.simulate_click(button, Modifiers::none());
     visual.run_until_parked();
     assert_eq!(

@@ -11,6 +11,7 @@ use gpui::{Context, Div, MouseButton, canvas, div, prelude::*, px, rgb, rgba, sv
 impl Desktop {
     /// 使用实际绘制边界命中时间线；全部把手在片段内容之后绘制，显示和命中均优先于邻片且保留轨道裁切。
     /// 刀片虚线裁在内容区内；轨道头固定，横向滚动只移动内容和刻度。
+    /// 空白区右键打开剪贴板菜单，保留播放头及当前选区，允许剪切后在空轨道粘贴。
     pub(crate) fn timeline_panel(&self, layout: Layout, cx: &mut Context<Self>) -> Div {
         let header = layout.track_header;
         let origin = header + crate::trim_handle::WIDTH;
@@ -76,6 +77,13 @@ impl Desktop {
                     .on_mouse_down(
                         MouseButton::Left,
                         cx.listener(|this, e, window, cx| this.begin_marquee(e, window, cx)),
+                    )
+                    .on_mouse_down(
+                        MouseButton::Right,
+                        cx.listener(|this, event: &gpui::MouseDownEvent, window, cx| {
+                            this.open_edit_menu(None, Some(event.position), window, cx);
+                            cx.stop_propagation();
+                        }),
                     )
                     .children((0..self.timeline.model.tracks.len()).map(|i| {
                         let (top, h) = self.track_geometry(i);

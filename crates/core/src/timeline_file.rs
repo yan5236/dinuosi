@@ -10,6 +10,10 @@ pub(crate) struct TimelineV1 {
     canvas: [u32; 2],
     #[serde(default = "default_bitrate")]
     bitrate_kbps: u32,
+    #[serde(default)]
+    bitrate_mode: crate::video_settings::BitrateMode,
+    #[serde(default)]
+    media_fit: crate::video_settings::MediaFit,
     tracks: Vec<TrackV1>,
     clips: Vec<ClipV1>,
     #[serde(default)]
@@ -99,7 +103,7 @@ fn default_bitrate() -> u32 {
     12000
 }
 impl TimelineV1 {
-    /// 显式复制领域数据、调色步骤、变速精确源区间、锁定、镜像、倒放、定格、标记和关键帧到版本化字段。
+    /// 显式复制领域数据、素材适配、码率模式、调色步骤、变速源区间、锁定、镜像、倒放、定格及动画到版本化字段。
     pub fn from_timeline(t: &Timeline) -> Self {
         Self {
             fps: t.fps,
@@ -116,6 +120,8 @@ impl TimelineV1 {
                 .collect(),
             canvas: [t.width, t.height],
             bitrate_kbps: t.bitrate_kbps,
+            bitrate_mode: t.bitrate_mode,
+            media_fit: t.media_fit,
             tracks: t
                 .tracks
                 .iter()
@@ -237,6 +243,8 @@ impl TimelineV1 {
             width: self.canvas[0],
             height: self.canvas[1],
             bitrate_kbps: self.bitrate_kbps,
+            bitrate_mode: self.bitrate_mode,
+            media_fit: self.media_fit,
             tracks: self
                 .tracks
                 .into_iter()

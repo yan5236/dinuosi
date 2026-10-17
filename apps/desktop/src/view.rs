@@ -281,18 +281,12 @@ impl Desktop {
             cx.notify();
         }
     }
-    /// 按用户操作显示未接入功能说明；不修改持久化项目或自动生成示例数据。
-    pub(crate) fn inform(&mut self, message: &str, cx: &mut Context<Self>) {
-        self.notice = Some(message.to_owned());
-        self.menu_open = false;
-        self.help_open = false;
-        cx.notify();
-    }
 }
 impl Render for Desktop {
     /// 渲染当前窗口角色与浮层；工作区快捷键在根节点接收冒泡，焦点置于零尺寸节点以保留系统拖动。
     /// 弹窗隔离工作区输入，调色器独立捕获拖动；点击正文外部先提交会话，避免旧快照覆盖后续操作。
     /// 全屏观看仅挂载播放器，避免编辑元素接收输入。
+    /// 编辑菜单和素材右键菜单共用浮层关闭区域，点击外部后恢复工作区焦点。
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         for image in self.session.retired_frames.drain(..) {
             if !self
@@ -377,6 +371,7 @@ impl Render for Desktop {
             .child(self.blade_cursor_region(cx))
             .when(
                 self.menu_open
+                    || self.timeline.edit_menu.is_some()
                     || self.help_open
                     || self.project_menu.is_some()
                     || self.session.media_menu.is_some()
@@ -390,10 +385,13 @@ impl Render for Desktop {
                             .occlude()
                             .id("menu-dismiss")
                             .on_click(cx.listener(|this, _, window, cx| {
-                                if this.timeline.keyframe_menu.is_some() {
+                                if this.timeline.keyframe_menu.is_some()
+                                    || this.timeline.edit_menu.is_some()
+                                {
                                     this.focus_handle.focus(window);
                                 }
                                 this.menu_open = false;
+                                this.timeline.edit_menu = None;
                                 this.help_open = false;
                                 this.project_menu = None;
                                 this.session.media_menu = None;
@@ -407,6 +405,9 @@ impl Render for Desktop {
                     })
                     .when(self.help_open, |s| {
                         s.child(self.help_menu(layout.title, cx))
+                    })
+                    .when(self.timeline.edit_menu.is_some(), |s| {
+                        s.child(self.edit_actions_menu(window, cx))
                     })
                     .when(self.timeline.marker_menu.is_some(), |s| {
                         s.child(self.marker_menu(window, cx))

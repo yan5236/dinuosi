@@ -7,6 +7,9 @@ pub enum Command {
     New,
     Open,
     Home,
+    Cut,
+    Copy,
+    Paste,
     Delete,
     Undo,
     Redo,
@@ -90,6 +93,24 @@ pub const SHORTCUTS: &[Shortcut] = &[
         id: "split-at-playhead",
         label: "Split selected clips at playhead",
         defaults: &["ctrl-b"],
+    },
+    Shortcut {
+        command: Command::Cut,
+        id: "cut",
+        label: "Cut",
+        defaults: &["ctrl-x"],
+    },
+    Shortcut {
+        command: Command::Copy,
+        id: "copy",
+        label: "Copy",
+        defaults: &["ctrl-c"],
+    },
+    Shortcut {
+        command: Command::Paste,
+        id: "paste",
+        label: "Paste",
+        defaults: &["ctrl-v"],
     },
 ];
 

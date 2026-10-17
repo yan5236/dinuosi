@@ -308,15 +308,10 @@ fn settings_window_isolates_input_and_applies_to_live_project(cx: &mut TestAppCo
         settings.read_with(visual, |s, cx| s.search.read(cx).text.clone()),
         settings.read_with(visual, |s, cx| s.matches(Tab::Project, cx))
     );
-    click(visual, "project-width");
-    visual.simulate_keystrokes("ctrl-a");
-    visual.simulate_input("1080");
-    click(visual, "project-height");
-    visual.simulate_keystrokes("ctrl-a");
-    visual.simulate_input("1920");
+    click(visual, "project-aspect");
+    click(visual, "project-aspect-1");
     click(visual, "project-fps");
-    visual.simulate_keystrokes("ctrl-a");
-    visual.simulate_input("60");
+    click(visual, "project-fps-4");
     click(visual, "settings-apply");
     assert!(settings.read_with(visual, |s, _| s.error.is_none()));
     let model = store.load_timeline(&entry).unwrap();

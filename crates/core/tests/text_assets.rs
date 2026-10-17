@@ -112,6 +112,52 @@ fn named_presets_persist_without_capturing_body_or_timing() {
     std::fs::remove_dir_all(root).unwrap();
 }
 
+/// 重命名只改变名称且可跨存储实例读取；空白、过长、控制字符、重名和未知身份均保留原文件。
+#[test]
+fn preset_rename_preserves_identity_style_and_rejects_invalid_names() {
+    let root = std::env::temp_dir().join(format!("dinuosi-style-rename-{}", uuid::Uuid::new_v4()));
+    std::fs::create_dir(&root).unwrap();
+    let store = ProjectStore::new(root.join("recent.json"));
+    let style = Text::new("正文".into(), (1920, 1080), false).style;
+    let first = store
+        .save_text_preset("旧名称", style.clone())
+        .unwrap()
+        .remove(0);
+    store.save_text_preset("Other", style).unwrap();
+    let before = std::fs::read(root.join("text-presets.json")).unwrap();
+    for name in [" ", "\n", "other", "坏\u{0001}名称", &"字".repeat(61)] {
+        assert!(store.rename_text_preset(&first.id, name).is_err());
+        assert_eq!(
+            std::fs::read(root.join("text-presets.json")).unwrap(),
+            before
+        );
+    }
+    assert!(
+        store
+            .rename_text_preset(&uuid::Uuid::new_v4().to_string(), "新名称")
+            .is_err()
+    );
+    assert_eq!(
+        std::fs::read(root.join("text-presets.json")).unwrap(),
+        before
+    );
+    let saved = store.rename_text_preset(&first.id, "  新名称  ").unwrap();
+    assert_eq!(saved[0].id, first.id);
+    assert_eq!(saved[0].style, first.style);
+    assert_eq!(saved[0].name, "新名称");
+    assert_eq!(
+        ProjectStore::new(root.join("recent.json"))
+            .load_text_presets()
+            .unwrap(),
+        saved
+    );
+    assert_eq!(
+        store.rename_text_preset(&first.id, "新名称").unwrap(),
+        saved
+    );
+    std::fs::remove_dir_all(root).unwrap();
+}
+
 /// UTF-8/BOM/CRLF、多行、重叠和常用标签能整体导入；导出再导入保持整数帧和正文。
 #[test]
 fn srt_import_export_preserves_content_group_and_frame_times() {

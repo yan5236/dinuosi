@@ -53,6 +53,7 @@ impl Filter {
 impl Desktop {
     /// 创建左侧分类与右侧缩略图列表，接收资源管理器的多文件拖放；点击素材切换实时预览。
     /// 分类图标固定为 18px 且禁止收缩；英文分类栏扩宽，缩略图网格按剩余宽度计算。
+    /// 文件素材以源路径打开公共库菜单，文本样式以独立身份复用同一菜单。
     pub(crate) fn library(&self, width: f32, cx: &mut Context<Self>) -> Div {
         let query = self.session.search.read(cx).text.to_lowercase();
         let filter_width = if crate::i18n::locale(cx) == "en" {
@@ -165,7 +166,7 @@ impl Desktop {
                                                     move |this, event: &gpui::MouseDownEvent, _, cx| {
                                                         if !this.busy {
                                                             this.session.media_menu = this.session.media.get(index)
-                                                                .map(|m| (m.path.clone(), event.position));
+                                                                .map(|m| (crate::media_actions::LibraryTarget::Media(m.path.clone()), event.position));
                                                             cx.notify();
                                                         }
                                                         cx.stop_propagation();

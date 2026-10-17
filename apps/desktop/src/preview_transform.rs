@@ -30,7 +30,7 @@ pub struct PreviewShape {
 
 impl Desktop {
     /// 按合成器图层顺序列出当前帧可选画面；排除离线、隐藏、锁轨、音频及范围外片段，片段锁定另行阻止变换。
-    /// 使用源尺寸与项目画布匹配合成器的补边，仅读取已加载元数据；返回顺序从顶层到底层。
+    /// 使用项目素材适配规则匹配合成器的显示区域，仅读取已加载元数据；返回顺序从顶层到底层。
     pub(crate) fn preview_shapes(&self) -> Vec<PreviewShape> {
         if !self.timeline.preview {
             return Vec::new();
@@ -64,10 +64,9 @@ impl Desktop {
                         .media
                         .iter()
                         .find(|m| m.path == clip.source && !m.offline)?;
-                    dinuosi_core::composite::fitted_size(
-                        media.source_size,
-                        (model.width, model.height),
-                    )
+                    model
+                        .media_fit
+                        .size(media.source_size, (model.width, model.height))
                 };
                 Some(PreviewShape {
                     id: clip.id.clone(),

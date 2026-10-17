@@ -5,6 +5,7 @@ impl Timeline {
     /// 原子修改分辨率、整数帧率和 kbps 码率；四舍五入换算片段、固定源帧、标记及关键帧时间。
     /// 裁剪范围外负帧锚点对称取整；同类型帧若折叠到同一新帧则拒绝，避免静默丢失动画。
     /// 变速精确源区间按帧率比例换算并夹紧舍入后的源尾；低帧率若导致片段消失或重叠则拒绝整次修改。
+    /// 显式传入的数值码率标记为自定义；界面可在成功后设置相应质量档位，素材适配保持不变。
     pub fn configure(
         &mut self,
         width: u32,
@@ -52,6 +53,7 @@ impl Timeline {
         next.height = height;
         next.fps = fps;
         next.bitrate_kbps = bitrate;
+        next.bitrate_mode = crate::video_settings::BitrateMode::Custom;
         next.validate()
             .map_err(|e| format!("无法应用项目设置：{e}"))?;
         *self = next;

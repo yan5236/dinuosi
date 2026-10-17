@@ -77,6 +77,8 @@ pub struct TimelineSession {
     pub curves: crate::curve_panel::CurveSession,
     pub model: Timeline,
     pub history: History,
+    pub clipboard: Option<Timeline>,
+    pub edit_menu: Option<crate::edit_menu::EditMenu>,
     pub selected: BTreeSet<String>,
     /// 最后点击的选中成员，仅决定检查器读取对象；整组联动仍使用 selected，不写入项目。
     pub primary_clip: Option<String>,

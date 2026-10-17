@@ -19,5 +19,11 @@
   "Unlock clip": "Unlock clip",
   "Enable snapping": "Enable snapping",
   "Disable snapping": "Disable snapping",
-  "Add marker": "Add marker"
+  "Add marker": "Add marker",
+  "Cut": "Cut",
+  "Copy": "Copy",
+  "Paste": "Paste",
+  "Undo": "Undo",
+  "Redo": "Redo",
+  "Delete": "Delete"
 }

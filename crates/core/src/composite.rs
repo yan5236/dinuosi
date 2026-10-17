@@ -189,7 +189,7 @@ pub fn render(timeline: &Timeline, frame: i64, media: &[media::Media]) -> Result
 
 impl FrameCache {
     /// 按轨道从底到顶合成，视频按路径、源帧、帧率及素材载入代次复用，图片直接借用缩略图。
-    /// 小素材保持原始显示尺寸，大素材等比缩小到项目画布；未覆盖区域为黑色。
+    /// 按项目素材适配规则计算覆盖尺寸，完整适配/填满裁切/仅缩小均保持比例；未覆盖区域为黑色。
     /// 每次只保留当前可见源帧，避免播放/寻址累积内存；失败不缓存错误，下一次允许重试。
     pub fn render(
         &mut self,
@@ -264,7 +264,9 @@ impl FrameCache {
                         bytes
                     }
                 };
-                let fitted = fitted_size(m.source_size, (timeline.width, timeline.height));
+                let fitted = timeline
+                    .media_fit
+                    .size(m.source_size, (timeline.width, timeline.height));
                 let graded = crate::color_render::apply(
                     &bytes,
                     (FRAME_WIDTH, FRAME_HEIGHT),
@@ -290,11 +292,5 @@ impl FrameCache {
 
 /// 返回素材在项目中的初始显示大小：仅缩小超出画布的素材，小素材不放大。
 pub fn fitted_size(source: (u32, u32), canvas: (u32, u32)) -> (f64, f64) {
-    let scale = (canvas.0 as f64 / source.0.max(1) as f64)
-        .min(canvas.1 as f64 / source.1.max(1) as f64)
-        .min(1.0);
-    (
-        source.0.max(1) as f64 * scale,
-        source.1.max(1) as f64 * scale,
-    )
+    crate::video_settings::MediaFit::Original.size(source, canvas)
 }

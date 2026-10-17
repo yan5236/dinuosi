@@ -20,6 +20,7 @@ pub(crate) enum DialogKind {
     Create,
     Rename(ProjectEntry),
     RenameMedia { path: PathBuf, name: String },
+    RenameTextPreset { id: String, name: String },
     Delete(ProjectEntry),
 }
 
@@ -36,12 +37,14 @@ pub(crate) struct Dialog {
 }
 
 impl Dialog {
-    /// 初始化所选操作的表单；删除默认不勾选目录，新建目录必须由用户显式选择。
+    /// 初始化项目、素材或文本样式名称表单；删除默认不勾选目录，新建目录必须由用户显式选择。
     pub(crate) fn new(kind: DialogKind, store: &ProjectStore, cx: &mut Context<Desktop>) -> Self {
         let name = match &kind {
             DialogKind::Create => Some(crate::i18n::t("dialogs", "Untitled project", cx).into()),
             DialogKind::Rename(entry) => Some(entry.name.clone()),
-            DialogKind::RenameMedia { name, .. } => Some(name.clone()),
+            DialogKind::RenameMedia { name, .. } | DialogKind::RenameTextPreset { name, .. } => {
+                Some(name.clone())
+            }
             DialogKind::Delete(_) => None,
         }
         .map(|text| cx.new(|cx| TextInput::new(text, cx)));
@@ -122,7 +125,7 @@ impl Desktop {
         cx.notify();
     }
 
-    /// 校验表单输入并调度项目命令或素材别名保存；未选目录时保留表单，不创建文件。
+    /// 校验表单输入并调度项目命令、素材别名或文本样式改名；未选目录及保存失败保留表单。
     pub(crate) fn submit_dialog(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.busy {
             return;
@@ -140,8 +143,15 @@ impl Desktop {
             self.change_media_reference(path, Some(name), window, cx);
             return;
         }
+        if let DialogKind::RenameTextPreset { id, .. } = &dialog.kind {
+            let id = id.clone();
+            self.rename_text_preset(&id, &name, window, cx);
+            return;
+        }
         let (command, enter) = match &dialog.kind {
-            DialogKind::RenameMedia { .. } => unreachable!("素材改名已单独调度"),
+            DialogKind::RenameMedia { .. } | DialogKind::RenameTextPreset { .. } => {
+                unreachable!("素材及样式改名已单独调度")
+            }
             DialogKind::Create => {
                 let Some(parent) = dialog.directory.clone() else {
                     dialog.error = Some("请先选择项目目录".into());
@@ -231,6 +241,7 @@ impl Desktop {
 
     /// 绘制灰阶模态表单和清晰的错误反馈；遮罩拦截底层点击，关闭不会提交表单。
     /// 选择目录、新建、重命名及删除均使用真实存储结果；文件删除必须显式勾选。
+    /// 文本样式改名复用名称表单，仅改变用户样式库，不提交项目生命周期命令。
     pub(crate) fn dialog_view(&self, cx: &mut Context<Self>) -> gpui::Stateful<Div> {
         let dialog = self.dialog.as_ref().expect("仅在弹窗存在时渲染");
         let (title, submit) = match dialog.kind {
@@ -244,6 +255,10 @@ impl Desktop {
             ),
             DialogKind::RenameMedia { .. } => (
                 crate::i18n::t("dialogs", "Rename media", cx),
+                crate::i18n::t("dialogs", "Save", cx),
+            ),
+            DialogKind::RenameTextPreset { .. } => (
+                crate::i18n::t("dialogs", "Rename style", cx),
                 crate::i18n::t("dialogs", "Save", cx),
             ),
             DialogKind::Delete(_) => (
@@ -289,10 +304,14 @@ impl Desktop {
                                 .flex_col()
                                 .gap(px(8.0))
                                 .child(div().text_size(px(12.0)).text_color(rgb(MUTED)).child(
-                                    if matches!(dialog.kind, DialogKind::RenameMedia { .. }) {
-                                        crate::i18n::t("dialogs", "Media name", cx)
-                                    } else {
-                                        crate::i18n::t("dialogs", "Project name", cx)
+                                    match dialog.kind {
+                                        DialogKind::RenameMedia { .. } => {
+                                            crate::i18n::t("dialogs", "Media name", cx)
+                                        }
+                                        DialogKind::RenameTextPreset { .. } => {
+                                            crate::i18n::t("dialogs", "Style name", cx)
+                                        }
+                                        _ => crate::i18n::t("dialogs", "Project name", cx),
                                     },
                                 ))
                                 .child(name),

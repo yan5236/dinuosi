@@ -6,8 +6,8 @@ use crate::{
 };
 use dinuosi_core::text::{Text, TextPreset, TextStyle};
 use gpui::{
-    Context, Div, Entity, ObjectFit, RenderImage, SharedString, Window, div, img, prelude::*, px,
-    rgb,
+    Context, Div, Entity, MouseButton, ObjectFit, RenderImage, SharedString, Window, div, img,
+    prelude::*, px, rgb,
 };
 use std::sync::Arc;
 
@@ -122,6 +122,34 @@ impl Desktop {
         }
         cx.notify();
     }
+    /// 使用公共名称弹窗重命名指定样式；保存成功才更新卡片并关闭弹窗，不修改任何时间线片段。
+    /// 校验或写入失败保留输入和旧列表，并在弹窗内显示实际错误，允许继续修正或取消。
+    pub(crate) fn rename_text_preset(
+        &mut self,
+        id: &str,
+        name: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.busy {
+            return;
+        }
+        match self.store.rename_text_preset(id, name).and_then(previews) {
+            Ok(items) => {
+                self.timeline.text.presets = items;
+                self.dialog = None;
+                self.focus_handle.focus(window);
+            }
+            Err(error) => {
+                if let Some(dialog) = &mut self.dialog {
+                    dialog.error = Some(error);
+                } else {
+                    self.notice = Some(error);
+                }
+            }
+        }
+        cx.notify();
+    }
     /// 在检查器提供单一“保存样式”入口；命名时显示输入及保存/取消，不新增说明性文案。
     pub(crate) fn text_preset_save(&self, enabled: bool, cx: &mut Context<Self>) -> Div {
         div()
@@ -185,7 +213,8 @@ impl Desktop {
                 )
             })
     }
-    /// 在左侧文本区绘制真实字体/效果缩略图和用户名称，点击取用，删除按钮不触发应用。
+    /// 在左侧文本区绘制真实字体/效果缩略图和用户名称，点击取用；卡片不放独立删除按钮。
+    /// 右键只打开和文件素材共用的改名/移除菜单，提交正文后保持时间线内容与选择不变。
     pub(crate) fn text_preset_library(&self, cx: &mut Context<Self>) -> Div {
         div()
             .mt(px(18.0))
@@ -199,7 +228,7 @@ impl Desktop {
             .child(div().flex().flex_wrap().gap(px(12.0)).children(
                 self.timeline.text.presets.iter().map(|p| {
                     let id = p.preset.id.clone();
-                    let remove = id.clone();
+                    let context = id.clone();
                     let keyboard = id.clone();
                     div()
                         .id(SharedString::from(format!("text-preset-{id}")))
@@ -243,24 +272,34 @@ impl Desktop {
                                         .text_size(px(12.0))
                                         .text_ellipsis()
                                         .child(p.preset.name.clone()),
-                                )
-                                .child(
-                                    crate::ui::tool(
-                                        SharedString::from(format!("remove-style-{remove}")),
-                                        dinuosi_icons::Icon::Trash,
-                                        true,
-                                    )
-                                    .on_click(cx.listener(
-                                        move |this, _, _, cx| {
-                                            cx.stop_propagation();
-                                            this.remove_text_preset(&remove, cx);
-                                        },
-                                    )),
                                 ),
                         )
                         .on_click(cx.listener(move |this, _, window, cx| {
                             this.use_text_preset(&id, window, cx)
                         }))
+                        .on_mouse_down(
+                            MouseButton::Right,
+                            cx.listener(move |this, event: &gpui::MouseDownEvent, window, cx| {
+                                if !this.busy && this.commit_text_input(cx) {
+                                    this.commit_inspector_input(cx);
+                                    this.menu_open = false;
+                                    this.help_open = false;
+                                    this.project_menu = None;
+                                    this.timeline.edit_menu = None;
+                                    this.timeline.keyframe_menu = None;
+                                    this.timeline.marker_menu = None;
+                                    this.session.media_menu = Some((
+                                        crate::media_actions::LibraryTarget::TextPreset(
+                                            context.clone(),
+                                        ),
+                                        event.position,
+                                    ));
+                                    this.focus_handle.focus(window);
+                                    cx.notify();
+                                }
+                                cx.stop_propagation();
+                            }),
+                        )
                         .on_key_down(cx.listener(
                             move |this, e: &gpui::KeyDownEvent, window, cx| {
                                 if !e.is_held

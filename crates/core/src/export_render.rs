@@ -129,6 +129,7 @@ impl Renderer {
     }
 
     /// 在指定项目帧先应用共享调色再合成导出画面，保持轨道顺序、隐藏、选区方向、定格源帧及画面关键帧。
+    /// 按项目素材适配规则计算覆盖尺寸，与预览一致；输出比例不同时居中适配整个项目画布。
     /// 复用输出缓冲并重置为黑色不透明底，返回切片在下一次渲染前有效；失败返回错误，不静默跳过。
     pub fn render(
         &mut self,
@@ -192,10 +193,9 @@ impl Renderer {
                     size,
                     &clip.transform_at(frame),
                     (timeline.width, timeline.height),
-                    composite::fitted_size(
-                        source_media.source_size,
-                        (timeline.width, timeline.height),
-                    ),
+                    timeline
+                        .media_fit
+                        .size(source_media.source_size, (timeline.width, timeline.height)),
                 )?;
             }
         }

@@ -1,7 +1,7 @@
 //! 导出弹窗绘制：左侧项目预览，右侧参数，下方进度与提交；复用灰阶控件。
 use crate::{
     export_dialog::ExportField,
-    ui::{LINE, MUTED, TEXT, pill, tool},
+    ui::{LINE, MUTED, PANEL, TEXT, pill, tool},
     view::Desktop,
 };
 use dinuosi_icons::Icon;
@@ -16,6 +16,25 @@ impl Desktop {
         let running = d.running;
         let available = !d.running && !d.probing && !d.choosing && !d.encoders.is_empty();
         let progress = d.progress.load(Ordering::Relaxed) as f32 / 10.0;
+        let width = if d.custom_resolution {
+            d.fields[0]
+                .read(cx)
+                .text
+                .parse::<u32>()
+                .unwrap_or(d.settings.width)
+        } else {
+            d.settings.width
+        };
+        let height = if d.custom_resolution {
+            d.fields[1]
+                .read(cx)
+                .text
+                .parse::<u32>()
+                .unwrap_or(d.settings.height)
+        } else {
+            d.settings.height
+        };
+        let scale = (476.0 / width.max(1) as f32).min(360.0 / height.max(1) as f32);
         div()
             .id("export-overlay")
             .debug_selector(|| "export-overlay".into())
@@ -30,7 +49,10 @@ impl Desktop {
             .on_mouse_down(MouseButton::Right, |_, _, cx| cx.stop_propagation())
             .child(
                 div()
+                    .id("export-form")
                     .w(px(880.0))
+                    .max_h_full()
+                    .overflow_y_scroll()
                     .p(px(24.0))
                     .rounded(px(10.0))
                     .bg(rgb(0x2b2b2e))
@@ -68,36 +90,83 @@ impl Desktop {
                                 div()
                                     .w(px(476.0))
                                     .h(px(360.0))
-                                    .relative()
-                                    .bg(rgb(0x000000))
-                                    .overflow_hidden()
+                                    .flex_none()
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .bg(rgb(PANEL))
                                     .debug_selector(|| "export-preview".into())
-                                    .when_some(self.timeline.frame.clone(), |s, frame| {
-                                        s.child(
-                                            img(frame)
-                                                .absolute()
-                                                .size_full()
-                                                .object_fit(ObjectFit::Contain),
-                                        )
-                                    }),
+                                    .child(
+                                        div()
+                                            .relative()
+                                            .w(px(width.max(1) as f32 * scale))
+                                            .h(px(height.max(1) as f32 * scale))
+                                            .bg(rgb(0x000000))
+                                            .overflow_hidden()
+                                            .debug_selector(|| "export-canvas".into())
+                                            .when_some(self.timeline.frame.clone(), |s, frame| {
+                                                s.child(
+                                                    img(frame)
+                                                        .absolute()
+                                                        .size_full()
+                                                        .object_fit(ObjectFit::Contain),
+                                                )
+                                            }),
+                                    ),
                             )
                             .child(
                                 div()
                                     .flex_1()
+                                    .min_w_0()
                                     .flex()
                                     .flex_col()
                                     .gap(px(12.0))
-                                    .children(
-                                        [
-                                            ExportField::Resolution,
-                                            ExportField::Fps,
-                                            ExportField::Bitrate,
-                                            ExportField::Container,
-                                            ExportField::Encoder,
-                                        ]
-                                        .into_iter()
-                                        .map(|field| self.export_dropdown(field, cx)),
+                                    .child(self.export_dropdown(ExportField::Aspect, cx))
+                                    .child(self.export_dropdown(ExportField::Resolution, cx))
+                                    .when(d.custom_resolution, |s| {
+                                        s.child(
+                                            div()
+                                                .flex()
+                                                .items_center()
+                                                .gap(px(8.0))
+                                                .child(
+                                                    div()
+                                                        .flex_1()
+                                                        .min_w_0()
+                                                        .child(self.export_number(0, cx)),
+                                                )
+                                                .child("×")
+                                                .child(
+                                                    div()
+                                                        .flex_1()
+                                                        .min_w_0()
+                                                        .child(self.export_number(1, cx)),
+                                                ),
+                                        )
+                                    })
+                                    .child(self.export_dropdown(ExportField::Fps, cx))
+                                    .child(self.export_dropdown(ExportField::Bitrate, cx))
+                                    .when(
+                                        d.bitrate_mode
+                                            == dinuosi_core::video_settings::BitrateMode::Custom,
+                                        |s| {
+                                            s.child(
+                                                div()
+                                                    .flex()
+                                                    .items_center()
+                                                    .gap(px(8.0))
+                                                    .child(
+                                                        div()
+                                                            .flex_1()
+                                                            .min_w_0()
+                                                            .child(self.export_number(2, cx)),
+                                                    )
+                                                    .child("kbps"),
+                                            )
+                                        },
                                     )
+                                    .child(self.export_dropdown(ExportField::Container, cx))
+                                    .child(self.export_dropdown(ExportField::Encoder, cx))
                                     .child(
                                         div()
                                             .flex()

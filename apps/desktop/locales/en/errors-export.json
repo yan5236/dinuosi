@@ -1,4 +1,7 @@
 {
+  "请输入有效的导出宽度": "Enter a valid export width",
+  "请输入有效的导出高度": "Enter a valid export height",
+  "请输入有效的导出码率": "Enter a valid export bitrate",
   "导出分辨率必须为 16 至 8192 的偶数，帧率为 1 至 240，码率为 100 至 1000000 kbps": "Export dimensions must be even numbers from 16 to 8192, frame rate from 1 to 240, and bitrate from 100 to 1000000 kbps",
   "时间线为空，无法导出": "The timeline is empty",
   "输出文件已存在，请选择其他文件名": "The output file already exists. Choose another file name",

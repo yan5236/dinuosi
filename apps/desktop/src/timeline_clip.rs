@@ -10,6 +10,7 @@ impl Desktop {
     /// 返回可见片段内容和独立把手层，调用方须先绘制全部内容，再绘制全部把手，避免邻片遮挡及抢占命中。
     /// 水平滚动截断处不伪造端点；音频按源选区查询波形，刀片模式隐藏把手，关联片段名称加下划线。
     /// 跟随鼠标模式仅在实际片段拖动时隐藏选中原块及把手；保留模式、点击和其他手势正常绘制，不修改模型。
+    /// 素材右键打开编辑菜单并隔离轨道空白区事件；菜单负责保持多选和关联组语义。
     pub(crate) fn timeline_clip(
         &self,
         clip: &Clip,
@@ -42,6 +43,7 @@ impl Desktop {
         let media = self.session.media.iter().find(|m| m.path == clip.source);
         let thumbnail = media.and_then(|m| m.thumbnail.clone());
         let visible = (w + x.min(0.0)).min(width - x.max(0.0)).max(2.0);
+        let context_id = clip.id.clone();
         Some((
             div()
                 .id(gpui::SharedString::from(format!("clip-{}", clip.id)))
@@ -69,6 +71,13 @@ impl Desktop {
                     MouseButton::Left,
                     cx.listener(move |this, e, window, cx| {
                         this.begin_clip(id.clone(), None, e, window, cx)
+                    }),
+                )
+                .on_mouse_down(
+                    MouseButton::Right,
+                    cx.listener(move |this, event: &gpui::MouseDownEvent, window, cx| {
+                        this.open_edit_menu(Some(&context_id), Some(event.position), window, cx);
+                        cx.stop_propagation();
                     }),
                 )
                 .child(

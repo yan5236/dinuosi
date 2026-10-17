@@ -2,6 +2,7 @@
 use crate::{
     export_dialog::ExportField,
     ui::{LINE, MUTED, PANEL, TEXT},
+    video_presets as presets,
     view::Desktop,
 };
 use dinuosi_core::export::Container;
@@ -12,9 +13,10 @@ impl ExportField {
     /// 返回控件的稳定标识与翻译键，顺序对应表单焦点循环；标识不进入视频元数据。
     fn info(self) -> (&'static str, &'static str, usize) {
         match self {
+            Self::Aspect => ("export-aspect", "Aspect ratio", 9),
             Self::Resolution => ("export-resolution", "Resolution", 1),
             Self::Fps => ("export-fps", "Frame rate", 2),
-            Self::Bitrate => ("export-bitrate", "Bitrate", 3),
+            Self::Bitrate => ("export-bitrate", "Quality", 3),
             Self::Container => ("export-container", "Container", 4),
             Self::Encoder => ("export-encoder", "Encoder", 5),
         }
@@ -22,28 +24,56 @@ impl ExportField {
 }
 
 impl Desktop {
-    /// 枚举当前项目默认值及常用参数；能力探测决定编码器列表，空列表显示探测状态。
-    /// 保留非预设项目值，不通过换帧率修改时间线；只改变本次编码参数。
+    /// 绘制自定义导出数值；编码进行时只显示快照文本，防止仍可编辑已锁定的任务参数。
+    pub(crate) fn export_number(&self, index: usize, cx: &gpui::App) -> Div {
+        let d = self.export_dialog.as_ref().unwrap();
+        if d.running {
+            div()
+                .h(px(34.0))
+                .child(d.fields[index].read(cx).text.clone())
+        } else {
+            div().child(d.fields[index].clone())
+        }
+    }
+    /// 枚举跟随项目、横竖屏/方形清晰度预设、自定义与质量档位；能力探测决定编码器列表。
+    /// 保留非预设项目帧率，所有选择仅用于本次输出，不修改时间线。
     pub(crate) fn export_options(&self, field: ExportField, cx: &gpui::App) -> Vec<String> {
         let d = self.export_dialog.as_ref().unwrap();
         match field {
-            ExportField::Resolution => {
-                export_resolutions(self.timeline.model.width, self.timeline.model.height)
-                    .into_iter()
-                    .map(|(w, h)| format!("{w} × {h}"))
-                    .collect()
-            }
-            ExportField::Fps => export_rates(self.timeline.model.fps, &[24, 25, 30, 50, 60])
-                .into_iter()
-                .map(|v| format!("{v} fps"))
+            ExportField::Aspect => presets::ASPECTS
+                .iter()
+                .map(|key| crate::i18n::t("export", key, cx).to_owned())
                 .collect(),
-            ExportField::Bitrate => export_rates(
-                self.timeline.model.bitrate_kbps,
-                &[2000, 4000, 8000, 12000, 20000, 40000],
+            ExportField::Resolution => {
+                let mut values = vec![format!(
+                    "{} · {} × {}",
+                    crate::i18n::t("export", "Match project", cx),
+                    self.timeline.model.width,
+                    self.timeline.model.height
+                )];
+                values.extend(
+                    presets::resolutions(d.aspect)
+                        .into_iter()
+                        .map(|(w, h)| presets::resolution_label(w, h)),
+                );
+                values.push(crate::i18n::t("export", "Custom", cx).into());
+                values
+            }
+            ExportField::Fps => std::iter::once(format!(
+                "{} · {} fps",
+                crate::i18n::t("export", "Match project", cx),
+                self.timeline.model.fps
+            ))
+            .chain(
+                presets::rates(self.timeline.model.fps)
+                    .into_iter()
+                    .map(|v| format!("{v} fps")),
             )
-            .into_iter()
-            .map(|v| format!("{v} kbps"))
             .collect(),
+            ExportField::Bitrate => presets::QUALITY
+                .iter()
+                .map(|key| crate::i18n::t("export", key, cx).to_owned())
+                .collect(),
             ExportField::Container => vec!["MP4".into(), "Matroska (.mkv)".into()],
             ExportField::Encoder => d
                 .encoders
@@ -58,6 +88,7 @@ impl Desktop {
         &mut self,
         field: ExportField,
         index: usize,
+        window: &mut gpui::Window,
         cx: &mut Context<Self>,
     ) {
         let Some(d) = &mut self.export_dialog else {
@@ -67,31 +98,43 @@ impl Desktop {
             return;
         }
         match field {
+            ExportField::Aspect => {
+                (d.settings.width, d.settings.height) =
+                    presets::change_aspect(d.settings.width, d.settings.height, index);
+                d.aspect = index;
+                d.follow_resolution = false;
+                d.custom_resolution = index == 3;
+            }
             ExportField::Resolution => {
-                if let Some(&(w, h)) =
-                    export_resolutions(self.timeline.model.width, self.timeline.model.height)
-                        .get(index)
-                {
+                d.follow_resolution = index == 0;
+                d.custom_resolution = index == 4;
+                if d.custom_resolution {
+                    d.aspect = 3;
+                }
+                if index == 0 {
+                    d.settings.width = self.timeline.model.width;
+                    d.settings.height = self.timeline.model.height;
+                    d.aspect = presets::aspect(d.settings.width, d.settings.height);
+                } else if let Some(&(w, h)) = presets::resolutions(d.aspect).get(index - 1) {
                     d.settings.width = w;
                     d.settings.height = h;
+                    d.aspect = presets::aspect(w, h);
                 }
             }
             ExportField::Fps => {
-                if let Some(&v) =
-                    export_rates(self.timeline.model.fps, &[24, 25, 30, 50, 60]).get(index)
-                {
+                d.follow_fps = index == 0;
+                if index == 0 {
+                    d.settings.fps = self.timeline.model.fps;
+                } else if let Some(&v) = presets::rates(self.timeline.model.fps).get(index - 1) {
                     d.settings.fps = v;
                 }
             }
             ExportField::Bitrate => {
-                if let Some(&v) = export_rates(
-                    self.timeline.model.bitrate_kbps,
-                    &[2000, 4000, 8000, 12000, 20000, 40000],
-                )
-                .get(index)
-                {
-                    d.settings.bitrate_kbps = v;
-                }
+                d.bitrate_mode = [
+                    dinuosi_core::video_settings::BitrateMode::Standard,
+                    dinuosi_core::video_settings::BitrateMode::High,
+                    dinuosi_core::video_settings::BitrateMode::Custom,
+                ][index];
             }
             ExportField::Container => {
                 d.settings.container = if index == 0 {
@@ -106,6 +149,21 @@ impl Desktop {
                 }
             }
         }
+        if matches!(field, ExportField::Aspect | ExportField::Resolution) {
+            for (input, value) in d.fields.iter().zip([d.settings.width, d.settings.height]) {
+                input.update(cx, |input, cx| {
+                    use gpui::EntityInputHandler;
+                    let end = input.text.encode_utf16().count();
+                    input.replace_text_in_range(Some(0..end), &value.to_string(), window, cx);
+                });
+            }
+        }
+        d.settings.bitrate_kbps = d.bitrate_mode.bitrate(
+            d.settings.width,
+            d.settings.height,
+            d.settings.fps,
+            d.settings.bitrate_kbps,
+        );
         d.menu = None;
         d.status = None;
         d.error = None;
@@ -116,10 +174,24 @@ impl Desktop {
     pub(crate) fn export_dropdown(&self, field: ExportField, cx: &mut Context<Self>) -> Div {
         let d = self.export_dialog.as_ref().unwrap();
         let (id, label, focus) = field.info();
+        let options = self.export_options(field, cx);
         let value = match field {
-            ExportField::Resolution => format!("{} × {}", d.settings.width, d.settings.height),
+            ExportField::Aspect => crate::i18n::t("export", presets::ASPECTS[d.aspect], cx).into(),
+            ExportField::Resolution if d.follow_resolution => options[0].clone(),
+            ExportField::Resolution if d.custom_resolution => {
+                crate::i18n::t("export", "Custom", cx).into()
+            }
+            ExportField::Resolution => {
+                presets::resolution_label(d.settings.width, d.settings.height)
+            }
+            ExportField::Fps if d.follow_fps => options[0].clone(),
             ExportField::Fps => format!("{} fps", d.settings.fps),
-            ExportField::Bitrate => format!("{} kbps", d.settings.bitrate_kbps),
+            ExportField::Bitrate => crate::i18n::t(
+                "export",
+                presets::QUALITY[presets::quality_index(d.bitrate_mode)],
+                cx,
+            )
+            .into(),
             ExportField::Container => if d.settings.container == Container::Mp4 {
                 "MP4"
             } else {
@@ -135,7 +207,6 @@ impl Desktop {
             }
             .into(),
         };
-        let options = self.export_options(field, cx);
         let selected = options.iter().position(|s| s == &value).unwrap_or(0);
         div()
             .flex()
@@ -183,7 +254,7 @@ impl Desktop {
                                 }
                             }))
                             .on_key_down(cx.listener(
-                                move |this, event: &gpui::KeyDownEvent, _, cx| {
+                                move |this, event: &gpui::KeyDownEvent, window, cx| {
                                     if event.keystroke.modifiers.modified() {
                                         return;
                                     }
@@ -198,11 +269,13 @@ impl Desktop {
                                         "up" => this.select_export_option(
                                             field,
                                             selected.saturating_sub(1),
+                                            window,
                                             cx,
                                         ),
                                         "down" => this.select_export_option(
                                             field,
                                             (selected + 1).min(options.len().saturating_sub(1)),
+                                            window,
                                             cx,
                                         ),
                                         _ => return,
@@ -241,9 +314,13 @@ impl Desktop {
                                                     .hover(|s| s.bg(rgb(LINE)))
                                                     .when(index == selected, |s| s.bg(rgb(LINE)))
                                                     .child(label)
-                                                    .on_click(cx.listener(move |this, _, _, cx| {
-                                                        this.select_export_option(field, index, cx)
-                                                    }))
+                                                    .on_click(cx.listener(
+                                                        move |this, _, window, cx| {
+                                                            this.select_export_option(
+                                                                field, index, window, cx,
+                                                            )
+                                                        },
+                                                    ))
                                             },
                                         ),
                                     ),
@@ -253,21 +330,4 @@ impl Desktop {
                     }),
             )
     }
-}
-
-/// 返回项目分辨率及常用编码尺寸，保持唯一且不把不同宽高比强制写入项目。
-fn export_resolutions(width: u32, height: u32) -> Vec<(u32, u32)> {
-    let mut values = vec![(width, height), (1280, 720), (1920, 1080), (3840, 2160)];
-    values.sort_unstable();
-    values.dedup();
-    values
-}
-
-/// 把项目帧率或码率合并到预设并排序去重，保证非标准项目设置也能直接导出。
-fn export_rates(current: u32, presets: &[u32]) -> Vec<u32> {
-    let mut values = presets.to_vec();
-    values.push(current);
-    values.sort_unstable();
-    values.dedup();
-    values
 }

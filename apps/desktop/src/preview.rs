@@ -13,7 +13,7 @@ use std::{collections::HashMap, sync::Arc, time::Duration};
 
 pub struct EditorSession {
     pub media: Vec<Media>,
-    pub media_menu: Option<(std::path::PathBuf, gpui::Point<Pixels>)>,
+    pub media_menu: Option<(crate::media_actions::LibraryTarget, gpui::Point<Pixels>)>,
     pub search: Entity<TextInput>,
     pub filter: Filter,
     pub selected: Option<usize>,

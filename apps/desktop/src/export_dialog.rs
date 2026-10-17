@@ -13,6 +13,7 @@ use std::{
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ExportField {
+    Aspect,
     Resolution,
     Fps,
     Bitrate,
@@ -34,6 +35,13 @@ pub(crate) struct ExportDialog {
     pub cancel: Arc<AtomicBool>,
     pub progress: Arc<AtomicU32>,
     pub focus: Vec<FocusHandle>,
+    pub aspect: usize,
+    pub follow_resolution: bool,
+    pub follow_fps: bool,
+    pub custom_resolution: bool,
+    pub bitrate_mode: dinuosi_core::video_settings::BitrateMode,
+    pub fields: Vec<Entity<TextInput>>,
+    _fields_watch: Vec<gpui::Subscription>,
 }
 
 impl Drop for ExportDialog {
@@ -75,7 +83,27 @@ impl Desktop {
             input
         });
         let mut focus = vec![name.read(cx).focus.clone()];
-        focus.extend((0..8).map(|_| cx.focus_handle()));
+        focus.extend((0..9).map(|_| cx.focus_handle()));
+        let fields: Vec<_> = [
+            self.timeline.model.width,
+            self.timeline.model.height,
+            self.timeline.model.bitrate_kbps,
+        ]
+        .into_iter()
+        .zip(["export-width", "export-height", "export-custom-bitrate"])
+        .map(|(value, id)| {
+            cx.new(|cx| {
+                let mut input = TextInput::new(value.to_string(), cx);
+                input.control_id = id;
+                input
+            })
+        })
+        .collect();
+        focus.extend(fields.iter().map(|input| input.read(cx).focus.clone()));
+        let fields_watch = fields
+            .iter()
+            .map(|input| cx.observe(input, |_, _, cx| cx.notify()))
+            .collect();
         focus[0].focus(window);
         self.export_dialog = Some(ExportDialog {
             settings: ExportSettings::for_timeline(&self.timeline.model, Encoder::Mpeg4),
@@ -91,6 +119,16 @@ impl Desktop {
             cancel: Arc::new(AtomicBool::new(false)),
             progress: Arc::new(AtomicU32::new(0)),
             focus,
+            fields,
+            _fields_watch: fields_watch,
+            aspect: crate::video_presets::aspect(
+                self.timeline.model.width,
+                self.timeline.model.height,
+            ),
+            follow_resolution: true,
+            follow_fps: true,
+            custom_resolution: false,
+            bitrate_mode: self.timeline.model.bitrate_mode,
         });
         // 以当前会话的取消句柄识别探测结果，关闭后再打开的表单不会收到旧任务的结果。
         let token = self.export_dialog.as_ref().unwrap().cancel.clone();
@@ -167,6 +205,51 @@ impl Desktop {
             return;
         };
         if dialog.running || dialog.probing || dialog.choosing || dialog.encoders.is_empty() {
+            return;
+        }
+        let parameters = (|| -> Result<(), String> {
+            if dialog.follow_resolution {
+                dialog.settings.width = self.timeline.model.width;
+                dialog.settings.height = self.timeline.model.height;
+            } else if dialog.custom_resolution {
+                dialog.settings.width = dialog.fields[0]
+                    .read(cx)
+                    .text
+                    .trim()
+                    .parse()
+                    .map_err(|_| "请输入有效的导出宽度".to_owned())?;
+                dialog.settings.height = dialog.fields[1]
+                    .read(cx)
+                    .text
+                    .trim()
+                    .parse()
+                    .map_err(|_| "请输入有效的导出高度".to_owned())?;
+            }
+            if dialog.follow_fps {
+                dialog.settings.fps = self.timeline.model.fps;
+            }
+            let custom = if dialog.bitrate_mode == dinuosi_core::video_settings::BitrateMode::Custom
+            {
+                dialog.fields[2]
+                    .read(cx)
+                    .text
+                    .trim()
+                    .parse()
+                    .map_err(|_| "请输入有效的导出码率".to_owned())?
+            } else {
+                dialog.settings.bitrate_kbps
+            };
+            dialog.settings.bitrate_kbps = dialog.bitrate_mode.bitrate(
+                dialog.settings.width,
+                dialog.settings.height,
+                dialog.settings.fps,
+                custom,
+            );
+            dialog.settings.validate()
+        })();
+        if let Err(error) = parameters {
+            dialog.error = Some(error);
+            cx.notify();
             return;
         }
         let name = dialog.name.read(cx).text.trim();
@@ -286,7 +369,12 @@ impl Desktop {
         let Some(dialog) = &mut self.export_dialog else {
             return;
         };
-        if dialog.name.read(cx).is_composing() {
+        if dialog.name.read(cx).is_composing()
+            || dialog
+                .fields
+                .iter()
+                .any(|input| input.read(cx).is_composing())
+        {
             return;
         }
         match event.keystroke.key.as_str() {
@@ -297,17 +385,25 @@ impl Desktop {
             "escape" => self.close_export(window, cx),
             "tab" if dialog.running => dialog.focus[7].focus(window),
             "tab" => {
-                let current = dialog
-                    .focus
+                let mut active = vec![0, 9, 1];
+                if dialog.custom_resolution {
+                    active.extend([10, 11]);
+                }
+                active.extend([2, 3]);
+                if dialog.bitrate_mode == dinuosi_core::video_settings::BitrateMode::Custom {
+                    active.push(12);
+                }
+                active.extend([4, 5, 6, 7, 8]);
+                let current = active
                     .iter()
-                    .position(|f| f.is_focused(window))
+                    .position(|&index| dialog.focus[index].is_focused(window))
                     .unwrap_or(0);
                 let step = if event.keystroke.modifiers.shift {
-                    dialog.focus.len() - 1
+                    active.len() - 1
                 } else {
                     1
                 };
-                dialog.focus[(current + step) % dialog.focus.len()].focus(window);
+                dialog.focus[active[(current + step) % active.len()]].focus(window);
             }
             "enter" | "space" if !event.is_held && !event.keystroke.modifiers.modified() => {
                 if dialog.focus[8].is_focused(window) {

@@ -190,7 +190,10 @@ fn language_index_names_and_system_resolution() {
 /// 验证小素材不放大且四边黑色、竖屏项目画布比例与中心位置正确，大素材等比适配。
 #[test]
 fn project_canvas_letterboxes_small_and_portrait_media() {
-    let mut model = Timeline::default();
+    let mut model = Timeline {
+        media_fit: dinuosi_core::video_settings::MediaFit::Original,
+        ..Default::default()
+    };
     model
         .insert(
             ("s.png".into(), MediaKind::Image),

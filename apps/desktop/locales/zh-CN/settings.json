@@ -1,4 +1,18 @@
 {
+  "Aspect ratio": "画幅",
+  "Resolution": "分辨率",
+  "Landscape 16:9": "横屏 16:9",
+  "Portrait 9:16": "竖屏 9:16",
+  "Square 1:1": "方形 1:1",
+  "Custom": "自定义",
+  "Size (pixels)": "尺寸（像素）",
+  "Media fitting": "素材适配",
+  "Fit entire image": "完整适配",
+  "Fill and crop": "填满裁切",
+  "Only downscale": "仅缩小",
+  "Export quality": "导出质量",
+  "Standard": "标准",
+  "High": "高质量",
   "Settings": "设置",
   "Live preview while dragging": "拖动时实时预览",
   "No plugins": "暂无插件",
@@ -19,7 +33,7 @@
   "Main settings": "主要设置",
   "Search settings": "搜索设置",
   "Interface language Follow system": "界面语言 跟随系统",
-  "Project settings Main track Resolution Width Height Frame rate Bitrate": "项目设置 主轨 分辨率 宽度 高度 帧率 码率",
+  "Project settings Main track Resolution Width Height Frame rate Bitrate": "项目设置 主轨 分辨率 宽度 高度 帧率 码率 画幅 横屏 竖屏 方形 素材适配 完整适配 填满裁切 仅缩小 导出质量 标准 高质量 自定义",
   "New project": "新建项目",
   "Open project": "打开项目",
   "Project manager": "项目管理",
@@ -41,5 +55,8 @@
   "Follow mouse": "跟随鼠标",
   "Keep in timeline": "保留在时间线",
   "Automatically add keyframes": "自动添加关键帧",
-  "Show marker lines": "显示标记点竖线"
+  "Show marker lines": "显示标记点竖线",
+  "Cut": "剪切",
+  "Copy": "复制",
+  "Paste": "粘贴"
 }

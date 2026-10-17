@@ -2,6 +2,7 @@
 use super::*;
 impl Desktop {
     /// 构造剪辑标题栏；品牌导航创建独立管理窗口，导出打开后台编码表单，系统命中区保留拖动与窗口控制。
+    /// 编辑入口打开含历史及剪贴板操作的菜单；文件、编辑和帮助浮层互斥。
     pub(crate) fn editor_titlebar(
         &self,
         height: f32,
@@ -43,6 +44,7 @@ impl Desktop {
                     .on_click(cx.listener(|this, _, _, cx| {
                         if !this.busy {
                             this.menu_open = !this.menu_open;
+                            this.timeline.edit_menu = None;
                             this.help_open = false;
                             this.notice = None;
                             cx.notify();
@@ -52,13 +54,14 @@ impl Desktop {
             .child(
                 div()
                     .id("edit-menu")
+                    .debug_selector(|| "edit-menu".into())
                     .px(px(14.0))
                     .py(px(8.0))
                     .cursor_pointer()
                     .hover(|s| s.bg(rgb(crate::ui::PANEL)))
                     .child(crate::i18n::t("editor", "Edit", cx))
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.inform(crate::i18n::t("editor", "No clips to edit", cx), cx)
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        this.open_edit_menu(None, None, window, cx)
                     })),
             )
             .child(
@@ -71,6 +74,7 @@ impl Desktop {
                     .child(crate::i18n::t("editor", "Help", cx))
                     .on_click(cx.listener(|this, _, _, cx| {
                         this.help_open = !this.help_open;
+                        this.timeline.edit_menu = None;
                         this.menu_open = false;
                         cx.notify();
                     })),

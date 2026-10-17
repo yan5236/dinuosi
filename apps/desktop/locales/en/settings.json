@@ -1,4 +1,18 @@
 {
+  "Aspect ratio": "Aspect ratio",
+  "Resolution": "Resolution",
+  "Landscape 16:9": "Landscape 16:9",
+  "Portrait 9:16": "Portrait 9:16",
+  "Square 1:1": "Square 1:1",
+  "Custom": "Custom",
+  "Size (pixels)": "Size (pixels)",
+  "Media fitting": "Media fitting",
+  "Fit entire image": "Fit entire image",
+  "Fill and crop": "Fill and crop",
+  "Only downscale": "Only downscale",
+  "Export quality": "Export quality",
+  "Standard": "Standard",
+  "High": "High",
   "Settings": "Settings",
   "Live preview while dragging": "Live preview while dragging",
   "No plugins": "No plugins",
@@ -19,7 +33,7 @@
   "Main settings": "Main settings",
   "Search settings": "Search settings",
   "Interface language Follow system": "Interface language Follow system",
-  "Project settings Main track Resolution Width Height Frame rate Bitrate": "Project settings Main track Resolution Width Height Frame rate Bitrate",
+  "Project settings Main track Resolution Width Height Frame rate Bitrate": "Project settings Main track Resolution Width Height Frame rate Bitrate Aspect ratio Landscape Portrait Square Media fitting Quality",
   "New project": "New project",
   "Open project": "Open project",
   "Project manager": "Project manager",
@@ -41,5 +55,8 @@
   "Follow mouse": "Follow mouse",
   "Keep in timeline": "Keep in timeline",
   "Automatically add keyframes": "Automatically add keyframes",
-  "Show marker lines": "Show marker lines"
+  "Show marker lines": "Show marker lines",
+  "Cut": "Cut",
+  "Copy": "Copy",
+  "Paste": "Paste"
 }

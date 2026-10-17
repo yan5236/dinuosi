@@ -19,5 +19,11 @@
   "Unlock clip": "解锁片段",
   "Enable snapping": "开启磁吸对齐",
   "Disable snapping": "关闭磁吸对齐",
-  "Add marker": "添加标记点"
+  "Add marker": "添加标记点",
+  "Cut": "剪切",
+  "Copy": "复制",
+  "Paste": "粘贴",
+  "Undo": "撤销",
+  "Redo": "重做",
+  "Delete": "删除"
 }

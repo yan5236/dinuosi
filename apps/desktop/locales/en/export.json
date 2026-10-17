@@ -1,4 +1,13 @@
 {
+  "Aspect ratio": "Aspect ratio",
+  "Landscape 16:9": "Landscape 16:9",
+  "Portrait 9:16": "Portrait 9:16",
+  "Square 1:1": "Square 1:1",
+  "Custom": "Custom",
+  "Match project": "Match project",
+  "Quality": "Quality",
+  "Standard": "Standard",
+  "High": "High",
   "Resolution": "Resolution",
   "Frame rate": "Frame rate",
   "Bitrate": "Bitrate",

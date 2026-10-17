@@ -1,4 +1,13 @@
 {
+  "Aspect ratio": "画幅",
+  "Landscape 16:9": "横屏 16:9",
+  "Portrait 9:16": "竖屏 9:16",
+  "Square 1:1": "方形 1:1",
+  "Custom": "自定义",
+  "Match project": "跟随项目",
+  "Quality": "质量",
+  "Standard": "标准",
+  "High": "高质量",
   "Resolution": "分辨率",
   "Frame rate": "帧率",
   "Bitrate": "码率",

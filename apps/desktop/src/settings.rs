@@ -48,6 +48,11 @@ pub struct Settings {
     pub(crate) project: bool,
     pub(crate) recording: Option<usize>,
     pub(crate) general_menu: Option<GeneralDropdown>,
+    pub(crate) project_menu: Option<crate::settings_project::ProjectDropdown>,
+    pub(crate) project_aspect: usize,
+    pub(crate) custom_resolution: bool,
+    pub(crate) media_fit: dinuosi_core::video_settings::MediaFit,
+    pub(crate) bitrate_mode: dinuosi_core::video_settings::BitrateMode,
     pub(crate) error: Option<String>,
     _search_watch: Subscription,
 }
@@ -98,10 +103,12 @@ impl Desktop {
         cx.notify();
     }
 
-    /// 对最新项目模型应用参数并原子保存；成功记录一次撤销，失败保留模型、历史与播放状态。
+    /// 对最新项目模型应用尺寸、帧率、质量及素材适配并原子保存；成功记录一次撤销，失败保留模型、历史与播放状态。
     pub(crate) fn apply_project_settings(
         &mut self,
         values: [u32; 4],
+        fit: dinuosi_core::video_settings::MediaFit,
+        mode: dinuosi_core::video_settings::BitrateMode,
         cx: &mut Context<Self>,
     ) -> Result<(), String> {
         if self.busy
@@ -117,6 +124,8 @@ impl Desktop {
         let entry = self.current.as_ref().ok_or("当前项目已关闭")?;
         let mut next = self.timeline.model.clone();
         next.configure(values[0], values[1], values[2], values[3])?;
+        next.media_fit = fit;
+        next.bitrate_mode = mode;
         if next == self.timeline.model {
             return Ok(());
         }
@@ -196,6 +205,22 @@ impl Settings {
             project: model.is_some(),
             recording: None,
             general_menu: None,
+            project_menu: None,
+            project_aspect: model
+                .as_ref()
+                .map_or(0, |m| crate::video_presets::aspect(m.width, m.height)),
+            custom_resolution: model.as_ref().is_some_and(|m| {
+                !crate::video_presets::resolutions(crate::video_presets::aspect(m.width, m.height))
+                    .contains(&(m.width, m.height))
+            }),
+            media_fit: model
+                .as_ref()
+                .map_or(dinuosi_core::video_settings::MediaFit::Fit, |m| m.media_fit),
+            bitrate_mode: model
+                .as_ref()
+                .map_or(dinuosi_core::video_settings::BitrateMode::Standard, |m| {
+                    m.bitrate_mode
+                }),
             error: None,
             _search_watch: watch,
         }
@@ -269,7 +294,13 @@ impl Settings {
             let values = self
                 .fields
                 .iter()
-                .map(|v| {
+                .enumerate()
+                .map(|(index, v)| {
+                    if index == 3
+                        && self.bitrate_mode != dinuosi_core::video_settings::BitrateMode::Custom
+                    {
+                        return Ok(12000);
+                    }
                     v.read(cx)
                         .text
                         .trim()
@@ -278,9 +309,19 @@ impl Settings {
                 })
                 .collect::<Result<Vec<_>, _>>();
             values.and_then(|v| {
-                let values: [u32; 4] = v.try_into().map_err(|_| "没有打开项目".to_owned())?;
+                let mut values: [u32; 4] = v.try_into().map_err(|_| "没有打开项目".to_owned())?;
+                values[3] = self
+                    .bitrate_mode
+                    .bitrate(values[0], values[1], values[2], values[3]);
                 self.owner
-                    .update(cx, |desktop, cx| desktop.apply_project_settings(values, cx))
+                    .update(cx, |desktop, cx| {
+                        desktop.apply_project_settings(
+                            values,
+                            self.media_fit,
+                            self.bitrate_mode,
+                            cx,
+                        )
+                    })
                     .map_err(|_| "当前项目已关闭".to_owned())?
             })
         } else {
@@ -325,8 +366,9 @@ impl Settings {
                     Err(e) => self.error = Some(e),
                 }
             }
-        } else if key == "escape" && self.general_menu.is_some() {
+        } else if key == "escape" && (self.general_menu.is_some() || self.project_menu.is_some()) {
             self.general_menu = None;
+            self.project_menu = None;
         } else if key == "escape" {
             window.remove_window();
         } else if key == "tab" {
